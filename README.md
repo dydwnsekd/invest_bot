@@ -88,6 +88,20 @@ invest_bot/
   logs/
 ```
 
+현재 기본 골격이 위 구조를 기준으로 생성되어 있습니다.
+
+## 빠른 시작
+
+가상환경을 준비한 뒤 아래 순서로 시작합니다.
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+python scripts/run_collection.py
+```
+
+환경 변수는 [`.env.example`](./.env.example)를 기준으로 구성합니다.
+
 ## 테스트 원칙
 
 테스트 도구는 `pytest`를 사용합니다.
@@ -108,6 +122,16 @@ invest_bot/
 ## 현재 상태
 
 현재 저장소는 프로젝트 초기 상태이며, 실 구현 코드보다 설계와 기준 문서가 먼저 정리되고 있습니다.
+
+기본 코드 골격에는 아래가 포함되어 있습니다.
+
+- `src/invest_bot/config/settings.py`: 최소 설정 로더
+- `src/invest_bot/market/collector.py`: 데이터 수집 진입점 초안
+- `src/invest_bot/strategy/base.py`: 전략 인터페이스와 신호 모델
+- `src/invest_bot/strategy/sample.py`: 샘플 전략
+- `src/invest_bot/jobs/collect_market_data.py`: 수집 작업 엔트리포인트
+- `tests/`: 초기 `pytest` 테스트
+- `scripts/run_collection.py`: 실행 스크립트
 
 다음 우선 작업 후보는 아래와 같습니다.
 
