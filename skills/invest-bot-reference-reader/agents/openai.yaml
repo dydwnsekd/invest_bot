@@ -1,0 +1,7 @@
+interface:
+  display_name: "Invest Bot Reference Reader"
+  short_description: "Analyze open-trading-api reference first, then rebuild features for invest_bot."
+  default_prompt: "Use $invest-bot-reference-reader to implement an invest_bot feature by inspecting the reference code first."
+
+policy:
+  allow_implicit_invocation: true
