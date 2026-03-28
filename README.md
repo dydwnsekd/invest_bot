@@ -95,12 +95,32 @@ invest_bot/
 가상환경을 준비한 뒤 아래 순서로 시작합니다.
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest
 python scripts/run_collection.py
 ```
 
 환경 변수는 [`.env.example`](./.env.example)를 기준으로 구성합니다.
+
+## 의존성 기준
+
+현재 의존성은 `reference/open-trading-api`를 기준으로 아래처럼 정리했습니다.
+
+- [`requirements.txt`](./requirements.txt): 현재 프로젝트에 필요한 핵심 런타임 의존성
+- [`requirements-dev.txt`](./requirements-dev.txt): 테스트용 의존성
+
+핵심 런타임 의존성은 다음 목적을 기준으로 선택했습니다.
+
+- `requests`, `websockets`, `pycryptodome`, `pyyaml`: reference 기반 API 연동 및 설정 처리
+- `pandas`, `numpy`: 데이터 수집, 지표 계산, 전략 분석
+- `python-dotenv`: 환경 변수 로딩
+- `pydantic`: 설정 및 데이터 검증 구조 확장 대비
+
+아직 제외한 항목도 있습니다.
+
+- `pyqt6`, `pyside6`: 현재 프로젝트는 GUI 범위가 아니므로 제외
+- `fastapi`, `uvicorn`, `httpx`, `python-multipart`: 웹 서버 또는 API 레이어가 필요해질 때 추가
+- `scipy`, `matplotlib`, `plotly`: 고급 분석 및 시각화 단계에서 필요 시 추가
 
 ## 테스트 원칙
 

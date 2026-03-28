@@ -21,6 +21,7 @@
 - Read `README.md` before changing project structure or setup.
 - Inspect `reference/open-trading-api` before implementing API-facing features.
 - Update `README.md` when structure, setup, or behavior changes.
+- Keep dependency decisions aligned with the current project scope; use reference dependency files only as early guidance.
 
 ## Architecture rules
 

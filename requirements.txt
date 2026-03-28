@@ -1,0 +1,13 @@
+# Core API and configuration dependencies from reference/open-trading-api
+requests>=2.32,<3.0
+websockets>=15.0,<16.0
+pyyaml>=6.0,<7.0
+pycryptodome>=3.23,<4.0
+python-dotenv>=1.0,<2.0
+
+# Data collection and strategy analysis
+pandas>=2.3,<3.0
+numpy>=2.3,<3.0
+
+# Project-side settings and schema validation
+pydantic>=2.0,<3.0

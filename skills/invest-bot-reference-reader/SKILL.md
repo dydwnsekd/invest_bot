@@ -44,10 +44,12 @@ Then inspect the relevant folders:
 
 - Prioritize domestic stock flows only.
 - Treat `reference/` as source material, not production-ready project code.
+- Use `reference/` heavily in the early build phase, but keep the project independently maintainable.
 - Separate mock trading and live trading paths clearly.
 - Do not hardcode secrets, account numbers, or tokens.
 - Do not expand order execution logic without a validation path.
 - Prefer reusable wrappers and modules over one-off scripts.
+- Add dependencies based on current project needs, not by copying all reference dependencies.
 
 ## Expected outputs
 
