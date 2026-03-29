@@ -1,0 +1,5 @@
+app_name: invest_bot
+market: domestic_stock
+trading_mode: mock
+environment: local
+log_level: INFO

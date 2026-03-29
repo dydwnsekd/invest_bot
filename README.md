@@ -90,6 +90,21 @@ invest_bot/
 
 현재 기본 골격이 위 구조를 기준으로 생성되어 있습니다.
 
+## 현재 구현된 수집 기능
+
+현재 국내주식 기준으로 아래 수집 기능이 기본 골격에 반영되어 있습니다.
+
+- 일봉 데이터 수집
+- 종목 기본정보 수집
+- 투자자 수급 일별 데이터 수집
+
+관련 구현 위치:
+
+- `src/invest_bot/clients/kis_client.py`
+- `src/invest_bot/market/domestic_stock.py`
+- `src/invest_bot/market/collector.py`
+- `src/invest_bot/jobs/collect_market_data.py`
+
 ## 빠른 시작
 
 가상환경을 준비한 뒤 아래 순서로 시작합니다.
@@ -100,7 +115,12 @@ python -m pytest
 python scripts/run_collection.py
 ```
 
-환경 변수는 [`.env.example`](./.env.example)를 기준으로 구성합니다.
+설정 파일은 아래 예시를 복사해서 사용합니다.
+
+- [`config/app.yaml.example`](./config/app.yaml.example) -> `config/app.yaml`
+- [`config/kis_credentials.yaml.example`](./config/kis_credentials.yaml.example) -> `config/kis_credentials.yaml`
+
+실제 비밀값 파일인 `config/kis_credentials.yaml`과 로컬 실행 설정 파일인 `config/app.yaml`은 `.gitignore`에 포함되어 있습니다.
 
 ## 의존성 기준
 
@@ -113,7 +133,6 @@ python scripts/run_collection.py
 
 - `requests`, `websockets`, `pycryptodome`, `pyyaml`: reference 기반 API 연동 및 설정 처리
 - `pandas`, `numpy`: 데이터 수집, 지표 계산, 전략 분석
-- `python-dotenv`: 환경 변수 로딩
 - `pydantic`: 설정 및 데이터 검증 구조 확장 대비
 
 아직 제외한 항목도 있습니다.
@@ -146,7 +165,11 @@ python scripts/run_collection.py
 기본 코드 골격에는 아래가 포함되어 있습니다.
 
 - `src/invest_bot/config/settings.py`: 최소 설정 로더
-- `src/invest_bot/market/collector.py`: 데이터 수집 진입점 초안
+- `config/app.yaml.example`: 공용 설정 예시
+- `config/kis_credentials.yaml.example`: KIS 키 파일 예시
+- `src/invest_bot/clients/kis_client.py`: KIS REST 인증 및 GET 요청 클라이언트
+- `src/invest_bot/market/domestic_stock.py`: 국내주식 일봉, 종목 기본정보, 투자자 수급 수집기
+- `src/invest_bot/market/collector.py`: 프로젝트용 수집 facade
 - `src/invest_bot/strategy/base.py`: 전략 인터페이스와 신호 모델
 - `src/invest_bot/strategy/sample.py`: 샘플 전략
 - `src/invest_bot/jobs/collect_market_data.py`: 수집 작업 엔트리포인트
