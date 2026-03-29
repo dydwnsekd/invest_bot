@@ -97,13 +97,26 @@ invest_bot/
 - 일봉 데이터 수집
 - 종목 기본정보 수집
 - 투자자 수급 일별 데이터 수집
+- 수집 결과 CSV 저장
 
 관련 구현 위치:
 
 - `src/invest_bot/clients/kis_client.py`
 - `src/invest_bot/market/domestic_stock.py`
 - `src/invest_bot/market/collector.py`
+- `src/invest_bot/market/storage.py`
 - `src/invest_bot/jobs/collect_market_data.py`
+
+CSV는 기본적으로 아래 경로에 저장됩니다.
+
+```text
+data/raw/domestic_stock/
+  daily_prices/
+  daily_prices_summary/
+  stock_info/
+  investor_daily/
+  investor_daily_summary/
+```
 
 ## 빠른 시작
 

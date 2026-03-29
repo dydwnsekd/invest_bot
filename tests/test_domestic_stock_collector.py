@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from datetime import date
 
+import pandas as pd
+
+from invest_bot.config.settings import AppSettings
+from invest_bot.market.collector import MarketDataCollector
 from invest_bot.market.domestic_stock import DailyPriceRequest, DomesticStockDataCollector, InvestorDailyRequest, StockInfoRequest
+from invest_bot.market.storage import CsvStorage
 
 
 class StubClient:
@@ -60,3 +65,28 @@ def test_collect_investor_daily_maps_reference_endpoint():
     assert client.calls[0]["tr_id"] == "FHPTJ04160001"
     assert not detail.empty
     assert not summary.empty
+
+
+def test_market_data_collector_saves_all_requested_csv_files(tmp_path):
+    collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(tmp_path))
+
+    daily_summary, daily_prices = collector.save_daily_prices(
+        "005930",
+        date(2026, 3, 1),
+        date(2026, 3, 29),
+        pd.DataFrame([{"symbol": "005930"}]),
+        pd.DataFrame([{"stck_bsop_date": "20260328"}]),
+    )
+    stock_info = collector.save_stock_info("005930", pd.DataFrame([{"pdno": "005930"}]))
+    investor_detail, investor_summary = collector.save_investor_daily(
+        "005930",
+        date(2026, 3, 29),
+        pd.DataFrame([{"frgn_ntby_qty": "100"}]),
+        pd.DataFrame([{"stck_bsop_date": "20260329"}]),
+    )
+
+    assert daily_summary.path.exists()
+    assert daily_prices.path.exists()
+    assert stock_info.path.exists()
+    assert investor_detail.path.exists()
+    assert investor_summary.path.exists()
