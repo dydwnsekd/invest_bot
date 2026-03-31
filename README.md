@@ -98,6 +98,7 @@ invest_bot/
 - 종목 기본정보 수집
 - 투자자 수급 일별 데이터 수집
 - 수집 결과 CSV 저장
+- 일봉 CSV 기반 기본 지표 계산
 
 관련 구현 위치:
 
@@ -105,7 +106,9 @@ invest_bot/
 - `src/invest_bot/market/domestic_stock.py`
 - `src/invest_bot/market/collector.py`
 - `src/invest_bot/market/storage.py`
+- `src/invest_bot/market/analysis.py`
 - `src/invest_bot/jobs/collect_market_data.py`
+- `src/invest_bot/jobs/analyze_daily_prices.py`
 
 CSV는 기본적으로 아래 경로에 저장됩니다.
 
@@ -118,6 +121,13 @@ data/raw/domestic_stock/
   investor_daily_summary/
 ```
 
+지표 계산 결과는 기본적으로 아래 경로에 저장됩니다.
+
+```text
+data/processed/domestic_stock/
+  daily_prices_indicators/
+```
+
 ## 빠른 시작
 
 가상환경을 준비한 뒤 아래 순서로 시작합니다.
@@ -126,6 +136,7 @@ data/raw/domestic_stock/
 pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest
 python scripts/run_collection.py
+python scripts/run_daily_analysis.py
 ```
 
 설정 파일은 아래 예시를 복사해서 사용합니다.
