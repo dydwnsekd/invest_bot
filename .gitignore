@@ -138,6 +138,7 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.tmp/
 env/
 venv/
 ENV/
@@ -207,3 +208,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Local pytest temp artifacts
+pytest-cache-files-*/

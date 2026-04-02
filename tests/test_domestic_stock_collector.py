@@ -8,6 +8,7 @@ from invest_bot.config.settings import AppSettings
 from invest_bot.market.collector import MarketDataCollector
 from invest_bot.market.domestic_stock import DailyPriceRequest, DomesticStockDataCollector, InvestorDailyRequest, StockInfoRequest
 from invest_bot.market.storage import CsvStorage
+from tests.helpers import make_test_dir
 
 
 class StubClient:
@@ -67,8 +68,9 @@ def test_collect_investor_daily_maps_reference_endpoint():
     assert not summary.empty
 
 
-def test_market_data_collector_saves_all_requested_csv_files(tmp_path):
-    collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(tmp_path))
+def test_market_data_collector_saves_all_requested_csv_files():
+    test_dir = make_test_dir("market_data_collector")
+    collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(test_dir))
 
     daily_summary, daily_prices = collector.save_daily_prices(
         "005930",

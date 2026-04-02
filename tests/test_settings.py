@@ -1,17 +1,18 @@
-from pathlib import Path
-
 from invest_bot.config.settings import AppSettings, TradingMode
+from tests.helpers import make_test_dir
 
 
-def test_app_settings_defaults_to_mock_mode(tmp_path: Path):
-    settings = AppSettings.from_file(tmp_path / "missing.yaml")
+def test_app_settings_defaults_to_mock_mode():
+    test_dir = make_test_dir("settings_defaults")
+    settings = AppSettings.from_file(test_dir / "missing.yaml")
 
     assert settings.market == "domestic_stock"
     assert settings.trading_mode is TradingMode.MOCK
 
 
-def test_app_settings_loads_file_values(tmp_path: Path):
-    config_path = tmp_path / "app.yaml"
+def test_app_settings_loads_file_values():
+    test_dir = make_test_dir("settings_load")
+    config_path = test_dir / "app.yaml"
     config_path.write_text(
         "\n".join(
             [

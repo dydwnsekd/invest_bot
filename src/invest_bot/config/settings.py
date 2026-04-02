@@ -27,16 +27,26 @@ class AppSettings:
     kis_mock_app_secret: str = ""
 
     @classmethod
-    def from_file(cls, path: str | Path | None = None) -> "AppSettings":
+    def from_file(
+        cls,
+        path: str | Path | None = None,
+        credentials_path: str | Path | None = None,
+    ) -> "AppSettings":
         settings_path = Path(path) if path is not None else Path("config") / "app.yaml"
         raw_data: dict[str, str] = {}
         if settings_path.exists():
             loaded = yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}
             raw_data = {str(key): value for key, value in loaded.items()}
 
-        credentials_path = Path("config") / "kis_credentials.yaml"
-        if credentials_path.exists():
-            loaded_credentials = yaml.safe_load(credentials_path.read_text(encoding="utf-8")) or {}
+        if credentials_path is None and path is None:
+            credentials_file = Path("config") / "kis_credentials.yaml"
+        elif credentials_path is not None:
+            credentials_file = Path(credentials_path)
+        else:
+            credentials_file = None
+
+        if credentials_file is not None and credentials_file.exists():
+            loaded_credentials = yaml.safe_load(credentials_file.read_text(encoding="utf-8")) or {}
             raw_data.update({str(key): value for key, value in loaded_credentials.items()})
 
         mode = str(raw_data.get("trading_mode", TradingMode.MOCK.value)).lower()

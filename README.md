@@ -103,6 +103,8 @@ invest_bot/
 관련 구현 위치:
 
 - `src/invest_bot/clients/kis_client.py`
+- `src/invest_bot/dashboard/service.py`
+- `src/invest_bot/dashboard/server.py`
 - `src/invest_bot/market/domestic_stock.py`
 - `src/invest_bot/market/collector.py`
 - `src/invest_bot/market/storage.py`
@@ -137,6 +139,13 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest
 python scripts/run_collection.py
 python scripts/run_daily_analysis.py
+python scripts/run_dashboard.py
+```
+
+웹으로 현재 상태를 보고 싶다면 아래 주소를 열면 됩니다.
+
+```text
+http://127.0.0.1:8000
 ```
 
 설정 파일은 아래 예시를 복사해서 사용합니다.

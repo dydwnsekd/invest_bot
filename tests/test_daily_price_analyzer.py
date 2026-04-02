@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 
 from invest_bot.market.analysis import DailyPriceAnalyzer, IndicatorRequest
 from invest_bot.market.storage import CsvStorage
+from tests.helpers import make_test_dir
 
 
-def test_daily_price_analyzer_normalizes_and_saves_indicators(tmp_path: Path):
-    raw_storage = CsvStorage(tmp_path / "raw")
-    processed_storage = CsvStorage(tmp_path / "processed")
+def test_daily_price_analyzer_normalizes_and_saves_indicators():
+    test_dir = make_test_dir("daily_price_analyzer")
+    raw_storage = CsvStorage(test_dir / "raw")
+    processed_storage = CsvStorage(test_dir / "processed")
     analyzer = DailyPriceAnalyzer(raw_storage=raw_storage, processed_storage=processed_storage)
 
     raw_frame = pd.DataFrame(
