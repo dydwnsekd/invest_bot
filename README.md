@@ -190,6 +190,7 @@ http://127.0.0.1:8000
 - 기능 추가 또는 구조 변경 시 README를 함께 갱신합니다.
 - reference에서 가져온 개념이나 코드가 있다면 출처를 추적 가능하게 남깁니다.
 - 에이전트 작업 기준은 [`agent.md`](./agent.md)를 참고합니다.
+- 작업 단위와 진행 현황은 [`docs/tasks/00_summary.md`](./docs/tasks/00_summary.md)를 참고합니다.
 
 ## 현재 상태
 
