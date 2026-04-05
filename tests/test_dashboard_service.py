@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 
 from invest_bot.dashboard.service import DashboardDataService
@@ -14,6 +12,11 @@ def test_dashboard_service_renders_saved_raw_and_processed_data():
     raw_storage = CsvStorage(test_dir / "raw")
     processed_storage = CsvStorage(test_dir / "processed")
 
+    raw_storage.save(
+        "stock_info",
+        "005930.csv",
+        pd.DataFrame([{"pdno": "005930", "prdt_abrv_name": "삼성전자"}]),
+    )
     raw_storage.save(
         "daily_prices",
         "005930_20260301_20260329.csv",
@@ -31,3 +34,7 @@ def test_dashboard_service_renders_saved_raw_and_processed_data():
     assert "invest_bot dashboard" in html
     assert "daily_prices" in html
     assert "daily_prices_indicators" in html
+    assert "삼성전자" in html
+    assert "표시 행 수" in html
+    assert "column-toggle" in html
+    assert "컬럼 설명" not in html or "close" in html
