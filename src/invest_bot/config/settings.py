@@ -7,6 +7,10 @@ from pathlib import Path
 import yaml
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+CONFIG_DIR = PROJECT_ROOT / "config"
+
+
 class TradingMode(StrEnum):
     MOCK = "mock"
     LIVE = "live"
@@ -32,14 +36,14 @@ class AppSettings:
         path: str | Path | None = None,
         credentials_path: str | Path | None = None,
     ) -> "AppSettings":
-        settings_path = Path(path) if path is not None else Path("config") / "app.yaml"
+        settings_path = Path(path) if path is not None else CONFIG_DIR / "app.yaml"
         raw_data: dict[str, str] = {}
         if settings_path.exists():
             loaded = yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}
             raw_data = {str(key): value for key, value in loaded.items()}
 
         if credentials_path is None and path is None:
-            credentials_file = Path("config") / "kis_credentials.yaml"
+            credentials_file = CONFIG_DIR / "kis_credentials.yaml"
         elif credentials_path is not None:
             credentials_file = Path(credentials_path)
         else:
