@@ -25,16 +25,19 @@ def test_dashboard_service_renders_saved_raw_and_processed_data():
     processed_storage.save(
         "daily_prices_indicators",
         "005930_20260301_20260329.csv",
-        pd.DataFrame([{"date": "20260329", "ma_5": 69000, "rsi_14": 55.2}]),
+        pd.DataFrame([{"date": "20260329", "close": 70000, "ma_5": 69000, "rsi_14": 55.2}]),
     )
 
     service = DashboardDataService(raw_root=test_dir / "raw", processed_root=test_dir / "processed")
     html = service.render_html()
 
     assert "invest_bot dashboard" in html
-    assert "daily_prices" in html
-    assert "daily_prices_indicators" in html
+    assert "일봉 가격 데이터" in html
+    assert "기본 지표 계산 결과" in html
     assert "삼성전자" in html
+    assert "종목명" in html
+    assert "컬럼 설명" in html
+    assert "왜 보는가" in html
+    assert "추천 컬럼만" in html
     assert "표시 행 수" in html
     assert "column-toggle" in html
-    assert "컬럼 설명" not in html or "close" in html
