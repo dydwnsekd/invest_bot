@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pandas as pd
 
@@ -45,6 +46,25 @@ class DatasetPreview:
 class DashboardSnapshot:
     raw_previews: list[DatasetPreview]
     processed_previews: list[DatasetPreview]
+
+
+@dataclass(slots=True)
+class TestCasePreview:
+    name: str
+    status: str
+    detail: str
+
+
+@dataclass(slots=True)
+class TestReportPreview:
+    total: int
+    passed: int
+    failed: int
+    skipped: int
+    errors: int
+    command: str
+    path: Path
+    test_cases: list[TestCasePreview]
 
 
 class DashboardDataService:
@@ -140,9 +160,11 @@ class DashboardDataService:
         self,
         raw_root: str | Path = "data/raw/domestic_stock",
         processed_root: str | Path = "data/processed/domestic_stock",
+        test_report_path: str | Path = "data/processed/test_reports/pytest_results.xml",
     ) -> None:
         self.raw_root = Path(raw_root)
         self.processed_root = Path(processed_root)
+        self.test_report_path = Path(test_report_path)
 
     def build_snapshot(self) -> DashboardSnapshot:
         return DashboardSnapshot(
@@ -153,6 +175,59 @@ class DashboardDataService:
     def render_html(self) -> str:
         snapshot = self.build_snapshot()
         return self._render_snapshot(snapshot)
+
+    def load_test_report(self) -> TestReportPreview | None:
+        if not self.test_report_path.exists():
+            return None
+
+        root = ElementTree.parse(self.test_report_path).getroot()
+        suite = root if root.tag == "testsuite" else root.find("testsuite")
+        if suite is None:
+            return None
+
+        total = int(suite.attrib.get("tests", "0"))
+        failures = int(suite.attrib.get("failures", "0"))
+        skipped = int(suite.attrib.get("skipped", "0"))
+        errors = int(suite.attrib.get("errors", "0"))
+        passed = max(total - failures - skipped - errors, 0)
+
+        test_cases: list[TestCasePreview] = []
+        for case in suite.findall("testcase"):
+            failure = case.find("failure")
+            skipped_node = case.find("skipped")
+            error = case.find("error")
+
+            status = "passed"
+            detail = ""
+            if failure is not None:
+                status = "failed"
+                detail = (failure.attrib.get("message") or failure.text or "").strip()
+            elif skipped_node is not None:
+                status = "skipped"
+                detail = (skipped_node.attrib.get("message") or skipped_node.text or "").strip()
+            elif error is not None:
+                status = "error"
+                detail = (error.attrib.get("message") or error.text or "").strip()
+
+            class_name = case.attrib.get("classname", "").strip()
+            case_name = case.attrib.get("name", "").strip()
+            name = f"{class_name}::{case_name}" if class_name else case_name
+            test_cases.append(TestCasePreview(name=name, status=status, detail=detail[:220]))
+
+        metadata_root = self.test_report_path.parent
+        command_file = metadata_root / "pytest_command.txt"
+        command = command_file.read_text(encoding="utf-8").strip() if command_file.exists() else ""
+
+        return TestReportPreview(
+            total=total,
+            passed=passed,
+            failed=failures,
+            skipped=skipped,
+            errors=errors,
+            command=command,
+            path=self.test_report_path,
+            test_cases=test_cases,
+        )
 
     def _collect_previews(self, root: Path) -> list[DatasetPreview]:
         previews: list[DatasetPreview] = []
@@ -349,6 +424,73 @@ class DashboardDataService:
 </th>
         """.strip()
 
+    def _render_test_report_section(self) -> str:
+        report = self.load_test_report()
+        if report is None:
+            return """
+<section class="section">
+  <div class="section-header">
+    <div><h2>테스트 결과</h2><p>아직 저장된 테스트 결과가 없습니다. 테스트 실행 스크립트로 먼저 결과를 저장해 주세요.</p></div>
+    <span class="badge">pytest</span>
+  </div>
+  <div class="empty">`scripts/run_tests.py`로 테스트를 실행하면 이 영역에서 통과, 실패, 스킵 결과를 보기 쉽게 확인할 수 있습니다.</div>
+</section>
+            """.strip()
+
+        summary_cards = f"""
+<div class="hero-stats">
+  <div class="hero-stat test-stat"><strong>{report.total}</strong><span>전체 테스트</span></div>
+  <div class="hero-stat test-stat"><strong>{report.passed}</strong><span>통과</span></div>
+  <div class="hero-stat test-stat fail"><strong>{report.failed + report.errors}</strong><span>실패/에러</span></div>
+  <div class="hero-stat test-stat"><strong>{report.skipped}</strong><span>스킵</span></div>
+</div>
+        """.strip()
+
+        command_html = ""
+        if report.command:
+            command_html = f'<div class="meta-panel">실행 명령<br />{escape(report.command)}<br /><br />결과 파일<br />{escape(str(report.path))}</div>'
+
+        test_rows = []
+        for case in report.test_cases[:20]:
+            badge_class = f"case-badge {case.status}"
+            detail = f"<div class=\"case-detail\">{escape(case.detail)}</div>" if case.detail else ""
+            test_rows.append(
+                f"""
+<article class="case-row">
+  <div class="case-row-head">
+    <strong>{escape(case.name)}</strong>
+    <span class="{badge_class}">{escape(case.status)}</span>
+  </div>
+  {detail}
+</article>
+                """.strip()
+            )
+
+        return f"""
+<section class="section">
+  <div class="section-header">
+    <div><h2>테스트 결과</h2><p>최근 저장된 `pytest` 실행 결과입니다. 실패가 있다면 어떤 테스트에서 문제가 났는지 바로 확인할 수 있습니다.</p></div>
+    <span class="badge">pytest</span>
+  </div>
+  {summary_cards}
+  <div class="card">
+    <div class="card-top">
+      <div>
+        <h3>최근 테스트 실행</h3>
+        <div class="dataset-key">최대 20개 테스트 케이스 미리보기</div>
+      </div>
+      {command_html}
+    </div>
+    <div class="guide-grid">
+      <article class="guide-card"><h4>이 화면은 무엇인가</h4><p>테스트가 몇 개 통과했고 몇 개 실패했는지 한눈에 보는 영역입니다.</p></article>
+      <article class="guide-card"><h4>왜 보는가</h4><p>터미널 로그를 길게 읽지 않아도, 실패한 테스트와 에러 메시지를 빠르게 찾을 수 있습니다.</p></article>
+      <article class="guide-card"><h4>처음에는 무엇을 볼까</h4><p>먼저 실패/에러 개수를 보고, 아래 목록에서 `failed` 또는 `error` 상태의 테스트를 확인하면 됩니다.</p></article>
+    </div>
+    <div class="case-list">{"".join(test_rows) if test_rows else '<div class="empty-text">표시할 테스트 케이스가 없습니다.</div>'}</div>
+  </div>
+</section>
+        """.strip()
+
     def _render_snapshot(self, snapshot: DashboardSnapshot) -> str:
         return f"""
 <!DOCTYPE html>
@@ -362,6 +504,7 @@ class DashboardDataService:
     * {{ box-sizing:border-box; }} body {{ margin:0; font-family:"Segoe UI","Noto Sans KR",sans-serif; color:var(--ink); background:radial-gradient(circle at top left,#fff0cf 0,transparent 24%), radial-gradient(circle at top right,#d6efe9 0,transparent 22%), linear-gradient(180deg,#fcfaf6 0,var(--bg) 100%); }}
     .page {{ max-width:1360px; margin:0 auto; padding:28px 18px 72px; }} .hero {{ background:linear-gradient(135deg,var(--accent2) 0,var(--accent) 100%); color:#fff; border-radius:28px; padding:32px; box-shadow:var(--shadow); }} .hero h1 {{ margin:0 0 10px; font-size:clamp(2rem,4vw,3.2rem); }} .hero p {{ margin:0; max-width:760px; line-height:1.7; color:rgba(255,255,255,.9); }}
     .hero-stats {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:22px; }} .hero-stat {{ padding:14px 16px; border-radius:18px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.14); }} .hero-stat strong {{ display:block; font-size:1.2rem; }} .hero-stat span {{ color:rgba(255,255,255,.84); font-size:.92rem; }}
+    .test-stat {{ background:#fff; border:1px solid #efe4d6; color:var(--ink); }} .test-stat span {{ color:var(--muted); }} .test-stat.fail strong {{ color:#b42318; }}
     .section {{ margin-top:28px; }} .section-header {{ display:flex; gap:12px; justify-content:space-between; align-items:end; margin-bottom:14px; }} .section-header h2 {{ margin:0; font-size:1.6rem; }} .section-header p {{ margin:6px 0 0; color:var(--muted); line-height:1.55; }} .badge {{ display:inline-flex; padding:8px 12px; border-radius:999px; background:var(--soft); color:var(--accent); font-weight:700; font-size:.88rem; white-space:nowrap; }}
     .cards {{ display:grid; gap:20px; }} .card {{ background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:24px; padding:22px; box-shadow:var(--shadow); }} .card-top {{ display:flex; gap:18px; justify-content:space-between; align-items:start; margin-bottom:18px; }} .card h3 {{ margin:0; font-size:1.35rem; }} .dataset-key {{ margin-top:6px; color:var(--muted); font-size:.92rem; }} .meta-panel {{ min-width:240px; padding:14px 16px; border-radius:18px; background:#fff; border:1px solid #efe4d6; color:var(--muted); font-size:.92rem; line-height:1.6; word-break:break-all; }} .symbol-chip {{ display:inline-flex; margin-top:10px; padding:8px 12px; border-radius:999px; background:var(--soft); color:var(--accent2); font-size:.88rem; font-weight:700; }}
     .guide-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:18px; }} .guide-card,.controls-panel,.column-card {{ background:var(--card); border:1px solid #efe4d6; border-radius:18px; }} .guide-card {{ padding:16px; }} .guide-card h4,.controls-text h4,.info-title {{ margin:0 0 8px; font-size:1rem; color:var(--accent2); }} .guide-card p,.controls-text p,.column-card p {{ margin:0; line-height:1.6; color:#344054; }}
@@ -370,6 +513,7 @@ class DashboardDataService:
     .column-selector {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-top:14px; }} .column-option {{ display:grid; grid-template-columns:auto 1fr; gap:4px 10px; align-items:start; padding:12px; border-radius:16px; background:rgba(255,255,255,.82); border:1px solid #efe4d6; }} .column-option input {{ margin-top:2px; }} .column-option span {{ font-size:.92rem; font-weight:700; color:#344054; }}
     .table-wrap {{ overflow:auto; border-radius:20px; border:1px solid #efe4d6; background:#fff; }} .table-toolbar {{ display:flex; gap:12px; justify-content:space-between; align-items:end; padding:16px 16px 10px; border-bottom:1px solid #f0e7db; background:#fffaf1; }} .table-toolbar strong {{ display:block; margin-bottom:4px; color:var(--accent2); }} .table-toolbar span,.row-picker {{ color:var(--muted); font-size:.88rem; }} .row-picker {{ display:inline-flex; gap:8px; align-items:center; font-weight:700; }} .row-picker select {{ border:1px solid #e5d9c9; border-radius:12px; background:#fff; padding:8px 10px; }}
     .dataset-table {{ width:100%; border-collapse:collapse; font-size:.92rem; }} .dataset-table th,.dataset-table td {{ padding:11px 12px; border-bottom:1px solid #f0e7db; text-align:left; white-space:nowrap; }} .dataset-table th {{ position:sticky; top:0; background:#fffaf1; z-index:1; }} .dataset-table tbody tr:nth-child(even) {{ background:rgba(250,247,239,.5); }} .dataset-table tbody tr:hover {{ background:rgba(223,244,239,.48); }} .th-label {{ font-weight:800; color:#1f2937; }} .empty,.empty-text {{ color:var(--muted); }} .empty {{ padding:28px; border-radius:22px; background:rgba(255,255,255,.78); border:1px dashed #e4d7c4; line-height:1.7; }} .empty-text {{ padding:18px; }}
+    .case-list {{ display:grid; gap:10px; }} .case-row {{ padding:14px 16px; border-radius:18px; background:#fff; border:1px solid #efe4d6; }} .case-row-head {{ display:flex; gap:12px; justify-content:space-between; align-items:start; }} .case-row-head strong {{ word-break:break-word; }} .case-badge {{ display:inline-flex; padding:6px 10px; border-radius:999px; font-size:.78rem; font-weight:700; text-transform:uppercase; }} .case-badge.passed {{ background:#e8f7ef; color:#027a48; }} .case-badge.failed,.case-badge.error {{ background:#fee4e2; color:#b42318; }} .case-badge.skipped {{ background:#fff1d6; color:#9a6700; }} .case-detail {{ margin-top:8px; color:#475467; line-height:1.55; white-space:pre-wrap; }}
     @media (max-width:920px) {{ .card-top,.section-header,.table-toolbar {{ flex-direction:column; align-items:stretch; }} .meta-panel {{ min-width:0; }} }}
   </style>
 </head>
@@ -384,6 +528,7 @@ class DashboardDataService:
         <div class="hero-stat"><strong>추천 컬럼 제공</strong><span>처음엔 필요한 정보만 보이도록 구성했습니다.</span></div>
       </div>
     </section>
+    {self._render_test_report_section()}
     {self._render_section("원본 수집 데이터", "실제 KIS 수집 결과", "가격, 종목정보, 수급처럼 외부에서 받아온 원본 데이터입니다.", snapshot.raw_previews)}
     {self._render_section("분석 데이터", "가공 후 계산 결과", "원본 데이터를 바탕으로 계산한 이동평균, RSI 같은 지표 데이터입니다.", snapshot.processed_previews)}
   </div>

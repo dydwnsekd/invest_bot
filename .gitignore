@@ -211,3 +211,4 @@ __marimo__/
 
 # Local pytest temp artifacts
 pytest-cache-files-*/
+data/processed/test_reports/
