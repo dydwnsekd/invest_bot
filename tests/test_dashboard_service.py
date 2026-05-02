@@ -29,6 +29,22 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
         "005930_20260301_20260329.csv",
         pd.DataFrame([{"date": "20260329", "close": 70000, "ma_5": 69000, "rsi_14": 55.2}]),
     )
+    processed_storage.save(
+        "golden_cross_signals",
+        "005930_20260301_20260329.csv",
+        pd.DataFrame(
+            [
+                {
+                    "date": "20260329",
+                    "close": 70000,
+                    "signal": "buy",
+                    "signal_reason": "ma_5 crossed above ma_20.",
+                    "signal_ma_5": 70500,
+                    "signal_ma_20": 70000,
+                }
+            ]
+        ),
+    )
 
     (report_dir / "pytest_results.xml").write_text(
         """
@@ -66,4 +82,7 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
     assert "전체 테스트" in html
     assert "test_sell_signal" in html
     assert "failed" in html
+    assert "골든크로스 신호" in html
+    assert "최신 골든크로스 신호" in html
+    assert "ma_5 crossed above ma_20." in html
     assert "column-toggle" in html

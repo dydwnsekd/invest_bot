@@ -37,6 +37,7 @@ class DatasetPreview:
     symbol: str
     symbol_name: str
     recommended_columns: list[str]
+    highlight_html: str
     column_help_html: str
     column_selector_html: str
     preview_html: str
@@ -113,6 +114,13 @@ class DashboardDataService:
             first_look="종가, 5일 이동평균, 20일 이동평균, RSI를 함께 보면 흐름을 읽기 좋습니다.",
             recommended_columns=("date", "close", "ma_5", "ma_20", "rsi_14", "volume_ma_5"),
         ),
+        "golden_cross_signals": DatasetGuide(
+            title="골든크로스 신호",
+            summary="이동평균 교차 조건으로 매수, 매도, 관망 신호를 계산한 결과입니다.",
+            purpose="전략이 지금 어떤 판단을 내렸는지 빠르게 확인할 때 씁니다.",
+            first_look="날짜, 신호, 신호 이유, signal_ma_5, signal_ma_20을 먼저 보면 됩니다.",
+            recommended_columns=("date", "signal", "signal_reason", "signal_ma_5", "signal_ma_20", "close"),
+        ),
     }
 
     COLUMN_META = {
@@ -154,6 +162,12 @@ class DashboardDataService:
         "start_date": ColumnMeta("시작일", "수집 요청의 시작 날짜입니다.", "어느 기간을 저장했는지 알 수 있습니다."),
         "end_date": ColumnMeta("종료일", "수집 요청의 종료 날짜입니다.", "데이터 최신 범위를 확인할 수 있습니다."),
         "row_count": ColumnMeta("행 수", "파일 안에 저장된 데이터 개수입니다.", "예상보다 적거나 많으면 수집 상태를 점검할 수 있습니다."),
+        "signal": ColumnMeta("신호", "전략의 최종 판단 결과입니다.", "buy, sell, hold 중 무엇인지 바로 파악할 수 있습니다."),
+        "signal_reason": ColumnMeta("신호 이유", "전략이 그 신호를 낸 직접적인 설명입니다.", "왜 매수나 매도가 나왔는지 이해하는 데 가장 중요합니다."),
+        "signal_prev_ma_5": ColumnMeta("직전 5일선", "신호 직전 시점의 5일 이동평균 값입니다.", "교차가 직전 구간에서 어떻게 생겼는지 비교할 수 있습니다."),
+        "signal_prev_ma_20": ColumnMeta("직전 20일선", "신호 직전 시점의 20일 이동평균 값입니다.", "장기선 대비 직전 상태를 확인할 수 있습니다."),
+        "signal_ma_5": ColumnMeta("현재 5일선", "신호가 생성된 시점의 5일 이동평균 값입니다.", "단기선이 장기선을 넘었는지 바로 확인할 수 있습니다."),
+        "signal_ma_20": ColumnMeta("현재 20일선", "신호가 생성된 시점의 20일 이동평균 값입니다.", "5일선과 비교해 골든크로스 여부를 해석할 수 있습니다."),
     }
 
     def __init__(
@@ -277,6 +291,7 @@ class DashboardDataService:
                     symbol=symbol,
                     symbol_name=symbol_name,
                     recommended_columns=recommended,
+                    highlight_html=self._build_highlight(dataset_dir.name, enriched),
                     column_help_html=self._build_column_help(enriched.columns, recommended),
                     column_selector_html=self._build_column_selector(dataset_dir.name, enriched.columns, recommended),
                     preview_html=self._frame_to_html(dataset_dir.name, enriched),
@@ -424,6 +439,40 @@ class DashboardDataService:
 </th>
         """.strip()
 
+    def _build_highlight(self, dataset_name: str, frame: pd.DataFrame) -> str:
+        if dataset_name != "golden_cross_signals" or frame.empty:
+            return ""
+
+        latest = frame.iloc[-1]
+        signal = str(latest.get("signal", "hold")).strip() or "hold"
+        reason = str(latest.get("signal_reason", "")).strip() or "아직 신호 설명이 없습니다."
+        signal_date = str(latest.get("date", "")).strip()
+        ma_5 = latest.get("signal_ma_5", "")
+        ma_20 = latest.get("signal_ma_20", "")
+
+        badge_class = {
+            "buy": "case-badge passed",
+            "sell": "case-badge failed",
+            "hold": "case-badge skipped",
+        }.get(signal, "case-badge")
+
+        return f"""
+<section class="highlight-panel">
+  <div class="case-row-head">
+    <div>
+      <h4 class="info-title">최신 골든크로스 신호</h4>
+      <div class="dataset-key">{escape(signal_date)}</div>
+    </div>
+    <span class="{badge_class}">{escape(signal)}</span>
+  </div>
+  <p class="highlight-copy">{escape(reason)}</p>
+  <div class="guide-grid">
+    <article class="guide-card"><h4>5일선</h4><p>{escape(str(ma_5))}</p></article>
+    <article class="guide-card"><h4>20일선</h4><p>{escape(str(ma_20))}</p></article>
+  </div>
+</section>
+        """.strip()
+
     def _render_test_report_section(self) -> str:
         report = self.load_test_report()
         if report is None:
@@ -513,6 +562,7 @@ class DashboardDataService:
     .column-selector {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-top:14px; }} .column-option {{ display:grid; grid-template-columns:auto 1fr; gap:4px 10px; align-items:start; padding:12px; border-radius:16px; background:rgba(255,255,255,.82); border:1px solid #efe4d6; }} .column-option input {{ margin-top:2px; }} .column-option span {{ font-size:.92rem; font-weight:700; color:#344054; }}
     .table-wrap {{ overflow:auto; border-radius:20px; border:1px solid #efe4d6; background:#fff; }} .table-toolbar {{ display:flex; gap:12px; justify-content:space-between; align-items:end; padding:16px 16px 10px; border-bottom:1px solid #f0e7db; background:#fffaf1; }} .table-toolbar strong {{ display:block; margin-bottom:4px; color:var(--accent2); }} .table-toolbar span,.row-picker {{ color:var(--muted); font-size:.88rem; }} .row-picker {{ display:inline-flex; gap:8px; align-items:center; font-weight:700; }} .row-picker select {{ border:1px solid #e5d9c9; border-radius:12px; background:#fff; padding:8px 10px; }}
     .dataset-table {{ width:100%; border-collapse:collapse; font-size:.92rem; }} .dataset-table th,.dataset-table td {{ padding:11px 12px; border-bottom:1px solid #f0e7db; text-align:left; white-space:nowrap; }} .dataset-table th {{ position:sticky; top:0; background:#fffaf1; z-index:1; }} .dataset-table tbody tr:nth-child(even) {{ background:rgba(250,247,239,.5); }} .dataset-table tbody tr:hover {{ background:rgba(223,244,239,.48); }} .th-label {{ font-weight:800; color:#1f2937; }} .empty,.empty-text {{ color:var(--muted); }} .empty {{ padding:28px; border-radius:22px; background:rgba(255,255,255,.78); border:1px dashed #e4d7c4; line-height:1.7; }} .empty-text {{ padding:18px; }}
+    .highlight-panel {{ margin-bottom:16px; padding:16px; border-radius:20px; border:1px solid #efe4d6; background:linear-gradient(180deg,#fff 0,#f7fbfa 100%); }} .highlight-copy {{ margin:10px 0 0; color:#344054; line-height:1.6; }}
     .case-list {{ display:grid; gap:10px; }} .case-row {{ padding:14px 16px; border-radius:18px; background:#fff; border:1px solid #efe4d6; }} .case-row-head {{ display:flex; gap:12px; justify-content:space-between; align-items:start; }} .case-row-head strong {{ word-break:break-word; }} .case-badge {{ display:inline-flex; padding:6px 10px; border-radius:999px; font-size:.78rem; font-weight:700; text-transform:uppercase; }} .case-badge.passed {{ background:#e8f7ef; color:#027a48; }} .case-badge.failed,.case-badge.error {{ background:#fee4e2; color:#b42318; }} .case-badge.skipped {{ background:#fff1d6; color:#9a6700; }} .case-detail {{ margin-top:8px; color:#475467; line-height:1.55; white-space:pre-wrap; }}
     @media (max-width:920px) {{ .card-top,.section-header,.table-toolbar {{ flex-direction:column; align-items:stretch; }} .meta-panel {{ min-width:0; }} }}
   </style>
@@ -625,6 +675,7 @@ class DashboardDataService:
     <article class="guide-card"><h4>처음에는 무엇을 볼까</h4><p>{escape(preview.first_look)}</p></article>
   </div>
   <h4 class="info-title">컬럼 설명</h4>
+  {preview.highlight_html}
   {preview.column_help_html}
   {preview.column_selector_html}
   <div class="table-wrap">{preview.preview_html}</div>
