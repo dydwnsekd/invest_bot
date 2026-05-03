@@ -24,6 +24,19 @@ class CollectionRequest:
     limit: int = 100
 
 
+@dataclass(slots=True)
+class BatchCollectionResult:
+    symbol: str
+    status: str
+    daily_summary_rows: int
+    daily_price_rows: int
+    stock_info_rows: int
+    investor_daily_rows: int
+    investor_summary_rows: int
+    saved_files: list[str]
+    error: str = ""
+
+
 class MarketDataCollector:
     """Facade for the currently supported domestic stock collection flows."""
 
@@ -86,3 +99,49 @@ class MarketDataCollector:
             frame=investor_summary,
         )
         return detail_result, summary_result
+
+    def collect_symbol_bundle(self, symbol: str, start_date: date, end_date: date) -> BatchCollectionResult:
+        try:
+            daily_summary, daily_prices = self.collect_daily_prices(symbol, start_date, end_date)
+            stock_info = self.collect_stock_info(symbol)
+            investor_daily, investor_summary = self.collect_investor_daily(symbol, end_date)
+
+            saved_daily_summary, saved_daily_prices = self.save_daily_prices(
+                symbol, start_date, end_date, daily_summary, daily_prices
+            )
+            saved_stock_info = self.save_stock_info(symbol, stock_info)
+            saved_investor_detail, saved_investor_summary = self.save_investor_daily(
+                symbol, end_date, investor_daily, investor_summary
+            )
+
+            return BatchCollectionResult(
+                symbol=symbol,
+                status="success",
+                daily_summary_rows=len(daily_summary),
+                daily_price_rows=len(daily_prices),
+                stock_info_rows=len(stock_info),
+                investor_daily_rows=len(investor_daily),
+                investor_summary_rows=len(investor_summary),
+                saved_files=[
+                    str(saved_daily_summary.path),
+                    str(saved_daily_prices.path),
+                    str(saved_stock_info.path),
+                    str(saved_investor_detail.path),
+                    str(saved_investor_summary.path),
+                ],
+            )
+        except Exception as error:  # noqa: BLE001
+            return BatchCollectionResult(
+                symbol=symbol,
+                status="failed",
+                daily_summary_rows=0,
+                daily_price_rows=0,
+                stock_info_rows=0,
+                investor_daily_rows=0,
+                investor_summary_rows=0,
+                saved_files=[],
+                error=str(error),
+            )
+
+    def collect_symbols_batch(self, symbols: list[str], start_date: date, end_date: date) -> list[BatchCollectionResult]:
+        return [self.collect_symbol_bundle(symbol=symbol, start_date=start_date, end_date=end_date) for symbol in symbols]

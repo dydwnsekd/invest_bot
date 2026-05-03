@@ -5,7 +5,7 @@ from datetime import date
 import pandas as pd
 
 from invest_bot.config.settings import AppSettings
-from invest_bot.market.collector import MarketDataCollector
+from invest_bot.market.collector import BatchCollectionResult, MarketDataCollector
 from invest_bot.market.domestic_stock import DailyPriceRequest, DomesticStockDataCollector, InvestorDailyRequest, StockInfoRequest
 from invest_bot.market.storage import CsvStorage
 from tests.helpers import make_test_dir
@@ -92,3 +92,41 @@ def test_market_data_collector_saves_all_requested_csv_files():
     assert stock_info.path.exists()
     assert investor_detail.path.exists()
     assert investor_summary.path.exists()
+
+
+def test_market_data_collector_can_collect_multiple_symbols_with_stubbed_methods(monkeypatch):
+    collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(make_test_dir("market_data_batch")))
+
+    monkeypatch.setattr(
+        collector,
+        "collect_daily_prices",
+        lambda symbol, start_date, end_date: (
+            pd.DataFrame([{"symbol": symbol}]),
+            pd.DataFrame([{"stck_bsop_date": "20260328", "symbol": symbol}]),
+        ),
+    )
+    monkeypatch.setattr(
+        collector,
+        "collect_stock_info",
+        lambda symbol: pd.DataFrame([{"pdno": symbol, "prdt_abrv_name": f"name-{symbol}"}]),
+    )
+    monkeypatch.setattr(
+        collector,
+        "collect_investor_daily",
+        lambda symbol, target_date: (
+            pd.DataFrame([{"frgn_ntby_qty": "100", "symbol": symbol}]),
+            pd.DataFrame([{"stck_bsop_date": "20260329", "symbol": symbol}]),
+        ),
+    )
+
+    results = collector.collect_symbols_batch(
+        symbols=["005930", "000660"],
+        start_date=date(2026, 3, 1),
+        end_date=date(2026, 3, 29),
+    )
+
+    assert len(results) == 2
+    assert all(isinstance(result, BatchCollectionResult) for result in results)
+    assert all(result.status == "success" for result in results)
+    assert results[0].symbol == "005930"
+    assert results[1].symbol == "000660"
