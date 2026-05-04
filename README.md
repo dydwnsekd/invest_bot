@@ -1,118 +1,178 @@
 # invest_bot
 
-국내주식을 대상으로 투자 전략을 선택하고 자동으로 매매할 수 있는 Python 기반 투자 봇 프로젝트입니다.
+국내주식 데이터를 수집하고, 지표를 계산하고, 전략 신호를 생성해 확인할 수 있는 Python 기반 자동매매 연구 프로젝트입니다.
 
-현재 프로젝트는 초기 설계 단계이며, `reference/open-trading-api`를 주요 참고 자산으로 활용해 백테스트, 모의투자, 실거래까지 확장 가능한 구조를 만드는 것을 목표로 합니다.
+현재는 실거래 자동화보다는 아래 흐름을 안정적으로 만드는 데 초점을 두고 있습니다.
 
-## 목표
+1. 데이터 수집
+2. CSV 저장
+3. 지표 계산
+4. 전략 신호 생성
+5. 대시보드 확인
+6. 테스트 기반 검증
 
-- 국내주식 자동매매 봇 개발
-- 전략 선택 및 향후 전략 교체가 가능한 구조 설계
-- 거래 데이터 수집 기반 마련
-- 백테스트, 모의투자, 실거래를 단계적으로 지원
-- 안전장치와 테스트가 포함된 운영 가능한 코드베이스 구축
+## 현재 구현 범위
 
-## 현재 확정된 사항
+### 데이터 수집
 
-- 대상 시장: 국내주식
-- 운영 모드: 모의투자 + 실거래
-- 초기 전략 기준: `reference/` 내 전략 및 예제를 우선 활용
-- 추가 요구: 전략 수립을 위한 거래 데이터 수집 필요
-- Python 버전: 3.13
-- 패키지 관리: `pip`
-- 테스트 도구: `pytest`
-- 문서 정책: 수정되는 내용에 따라 README 갱신
+- 국내주식 일봉 데이터 수집
+- 종목 기본정보 수집
+- 투자자 수급 일별 데이터 수집
+- CSV 저장
+- 다중 종목 배치 수집
 
-## 개발 방향
+### 분석
 
-이 프로젝트는 처음부터 전체 자동매매를 한 번에 완성하는 방식보다, 아래 순서로 점진적으로 개발하는 것을 기본 원칙으로 합니다.
+- 일봉 CSV 로드
+- 기본 컬럼 정규화
+- 이동평균 계산
+  - `ma_5`
+  - `ma_20`
+  - `ma_60`
+- 거래량 이동평균 계산
+  - `volume_ma_5`
+- RSI 계산
+  - `rsi_14`
 
-1. reference 분석
-2. 인증 및 시세 조회 기능 구성
-3. 거래 데이터 수집 기능 구성
-4. 전략 인터페이스 및 초기 전략 반영
-5. 백테스트 환경 구축
-6. 모의투자 흐름 연결
-7. 실거래 안전장치 적용
+### 전략
 
-핵심 원칙은 다음과 같습니다.
+- 전략 공통 인터페이스
+- 샘플 전략
+- 골든크로스 전략
+- 골든크로스 신호 생성 잡
 
-- reference 예제를 그대로 사용하는 대신 프로젝트 구조에 맞게 재구성
-- 전략 엔진과 주문 엔진 분리
-- 실거래보다 검증과 안정성 우선
-- 모의투자와 실거래 환경 명확히 분리
-- 설정값과 비밀키는 코드와 분리
+### 대시보드
 
-## 참고 자산
+- raw / processed 데이터 조회
+- 컬럼 선택
+- 표시 행 수 선택
+- 종목명 표시
+- 컬럼 설명 표시
+- 테스트 결과 표시
+- 골든크로스 최신 신호 표시
 
-현재 가장 중요한 참고 자산은 아래 경로입니다.
+### 테스트
 
-- `reference/open-trading-api/README.md`
-- `reference/open-trading-api/docs/`
-- `reference/open-trading-api/examples_llm/`
-- `reference/open-trading-api/examples_user/`
-- `reference/open-trading-api/backtester/`
-- `reference/open-trading-api/strategy_builder/`
+- `pytest` 기반 테스트
+- 전략 테스트
+- 수집기 테스트
+- 분석 테스트
+- 대시보드 테스트
+- 테스트 결과를 대시보드에서 확인하는 흐름 지원
 
-활용 원칙:
-
-- API 인증, 주문, 시세 조회는 reference 예제와 문서를 먼저 확인합니다.
-- 초기 전략은 reference 자산을 우선 검토합니다.
-- 재사용 시 프로젝트 전용 모듈 구조로 분리합니다.
-- 실거래 연결 전 반드시 테스트와 안전장치를 둡니다.
-
-프로젝트 전용 스킬 초안은 `skills/invest-bot-reference-reader/`에 있습니다.
-
-## 권장 프로젝트 구조
-
-아래 구조를 기본 방향으로 고려하고 있습니다.
+## 프로젝트 구조
 
 ```text
 invest_bot/
   agent.md
   README.md
+  docs/
+    tasks/
+    strategies/
+  config/
+    app.yaml.example
+    kis_credentials.yaml.example
   reference/
+    open-trading-api/
+  scripts/
+    run_collection.py
+    run_daily_analysis.py
+    run_golden_cross_signals.py
+    run_dashboard.py
+    run_tests.py
   src/
     invest_bot/
-      config/
       clients/
+      config/
+      dashboard/
+      jobs/
       market/
       strategy/
-      backtest/
-      trading/
-      risk/
-      jobs/
-      utils/
   tests/
-  scripts/
-  logs/
 ```
 
-현재 기본 골격이 위 구조를 기준으로 생성되어 있습니다.
+## 설정 파일
 
-## 현재 구현된 수집 기능
+실제 실행 전 아래 예시 파일을 복사해서 사용합니다.
 
-현재 국내주식 기준으로 아래 수집 기능이 기본 골격에 반영되어 있습니다.
+- [`config/app.yaml.example`](./config/app.yaml.example) -> `config/app.yaml`
+- [`config/kis_credentials.yaml.example`](./config/kis_credentials.yaml.example) -> `config/kis_credentials.yaml`
 
-- 일봉 데이터 수집
-- 종목 기본정보 수집
-- 투자자 수급 일별 데이터 수집
-- 수집 결과 CSV 저장
-- 일봉 CSV 기반 기본 지표 계산
+실제 키 파일은 `.gitignore`에 포함되어 있어 저장소에 올라가지 않습니다.
 
-관련 구현 위치:
+## 설치
 
-- `src/invest_bot/clients/kis_client.py`
-- `src/invest_bot/dashboard/service.py`
-- `src/invest_bot/dashboard/server.py`
-- `src/invest_bot/market/domestic_stock.py`
-- `src/invest_bot/market/collector.py`
-- `src/invest_bot/market/storage.py`
-- `src/invest_bot/market/analysis.py`
-- `src/invest_bot/jobs/collect_market_data.py`
-- `src/invest_bot/jobs/analyze_daily_prices.py`
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt -r requirements-dev.txt
+```
 
-CSV는 기본적으로 아래 경로에 저장됩니다.
+## 실행 방법
+
+### 1. 테스트
+
+전체 테스트:
+
+```powershell
+python -m pytest
+```
+
+대시보드에서 테스트 결과까지 보고 싶으면:
+
+```powershell
+python scripts/run_tests.py
+```
+
+특정 테스트만 실행:
+
+```powershell
+python scripts/run_tests.py tests/test_golden_cross_strategy.py tests/test_sample_strategy.py
+```
+
+### 2. 단일 종목 수집
+
+```powershell
+python scripts/run_collection.py 005930
+```
+
+### 3. 다중 종목 배치 수집
+
+```powershell
+python scripts/run_collection.py 005930 000660 035420
+```
+
+심볼 파일 사용:
+
+```powershell
+python scripts/run_collection.py --symbols-file symbols.txt --days 60
+```
+
+### 4. 지표 계산
+
+```powershell
+python scripts/run_daily_analysis.py
+```
+
+### 5. 골든크로스 신호 생성
+
+```powershell
+python scripts/run_golden_cross_signals.py
+```
+
+### 6. 대시보드 실행
+
+```powershell
+python scripts/run_dashboard.py
+```
+
+브라우저 접속:
+
+- [http://127.0.0.1:8000](http://127.0.0.1:8000)
+
+## 데이터 저장 경로
+
+### 수집 결과
 
 ```text
 data/raw/domestic_stock/
@@ -123,105 +183,82 @@ data/raw/domestic_stock/
   investor_daily_summary/
 ```
 
-지표 계산 결과는 기본적으로 아래 경로에 저장됩니다.
+### 분석 결과
 
 ```text
 data/processed/domestic_stock/
   daily_prices_indicators/
+  golden_cross_signals/
 ```
 
-## 빠른 시작
-
-가상환경을 준비한 뒤 아래 순서로 시작합니다.
-
-```bash
-pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest
-python scripts/run_collection.py
-python scripts/run_daily_analysis.py
-python scripts/run_dashboard.py
-```
-
-웹으로 현재 상태를 보고 싶다면 아래 주소를 열면 됩니다.
+### 테스트 결과
 
 ```text
-http://127.0.0.1:8000
+data/processed/test_reports/
 ```
 
-설정 파일은 아래 예시를 복사해서 사용합니다.
+## 현재 주요 파일
 
-- [`config/app.yaml.example`](./config/app.yaml.example) -> `config/app.yaml`
-- [`config/kis_credentials.yaml.example`](./config/kis_credentials.yaml.example) -> `config/kis_credentials.yaml`
+### 데이터 수집
 
-실제 비밀값 파일인 `config/kis_credentials.yaml`과 로컬 실행 설정 파일인 `config/app.yaml`은 `.gitignore`에 포함되어 있습니다.
+- [`kis_client.py`](./src/invest_bot/clients/kis_client.py)
+- [`domestic_stock.py`](./src/invest_bot/market/domestic_stock.py)
+- [`collector.py`](./src/invest_bot/market/collector.py)
+- [`collect_market_data.py`](./src/invest_bot/jobs/collect_market_data.py)
 
-## 의존성 기준
+### 분석
 
-현재 의존성은 `reference/open-trading-api`를 기준으로 아래처럼 정리했습니다.
+- [`analysis.py`](./src/invest_bot/market/analysis.py)
+- [`analyze_daily_prices.py`](./src/invest_bot/jobs/analyze_daily_prices.py)
 
-- [`requirements.txt`](./requirements.txt): 현재 프로젝트에 필요한 핵심 런타임 의존성
-- [`requirements-dev.txt`](./requirements-dev.txt): 테스트용 의존성
+### 전략
 
-핵심 런타임 의존성은 다음 목적을 기준으로 선택했습니다.
+- [`base.py`](./src/invest_bot/strategy/base.py)
+- [`sample.py`](./src/invest_bot/strategy/sample.py)
+- [`golden_cross.py`](./src/invest_bot/strategy/golden_cross.py)
+- [`generate_golden_cross_signals.py`](./src/invest_bot/jobs/generate_golden_cross_signals.py)
 
-- `requests`, `websockets`, `pycryptodome`, `pyyaml`: reference 기반 API 연동 및 설정 처리
-- `pandas`, `numpy`: 데이터 수집, 지표 계산, 전략 분석
-- `pydantic`: 설정 및 데이터 검증 구조 확장 대비
+### 대시보드
 
-아직 제외한 항목도 있습니다.
+- [`service.py`](./src/invest_bot/dashboard/service.py)
+- [`server.py`](./src/invest_bot/dashboard/server.py)
 
-- `pyqt6`, `pyside6`: 현재 프로젝트는 GUI 범위가 아니므로 제외
-- `fastapi`, `uvicorn`, `httpx`, `python-multipart`: 웹 서버 또는 API 레이어가 필요해질 때 추가
-- `scipy`, `matplotlib`, `plotly`: 고급 분석 및 시각화 단계에서 필요 시 추가
+## 현재 진행 상태
 
-## 테스트 원칙
+현재는 아래 단계까지 구현된 상태입니다.
 
-테스트 도구는 `pytest`를 사용합니다.
+- [x] KIS 연동 기반 수집 구조
+- [x] CSV 저장 구조
+- [x] 기본 지표 계산
+- [x] 골든크로스 전략 구현
+- [x] 골든크로스 신호 생성
+- [x] 로컬 대시보드
+- [x] 테스트 결과 대시보드 표시
+- [x] 다중 종목 배치 수집
+- [ ] 백테스트
+- [ ] 모의투자 주문 실행
+- [ ] 실거래 주문 실행
+- [ ] 리스크 관리 정책 자동화
 
-현재 세부 테스트 정책은 아직 확정 전이지만, 최소한 아래 방향을 기준으로 합니다.
+전체 작업 현황은 아래 문서를 참고합니다.
 
-- 전략 로직은 재현 가능한 입력/출력 테스트가 가능해야 함
-- API 연동 로직은 직접 호출보다 래퍼와 mock 가능한 구조를 우선
-- 백테스트 로직은 회귀 검증이 가능해야 함
-- 실거래 관련 로직은 안전장치와 환경 분리 기준이 명확해야 함
+- [`docs/tasks/00_summary.md`](./docs/tasks/00_summary.md)
+- [`docs/strategies/00_summary.md`](./docs/strategies/00_summary.md)
 
-## 문서 원칙
+## 참고 자산
 
-- 기능 추가 또는 구조 변경 시 README를 함께 갱신합니다.
-- reference에서 가져온 개념이나 코드가 있다면 출처를 추적 가능하게 남깁니다.
-- 에이전트 작업 기준은 [`agent.md`](./agent.md)를 참고합니다.
-- 작업 단위와 진행 현황은 [`docs/tasks/00_summary.md`](./docs/tasks/00_summary.md)를 참고합니다.
+초기 구현과 구조 설계는 아래 reference를 참고합니다.
 
-## 현재 상태
+- `reference/open-trading-api/`
 
-현재 저장소는 프로젝트 초기 상태이며, 실 구현 코드보다 설계와 기준 문서가 먼저 정리되고 있습니다.
+다만 현재 프로젝트는 reference를 그대로 복사하는 방식이 아니라, 필요한 기능을 분리해 독립 프로젝트 형태로 정리하는 방향을 따릅니다.
 
-기본 코드 골격에는 아래가 포함되어 있습니다.
+## 다음 추천 작업
 
-- `src/invest_bot/config/settings.py`: 최소 설정 로더
-- `config/app.yaml.example`: 공용 설정 예시
-- `config/kis_credentials.yaml.example`: KIS 키 파일 예시
-- `src/invest_bot/clients/kis_client.py`: KIS REST 인증 및 GET 요청 클라이언트
-- `src/invest_bot/market/domestic_stock.py`: 국내주식 일봉, 종목 기본정보, 투자자 수급 수집기
-- `src/invest_bot/market/collector.py`: 프로젝트용 수집 facade
-- `src/invest_bot/strategy/base.py`: 전략 인터페이스와 신호 모델
-- `src/invest_bot/strategy/sample.py`: 샘플 전략
-- `src/invest_bot/jobs/collect_market_data.py`: 수집 작업 엔트리포인트
-- `tests/`: 초기 `pytest` 테스트
-- `scripts/run_collection.py`: 실행 스크립트
+다음으로 자연스러운 작업은 아래 중 하나입니다.
 
-다음 우선 작업 후보는 아래와 같습니다.
-
-1. 프로젝트 기본 디렉터리 구조 생성
-2. 설정 로더 및 로깅 구성
-3. 국내주식 인증/시세 조회 클라이언트 초안 작성
-4. 거래 데이터 수집 스크립트 작성
-5. 전략 인터페이스 정의
-6. 백테스트 실행기 초안 작성
-
-## 주의 사항
-
-- reference 코드를 검증 없이 실거래에 바로 사용하지 않습니다.
-- 계좌 정보, 비밀키, 토큰은 저장소에 커밋하지 않습니다.
-- 테스트 없이 주문 로직을 확장하지 않습니다.
-- 모의투자와 실거래 설정이 혼동되지 않도록 분리합니다.
+1. 골든크로스 신호 히스토리를 대시보드에서 더 명확하게 표시
+2. 백테스트 초안 추가
+3. 추세 필터 전략 추가
+4. 투자자 수급 기반 커스텀 전략 추가
+5. 모의투자 주문 흐름 연결
