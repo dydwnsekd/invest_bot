@@ -92,3 +92,5 @@
 
 관련 문서:
 - [07_operations_docs.md](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/07_operations_docs.md)
+
+commit 안됨 test
