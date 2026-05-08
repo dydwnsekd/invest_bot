@@ -17,7 +17,12 @@ class CsvStorage:
     """Persist collected datasets under the project's raw data directory."""
 
     def __init__(self, root_dir: str | Path = "data/raw/domestic_stock") -> None:
-        self.root_dir = Path(root_dir)
+        base_dir = Path(root_dir)
+        if base_dir.is_absolute():
+            self.root_dir = base_dir
+        else:
+            project_root = Path(__file__).resolve().parents[3]
+            self.root_dir = project_root / base_dir
 
     def save(self, dataset: str, filename: str, frame: pd.DataFrame) -> SavedDataset:
         dataset_dir = self.root_dir / dataset

@@ -15,4 +15,4 @@ def test_csv_storage_saves_frame_to_expected_dataset_directory():
 
     assert result.rows == 1
     assert result.path.exists()
-    assert result.path.parent == test_dir / "daily_prices"
+    assert result.path.parent == storage.root_dir / "daily_prices"
