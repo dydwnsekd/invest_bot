@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 from datetime import date, timedelta
 
 from invest_bot.config.settings import AppSettings
@@ -53,7 +54,7 @@ def main() -> None:
             "symbols": symbols,
             "success_count": sum(1 for result in results if result.status == "success"),
             "failed_count": sum(1 for result in results if result.status == "failed"),
-            "results": [result.__dict__ for result in results],
+            "results": [asdict(result) for result in results],
         }
     )
 
