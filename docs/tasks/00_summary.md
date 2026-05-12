@@ -93,4 +93,4 @@
 관련 문서:
 - [07_operations_docs.md](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/07_operations_docs.md)
 
-또 git 잔디 issue
+또또 git 잔디 issue
