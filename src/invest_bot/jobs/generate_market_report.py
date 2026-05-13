@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pandas as pd
+from pandas.errors import EmptyDataError
 
 from invest_bot.market.storage import CsvStorage, SavedDataset
 
@@ -123,14 +124,20 @@ class MarketReportGenerator:
         return self.processed_storage.save("market_reports", filename, frame)
 
     def _load_processed_csv(self, dataset: str, filename: str, parse_date: bool = False) -> pd.DataFrame:
-        frame = pd.read_csv(self.processed_storage.root_dir / dataset / filename)
+        try:
+            frame = pd.read_csv(self.processed_storage.root_dir / dataset / filename)
+        except EmptyDataError:
+            return pd.DataFrame()
         if parse_date and "date" in frame.columns:
             frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
             frame = frame.sort_values("date").reset_index(drop=True)
         return frame
 
     def _load_raw_csv(self, dataset: str, filename: str) -> pd.DataFrame:
-        return pd.read_csv(self.raw_storage.root_dir / dataset / filename)
+        try:
+            return pd.read_csv(self.raw_storage.root_dir / dataset / filename)
+        except EmptyDataError:
+            return pd.DataFrame()
 
     @staticmethod
     def _latest_row(frame: pd.DataFrame) -> pd.Series:
