@@ -24,10 +24,15 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
         "005930_20260301_20260329.csv",
         pd.DataFrame([{"date": "20260329", "close": 70000, "volume": 1000}]),
     )
+    raw_storage.save(
+        "investor_daily",
+        "005930_20260329.csv",
+        pd.DataFrame([{"stck_bsop_date": "20260329", "frgn_ntby_qty": 1200, "orgn_ntby_qty": 300, "prsn_ntby_qty": -1500}]),
+    )
     processed_storage.save(
         "daily_prices_indicators",
         "005930_20260301_20260329.csv",
-        pd.DataFrame([{"date": "20260329", "close": 70000, "ma_5": 69000, "rsi_14": 55.2}]),
+        pd.DataFrame([{"date": "20260329", "close": 70000, "ma_5": 69000, "ma_20": 68000, "ma_60": 65000, "rsi_14": 55.2}]),
     )
     processed_storage.save(
         "golden_cross_signals",
@@ -45,6 +50,27 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
             ]
         ),
     )
+    processed_storage.save(
+        "market_reports",
+        "005930_20260329.csv",
+        pd.DataFrame(
+            [
+                {
+                    "symbol": "005930",
+                    "symbol_name": "삼성전자",
+                    "date": "2026-03-29",
+                    "golden_cross_signal": "buy",
+                    "golden_cross_reason": "ma_5 crossed above ma_20.",
+                    "trend_state": "bullish",
+                    "rsi_state": "strong",
+                    "volume_state": "active",
+                    "investor_flow": "supportive",
+                    "summary": "추세는 상승 우세이며 골든크로스 매수 신호가 확인됩니다.",
+                    "final_opinion": "buy",
+                }
+            ]
+        ),
+    )
 
     (report_dir / "pytest_results.xml").write_text(
         """
@@ -58,7 +84,7 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
         encoding="utf-8",
     )
     (report_dir / "pytest_command.txt").write_text(
-        'python -m pytest tests/test_golden_cross_strategy.py',
+        "python -m pytest tests/test_golden_cross_strategy.py",
         encoding="utf-8",
     )
 
@@ -67,13 +93,14 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
         processed_root=test_dir / "processed",
         test_report_path=report_dir / "pytest_results.xml",
     )
-    html = service.render_html()
+    html = service.render_html(message="005930 시장 리포트를 생성했습니다.", message_type="success")
 
     assert "invest_bot dashboard" in html
-    assert "일봉 가격 데이터" in html
-    assert "기본 지표 계산 결과" in html
+    assert "시장 리포트 생성" in html
+    assert "시장 상황 요약 리포트" in html
+    assert "최신 시장 리포트" in html
+    assert "005930 시장 리포트를 생성했습니다." in html
     assert "삼성전자" in html
-    assert "종목명" in html
     assert "컬럼 설명" in html
     assert "왜 보는가" in html
     assert "추천 컬럼만" in html
@@ -86,3 +113,4 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
     assert "최신 골든크로스 신호" in html
     assert "ma_5 crossed above ma_20." in html
     assert "column-toggle" in html
+    assert "action=\"/actions/generate-market-report\"" in html

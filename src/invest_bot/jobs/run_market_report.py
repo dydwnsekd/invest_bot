@@ -29,24 +29,59 @@ def _find_latest_file(directory: Path, pattern: str) -> Path:
     return matches[0]
 
 
+def generate_market_report_for_symbol(symbol: str, generator: MarketReportGenerator | None = None) -> dict[str, str | int]:
+    report_generator = generator or MarketReportGenerator()
+
+    indicator_file = _find_latest_file(
+        report_generator.processed_storage.root_dir / "daily_prices_indicators",
+        f"{symbol}_*.csv",
+    )
+    signal_file = _find_latest_file(
+        report_generator.processed_storage.root_dir / "golden_cross_signals",
+        f"{symbol}_*.csv",
+    )
+    investor_file = _find_latest_file(
+        report_generator.raw_storage.root_dir / "investor_daily",
+        f"{symbol}_*.csv",
+    )
+
+    request = MarketReportRequest(
+        symbol=symbol,
+        indicator_filename=indicator_file.name,
+        signal_filename=signal_file.name,
+        investor_filename=investor_file.name,
+    )
+    indicator_frame = report_generator.load_indicator_frame(request)
+    signal_frame = report_generator.load_signal_frame(request)
+    investor_frame = report_generator.load_investor_frame(request)
+    stock_info_frame = report_generator.load_stock_info_frame(request)
+
+    report = report_generator.generate_report(
+        request=request,
+        indicator_frame=indicator_frame,
+        signal_frame=signal_frame,
+        investor_frame=investor_frame,
+        stock_info_frame=stock_info_frame,
+    )
+    report_date = report.iloc[0]["date"] if not report.empty else "latest"
+    report_suffix = str(report_date).replace("-", "")
+    saved = report_generator.save_report(f"{symbol}_{report_suffix}.csv", report)
+    return {
+        "symbol": symbol,
+        "rows": len(report),
+        "indicator_file": indicator_file.name,
+        "signal_file": signal_file.name,
+        "investor_file": investor_file.name,
+        "saved_path": str(saved.path),
+    }
+
+
 def main() -> None:
     args = _parse_args()
-    generator = MarketReportGenerator()
     symbol = args.symbol
 
     try:
-        indicator_file = _find_latest_file(
-            generator.processed_storage.root_dir / "daily_prices_indicators",
-            f"{symbol}_*.csv",
-        )
-        signal_file = _find_latest_file(
-            generator.processed_storage.root_dir / "golden_cross_signals",
-            f"{symbol}_*.csv",
-        )
-        investor_file = _find_latest_file(
-            generator.raw_storage.root_dir / "investor_daily",
-            f"{symbol}_*.csv",
-        )
+        result = generate_market_report_for_symbol(symbol)
     except FileNotFoundError as error:
         raise SystemExit(
             "\n".join(
@@ -62,37 +97,7 @@ def main() -> None:
             )
         ) from error
 
-    request = MarketReportRequest(
-        symbol=symbol,
-        indicator_filename=indicator_file.name,
-        signal_filename=signal_file.name,
-        investor_filename=investor_file.name,
-    )
-    indicator_frame = generator.load_indicator_frame(request)
-    signal_frame = generator.load_signal_frame(request)
-    investor_frame = generator.load_investor_frame(request)
-    stock_info_frame = generator.load_stock_info_frame(request)
-
-    report = generator.generate_report(
-        request=request,
-        indicator_frame=indicator_frame,
-        signal_frame=signal_frame,
-        investor_frame=investor_frame,
-        stock_info_frame=stock_info_frame,
-    )
-    report_date = report.iloc[0]["date"] if not report.empty else "latest"
-    report_suffix = str(report_date).replace("-", "")
-    saved = generator.save_report(f"{symbol}_{report_suffix}.csv", report)
-    print(
-        {
-            "symbol": symbol,
-            "rows": len(report),
-            "indicator_file": indicator_file.name,
-            "signal_file": signal_file.name,
-            "investor_file": investor_file.name,
-            "saved_path": str(saved.path),
-        }
-    )
+    print(result)
 
 
 if __name__ == "__main__":
