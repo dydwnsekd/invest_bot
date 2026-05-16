@@ -5,6 +5,7 @@ from datetime import date
 import pandas as pd
 
 from invest_bot.config.settings import AppSettings
+from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
 from invest_bot.market.collector import BatchCollectionResult, MarketDataCollector
 from invest_bot.market.domestic_stock import DailyPriceRequest, DomesticStockDataCollector, InvestorDailyRequest, StockInfoRequest
 from invest_bot.market.storage import CsvStorage
@@ -130,3 +131,48 @@ def test_market_data_collector_can_collect_multiple_symbols_with_stubbed_methods
     assert all(result.status == "success" for result in results)
     assert results[0].symbol == "005930"
     assert results[1].symbol == "000660"
+
+
+def test_collect_market_data_for_symbols_summarizes_batch_results():
+    settings = AppSettings()
+
+    class StubCollector:
+        def collect_symbols_batch(self, symbols, start_date, end_date):
+            assert symbols == ["005930", "000660"]
+            assert start_date <= end_date
+            return [
+                BatchCollectionResult(
+                    symbol="005930",
+                    status="success",
+                    daily_summary_rows=1,
+                    daily_price_rows=20,
+                    stock_info_rows=1,
+                    investor_daily_rows=1,
+                    investor_summary_rows=30,
+                    saved_files=["a.csv"],
+                ),
+                BatchCollectionResult(
+                    symbol="000660",
+                    status="failed",
+                    daily_summary_rows=0,
+                    daily_price_rows=0,
+                    stock_info_rows=0,
+                    investor_daily_rows=0,
+                    investor_summary_rows=0,
+                    saved_files=[],
+                    error="boom",
+                ),
+            ]
+
+    summary = collect_market_data_for_symbols(
+        symbols=["005930", "000660", "005930"],
+        days=15,
+        settings=settings,
+        collector=StubCollector(),
+    )
+
+    assert summary["symbol_count"] == 2
+    assert summary["symbols"] == ["005930", "000660"]
+    assert summary["days"] == 15
+    assert summary["success_count"] == 1
+    assert summary["failed_count"] == 1
