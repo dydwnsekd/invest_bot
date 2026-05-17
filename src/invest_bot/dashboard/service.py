@@ -740,7 +740,7 @@ class DashboardDataService:
     .case-badge.failed,.case-badge.error {{ background:var(--danger-bg); color:var(--danger); }}
     .case-badge.skipped {{ background:#fff1d6; color:#9a6700; }}
     .case-detail {{ margin-top:8px; color:#475467; line-height:1.55; white-space:pre-wrap; }}
-    .action-layout {{ display:grid; grid-template-columns:minmax(320px, 1.1fr) minmax(240px, .9fr); gap:16px; }}
+    .action-layout {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; }}
     .action-card {{ padding:20px; }}
     .action-form {{ display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; align-items:end; }}
     .input-group {{ display:grid; gap:6px; min-width:220px; flex:1; }}
@@ -761,15 +761,15 @@ class DashboardDataService:
   <div class="page">
     <section class="hero">
       <h1>invest_bot dashboard</h1>
-      <p>수집한 주식 데이터를 초보자도 읽기 쉽게 정리한 화면입니다. 리포트 생성 버튼으로 최신 시장 요약을 만들고, 아래 카드에서 데이터와 해석을 함께 확인해 보세요.</p>
+      <p>수집한 주식 데이터를 초보자도 읽기 쉽게 정리한 화면입니다. 웹에서 바로 데이터를 수집하고, 준비가 되면 시장 리포트까지 생성해 보세요.</p>
       <div class="hero-stats">
         <div class="hero-stat"><strong>{len(snapshot.raw_previews)}</strong><span>원본 데이터셋</span></div>
         <div class="hero-stat"><strong>{len(snapshot.processed_previews)}</strong><span>분석 데이터셋</span></div>
-        <div class="hero-stat"><strong>리포트 생성 가능</strong><span>대시보드에서 바로 시장 요약 리포트를 만들 수 있습니다.</span></div>
+        <div class="hero-stat"><strong>웹 실행 지원</strong><span>데이터 수집과 시장 리포트를 대시보드에서 바로 실행할 수 있습니다.</span></div>
       </div>
     </section>
-    {flash_message}
-    {report_actions}
+    {self._render_flash_message(message, message_type)}
+    {self._render_report_action_section()}
     {self._render_test_report_section()}
     {self._render_section("원본 수집 데이터", "실제 KIS 수집 결과", "가격, 종목정보, 수급처럼 외부에서 받아온 원본 데이터입니다.", snapshot.raw_previews)}
     {self._render_section("분석 데이터", "가공 후 계산 결과", "원본 데이터를 바탕으로 계산한 이동평균, RSI, 전략 신호, 시장 리포트입니다.", snapshot.processed_previews)}
@@ -837,13 +837,29 @@ class DashboardDataService:
         return """
 <section class="section">
   <div class="section-header">
-    <div><h2>시장 리포트 생성</h2><p>웹 대시보드에서 종목코드를 입력하고 최신 시장 상황 요약 리포트를 바로 만들 수 있습니다.</p></div>
+    <div><h2>대시보드 실행 작업</h2><p>데이터 수집과 시장 리포트 생성을 웹에서 바로 실행할 수 있습니다. 처음에는 수집을 먼저 하고, 그 다음 리포트를 생성해 보세요.</p></div>
     <span class="badge">dashboard action</span>
   </div>
   <div class="action-layout">
     <article class="action-card">
-      <h3>리포트 생성 실행</h3>
-      <p>아래 종목코드를 입력하면 이미 수집된 일봉, 지표, 골든크로스 신호, 투자자 수급 파일을 바탕으로 최신 시장 리포트를 생성합니다.</p>
+      <h3>데이터 수집 실행</h3>
+      <p>종목코드를 한 개 이상 입력하면 일봉, 종목 기본정보, 투자자 수급 데이터를 바로 수집합니다. 여러 종목은 줄바꿈이나 쉼표로 나눠 넣으면 됩니다.</p>
+      <form class="action-form" method="post" action="/actions/collect-market-data">
+        <div class="input-group">
+          <label for="symbols-input">종목코드 목록</label>
+          <input id="symbols-input" class="symbol-input" type="text" name="symbols" value="005930, 000660" placeholder="예: 005930, 000660" />
+        </div>
+        <div class="input-group">
+          <label for="days-input">조회 일수</label>
+          <input id="days-input" class="symbol-input" type="number" min="1" name="days" value="30" />
+        </div>
+        <button class="action-button" type="submit">데이터 수집 실행</button>
+      </form>
+      <p class="action-note">수집이 끝나면 아래 원본 데이터 카드에서 최신 CSV가 바로 갱신됩니다.</p>
+    </article>
+    <article class="action-card">
+      <h3>시장 리포트 생성</h3>
+      <p>이미 수집과 분석이 끝난 종목이라면, 종목코드를 넣고 현재 장 상황 요약 리포트를 바로 만들 수 있습니다.</p>
       <form class="action-form" method="post" action="/actions/generate-market-report">
         <div class="input-group">
           <label for="symbol-input">종목코드</label>
@@ -851,16 +867,13 @@ class DashboardDataService:
         </div>
         <button class="action-button" type="submit">시장 리포트 생성</button>
       </form>
-      <p class="action-note">먼저 데이터 수집, 지표 계산, 골든크로스 신호 생성이 끝난 종목이어야 합니다.</p>
+      <p class="action-note">리포트 생성 전에는 해당 종목의 지표 계산과 골든크로스 신호 생성까지 끝나 있어야 합니다.</p>
     </article>
-    <article class="action-card">
-      <h3>실행 전 체크</h3>
-      <div class="guide-grid">
-        <article class="guide-card"><h4>1. 데이터 수집</h4><p>`run_collection.py`로 일봉과 수급 데이터가 먼저 있어야 합니다.</p></article>
-        <article class="guide-card"><h4>2. 지표 계산</h4><p>`run_daily_analysis.py` 결과가 있어야 추세와 RSI를 읽을 수 있습니다.</p></article>
-        <article class="guide-card"><h4>3. 전략 신호</h4><p>`run_golden_cross_signals.py` 결과가 있어야 최종 의견까지 만들 수 있습니다.</p></article>
-      </div>
-    </article>
+  </div>
+  <div class="guide-grid">
+    <article class="guide-card"><h4>1. 데이터 수집</h4><p>`run_collection.py`와 같은 작업을 웹에서 실행합니다. 수집이 먼저 되어야 다음 단계가 가능합니다.</p></article>
+    <article class="guide-card"><h4>2. 지표 계산</h4><p>지표 계산 결과가 있어야 추세, RSI, 거래량 상태를 해석할 수 있습니다.</p></article>
+    <article class="guide-card"><h4>3. 전략 신호와 리포트</h4><p>골든크로스 신호와 시장 리포트는 수집된 데이터 위에 쌓이는 해석 단계입니다.</p></article>
   </div>
 </section>
         """.strip()

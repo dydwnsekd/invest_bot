@@ -37,26 +37,43 @@ def _load_symbols(args: argparse.Namespace) -> list[str]:
     return unique_symbols
 
 
+def collect_market_data_for_symbols(
+    symbols: list[str],
+    days: int = 30,
+    settings: AppSettings | None = None,
+    collector: MarketDataCollector | None = None,
+) -> dict[str, object]:
+    resolved_settings = settings or AppSettings.from_file()
+    market_collector = collector or MarketDataCollector(resolved_settings)
+    today = date.today()
+    start_date = today - timedelta(days=days)
+
+    unique_symbols: list[str] = []
+    seen: set[str] = set()
+    for symbol in symbols or ["005930"]:
+        normalized = symbol.strip()
+        if normalized and normalized not in seen:
+            unique_symbols.append(normalized)
+            seen.add(normalized)
+
+    results = market_collector.collect_symbols_batch(symbols=unique_symbols, start_date=start_date, end_date=today)
+    return {
+        "app_name": resolved_settings.app_name,
+        "market": resolved_settings.market,
+        "trading_mode": resolved_settings.trading_mode.value,
+        "symbol_count": len(unique_symbols),
+        "symbols": unique_symbols,
+        "days": days,
+        "success_count": sum(1 for result in results if result.status == "success"),
+        "failed_count": sum(1 for result in results if result.status == "failed"),
+        "results": [asdict(result) for result in results],
+    }
+
+
 def main() -> None:
     args = _parse_args()
-    settings = AppSettings.from_file()
-    collector = MarketDataCollector(settings)
-    today = date.today()
-    start_date = today - timedelta(days=args.days)
     symbols = _load_symbols(args)
-    results = collector.collect_symbols_batch(symbols=symbols, start_date=start_date, end_date=today)
-    print(
-        {
-            "app_name": settings.app_name,
-            "market": settings.market,
-            "trading_mode": settings.trading_mode.value,
-            "symbol_count": len(symbols),
-            "symbols": symbols,
-            "success_count": sum(1 for result in results if result.status == "success"),
-            "failed_count": sum(1 for result in results if result.status == "failed"),
-            "results": [asdict(result) for result in results],
-        }
-    )
+    print(collect_market_data_for_symbols(symbols=symbols, days=args.days))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
 
 
@@ -28,13 +29,42 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
-        if parsed.path != "/actions/generate-market-report":
-            self.send_error(404, "Not Found")
+        if parsed.path == "/actions/collect-market-data":
+            self._handle_collect_market_data()
+            return
+        if parsed.path == "/actions/generate-market-report":
+            self._handle_generate_market_report()
             return
 
-        content_length = int(self.headers.get("Content-Length", "0"))
-        payload = self.rfile.read(content_length).decode("utf-8")
-        form = parse_qs(payload)
+        self.send_error(404, "Not Found")
+
+    def _handle_collect_market_data(self) -> None:
+        form = self._read_form_body()
+        symbols_text = (form.get("symbols", ["005930"])[0] or "005930").strip()
+        days_text = (form.get("days", ["30"])[0] or "30").strip()
+
+        try:
+            days = max(int(days_text), 1)
+        except ValueError:
+            days = 30
+
+        symbols = [token.strip() for token in symbols_text.replace(",", "\n").splitlines() if token.strip()]
+
+        try:
+            result = collect_market_data_for_symbols(symbols=symbols, days=days)
+            message = (
+                f"데이터 수집을 완료했습니다. 종목 {result['symbol_count']}개 중 "
+                f"{result['success_count']}개 성공, {result['failed_count']}개 실패입니다."
+            )
+            message_type = "success" if result["failed_count"] == 0 else "info"
+        except Exception as error:  # noqa: BLE001
+            message = f"데이터 수집 중 오류가 발생했습니다: {error}"
+            message_type = "error"
+
+        self._redirect_with_message(message=message, message_type=message_type)
+
+    def _handle_generate_market_report(self) -> None:
+        form = self._read_form_body()
         symbol = (form.get("symbol", ["005930"])[0] or "005930").strip()
 
         try:
@@ -48,9 +78,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             message = f"리포트 생성 중 오류가 발생했습니다: {error}"
             message_type = "error"
 
-        redirect_path = (
-            f"/?message={quote(message, safe='')}&message_type={quote(message_type, safe='')}"
-        )
+        self._redirect_with_message(message=message, message_type=message_type)
+
+    def _read_form_body(self) -> dict[str, list[str]]:
+        content_length = int(self.headers.get("Content-Length", "0"))
+        payload = self.rfile.read(content_length).decode("utf-8")
+        return parse_qs(payload)
+
+    def _redirect_with_message(self, message: str, message_type: str) -> None:
+        redirect_path = f"/?message={quote(message, safe='')}&message_type={quote(message_type, safe='')}"
         self.send_response(303)
         self.send_header("Location", redirect_path)
         self.end_headers()
