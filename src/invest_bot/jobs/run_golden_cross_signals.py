@@ -30,15 +30,33 @@ def _find_latest_file(directory: Path, pattern: str) -> Path:
     return matches[0]
 
 
+def generate_golden_cross_signals_for_symbol(
+    symbol: str,
+    generator: GoldenCrossSignalGenerator | None = None,
+) -> dict[str, str | int]:
+    signal_generator = generator or GoldenCrossSignalGenerator()
+    source_file = _find_latest_file(
+        signal_generator.processed_storage.root_dir / "daily_prices_indicators",
+        f"{symbol}_*.csv",
+    )
+    request = GoldenCrossSignalRequest(symbol=symbol, source_filename=source_file.name)
+    indicator_frame = signal_generator.load_indicator_frame(request)
+    signal_frame = signal_generator.generate_signals(indicator_frame)
+    saved = signal_generator.save_signals(request.source_filename, signal_frame)
+    return {
+        "symbol": symbol,
+        "source_file": source_file.name,
+        "indicator_rows": len(indicator_frame),
+        "signal_rows": len(signal_frame),
+        "saved_path": str(saved.path),
+    }
+
+
 def main() -> None:
     args = _parse_args()
-    generator = GoldenCrossSignalGenerator()
     symbol = args.symbol
     try:
-        source_file = _find_latest_file(
-            generator.processed_storage.root_dir / "daily_prices_indicators",
-            f"{symbol}_*.csv",
-        )
+        result = generate_golden_cross_signals_for_symbol(symbol)
     except FileNotFoundError as error:
         raise SystemExit(
             "\n".join(
@@ -53,19 +71,7 @@ def main() -> None:
             )
         ) from error
 
-    request = GoldenCrossSignalRequest(symbol=symbol, source_filename=source_file.name)
-    indicator_frame = generator.load_indicator_frame(request)
-    signal_frame = generator.generate_signals(indicator_frame)
-    saved = generator.save_signals(request.source_filename, signal_frame)
-    print(
-        {
-            "symbol": symbol,
-            "source_file": source_file.name,
-            "indicator_rows": len(indicator_frame),
-            "signal_rows": len(signal_frame),
-            "saved_path": str(saved.path),
-        }
-    )
+    print(result)
 
 
 if __name__ == "__main__":

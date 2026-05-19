@@ -837,10 +837,26 @@ class DashboardDataService:
         return """
 <section class="section">
   <div class="section-header">
-    <div><h2>대시보드 실행 작업</h2><p>데이터 수집과 시장 리포트 생성을 웹에서 바로 실행할 수 있습니다. 처음에는 수집을 먼저 하고, 그 다음 리포트를 생성해 보세요.</p></div>
+    <div><h2>대시보드 실행 작업</h2><p>수집부터 지표 계산, 골든크로스 신호, 시장 리포트까지 전부 웹에서 눌러보며 검증할 수 있습니다. 빠르게 확인하려면 전체 파이프라인 실행을 먼저 써보세요.</p></div>
     <span class="badge">dashboard action</span>
   </div>
   <div class="action-layout">
+    <article class="action-card">
+      <h3>전체 파이프라인 실행</h3>
+      <p>한 번의 실행으로 데이터 수집, 지표 계산, 골든크로스 신호 생성, 시장 리포트 생성을 순서대로 진행합니다. 지금까지 만든 흐름을 통째로 검증할 때 가장 편합니다.</p>
+      <form class="action-form" method="post" action="/actions/run-full-pipeline">
+        <div class="input-group">
+          <label for="pipeline-symbols-input">종목코드 목록</label>
+          <input id="pipeline-symbols-input" class="symbol-input" type="text" name="symbols" value="005930, 000660" placeholder="예: 005930, 000660" />
+        </div>
+        <div class="input-group">
+          <label for="pipeline-days-input">조회 일수</label>
+          <input id="pipeline-days-input" class="symbol-input" type="number" min="1" name="days" value="30" />
+        </div>
+        <button class="action-button" type="submit">전체 파이프라인 실행</button>
+      </form>
+      <p class="action-note">처음 확인할 때는 이 버튼 하나로 대부분의 흐름을 끝까지 검증할 수 있습니다.</p>
+    </article>
     <article class="action-card">
       <h3>데이터 수집 실행</h3>
       <p>종목코드를 한 개 이상 입력하면 일봉, 종목 기본정보, 투자자 수급 데이터를 바로 수집합니다. 여러 종목은 줄바꿈이나 쉼표로 나눠 넣으면 됩니다.</p>
@@ -858,6 +874,30 @@ class DashboardDataService:
       <p class="action-note">수집이 끝나면 아래 원본 데이터 카드에서 최신 CSV가 바로 갱신됩니다.</p>
     </article>
     <article class="action-card">
+      <h3>지표 계산 실행</h3>
+      <p>수집된 일봉 CSV를 읽어 이동평균과 RSI를 계산합니다. 일봉 데이터가 먼저 있어야 하며, 계산 결과는 분석 데이터 카드에서 바로 확인할 수 있습니다.</p>
+      <form class="action-form" method="post" action="/actions/analyze-daily-prices">
+        <div class="input-group">
+          <label for="analyze-symbol-input">종목코드</label>
+          <input id="analyze-symbol-input" class="symbol-input" type="text" name="symbol" value="005930" placeholder="예: 005930" />
+        </div>
+        <button class="action-button" type="submit">지표 계산 실행</button>
+      </form>
+      <p class="action-note">완료 후 `daily_prices_indicators` 카드에서 `ma_5`, `ma_20`, `rsi_14`를 확인해 보세요.</p>
+    </article>
+    <article class="action-card">
+      <h3>골든크로스 신호 생성</h3>
+      <p>계산된 지표를 바탕으로 골든크로스 전략 신호를 만듭니다. 지표 계산 결과가 먼저 있어야 하며, 신호 카드에서 최신 판단을 바로 볼 수 있습니다.</p>
+      <form class="action-form" method="post" action="/actions/generate-golden-cross-signals">
+        <div class="input-group">
+          <label for="signal-symbol-input">종목코드</label>
+          <input id="signal-symbol-input" class="symbol-input" type="text" name="symbol" value="005930" placeholder="예: 005930" />
+        </div>
+        <button class="action-button" type="submit">골든크로스 신호 생성</button>
+      </form>
+      <p class="action-note">완료 후 `golden_cross_signals` 카드에서 `buy`, `sell`, `hold` 결과를 확인할 수 있습니다.</p>
+    </article>
+    <article class="action-card">
       <h3>시장 리포트 생성</h3>
       <p>이미 수집과 분석이 끝난 종목이라면, 종목코드를 넣고 현재 장 상황 요약 리포트를 바로 만들 수 있습니다.</p>
       <form class="action-form" method="post" action="/actions/generate-market-report">
@@ -871,9 +911,10 @@ class DashboardDataService:
     </article>
   </div>
   <div class="guide-grid">
-    <article class="guide-card"><h4>1. 데이터 수집</h4><p>`run_collection.py`와 같은 작업을 웹에서 실행합니다. 수집이 먼저 되어야 다음 단계가 가능합니다.</p></article>
-    <article class="guide-card"><h4>2. 지표 계산</h4><p>지표 계산 결과가 있어야 추세, RSI, 거래량 상태를 해석할 수 있습니다.</p></article>
-    <article class="guide-card"><h4>3. 전략 신호와 리포트</h4><p>골든크로스 신호와 시장 리포트는 수집된 데이터 위에 쌓이는 해석 단계입니다.</p></article>
+    <article class="guide-card"><h4>1. 데이터 수집</h4><p>일봉, 종목 기본정보, 투자자 수급 데이터를 먼저 확보합니다.</p></article>
+    <article class="guide-card"><h4>2. 지표 계산</h4><p>이동평균과 RSI를 계산해 차트 해석이 가능한 상태로 만듭니다.</p></article>
+    <article class="guide-card"><h4>3. 전략 신호</h4><p>골든크로스 전략으로 매수, 매도, 관망 신호를 생성합니다.</p></article>
+    <article class="guide-card"><h4>4. 시장 리포트</h4><p>신호와 수급을 묶어 사람이 읽기 쉬운 최종 요약 리포트를 만듭니다.</p></article>
   </div>
 </section>
         """.strip()

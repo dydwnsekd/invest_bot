@@ -4,8 +4,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
+from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -32,8 +34,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/actions/collect-market-data":
             self._handle_collect_market_data()
             return
+        if parsed.path == "/actions/analyze-daily-prices":
+            self._handle_analyze_daily_prices()
+            return
+        if parsed.path == "/actions/generate-golden-cross-signals":
+            self._handle_generate_golden_cross_signals()
+            return
         if parsed.path == "/actions/generate-market-report":
             self._handle_generate_market_report()
+            return
+        if parsed.path == "/actions/run-full-pipeline":
+            self._handle_run_full_pipeline()
             return
 
         self.send_error(404, "Not Found")
@@ -76,6 +87,71 @@ class DashboardHandler(BaseHTTPRequestHandler):
             message_type = "error"
         except Exception as error:  # noqa: BLE001
             message = f"리포트 생성 중 오류가 발생했습니다: {error}"
+            message_type = "error"
+
+        self._redirect_with_message(message=message, message_type=message_type)
+
+    def _handle_analyze_daily_prices(self) -> None:
+        form = self._read_form_body()
+        symbol = (form.get("symbol", ["005930"])[0] or "005930").strip()
+
+        try:
+            result = generate_indicators_for_symbol(symbol)
+            message = f"{symbol} 지표 계산을 완료했습니다. 저장 위치: {result['saved_path']}"
+            message_type = "success"
+        except FileNotFoundError as error:
+            message = str(error)
+            message_type = "error"
+        except Exception as error:  # noqa: BLE001
+            message = f"지표 계산 중 오류가 발생했습니다: {error}"
+            message_type = "error"
+
+        self._redirect_with_message(message=message, message_type=message_type)
+
+    def _handle_generate_golden_cross_signals(self) -> None:
+        form = self._read_form_body()
+        symbol = (form.get("symbol", ["005930"])[0] or "005930").strip()
+
+        try:
+            result = generate_golden_cross_signals_for_symbol(symbol)
+            message = f"{symbol} 골든크로스 신호 생성을 완료했습니다. 저장 위치: {result['saved_path']}"
+            message_type = "success"
+        except FileNotFoundError as error:
+            message = str(error)
+            message_type = "error"
+        except Exception as error:  # noqa: BLE001
+            message = f"골든크로스 신호 생성 중 오류가 발생했습니다: {error}"
+            message_type = "error"
+
+        self._redirect_with_message(message=message, message_type=message_type)
+
+    def _handle_run_full_pipeline(self) -> None:
+        form = self._read_form_body()
+        symbols_text = (form.get("symbols", ["005930"])[0] or "005930").strip()
+        days_text = (form.get("days", ["30"])[0] or "30").strip()
+        symbols = [token.strip() for token in symbols_text.replace(",", "\n").splitlines() if token.strip()]
+
+        try:
+            days = max(int(days_text), 1)
+        except ValueError:
+            days = 30
+
+        try:
+            collect_result = collect_market_data_for_symbols(symbols=symbols, days=days)
+            pipeline_symbols = collect_result["symbols"]
+            analyzed = [generate_indicators_for_symbol(symbol) for symbol in pipeline_symbols]
+            signaled = [generate_golden_cross_signals_for_symbol(symbol) for symbol in pipeline_symbols]
+            reported = [generate_market_report_for_symbol(symbol) for symbol in pipeline_symbols]
+            message = (
+                f"전체 파이프라인을 완료했습니다. 수집 {collect_result['success_count']}/{collect_result['symbol_count']} 성공, "
+                f"지표 계산 {len(analyzed)}건, 신호 생성 {len(signaled)}건, 리포트 생성 {len(reported)}건입니다."
+            )
+            message_type = "success" if collect_result["failed_count"] == 0 else "info"
+        except FileNotFoundError as error:
+            message = str(error)
+            message_type = "error"
+        except Exception as error:  # noqa: BLE001
+            message = f"전체 파이프라인 실행 중 오류가 발생했습니다: {error}"
             message_type = "error"
 
         self._redirect_with_message(message=message, message_type=message_type)

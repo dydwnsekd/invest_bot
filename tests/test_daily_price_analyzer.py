@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.market.analysis import DailyPriceAnalyzer, IndicatorRequest
 from invest_bot.market.storage import CsvStorage
 from tests.helpers import make_test_dir
@@ -53,3 +54,30 @@ def test_daily_price_analyzer_normalizes_and_saves_indicators():
     assert "rsi_14" in indicators.columns
     assert indicators.iloc[4]["ma_5"] == 72000
     assert saved.path.exists()
+
+
+def test_generate_indicators_for_symbol_uses_latest_saved_daily_price_file():
+    test_dir = make_test_dir("daily_price_analyzer_runner")
+    raw_storage = CsvStorage(test_dir / "raw")
+    processed_storage = CsvStorage(test_dir / "processed")
+    analyzer = DailyPriceAnalyzer(raw_storage=raw_storage, processed_storage=processed_storage)
+
+    raw_storage.save(
+        "daily_prices",
+        "005930_20260301_20260329.csv",
+        pd.DataFrame(
+            [
+                {"stck_bsop_date": "20260301", "stck_clpr": "70000", "acml_vol": "1000"},
+                {"stck_bsop_date": "20260302", "stck_clpr": "71000", "acml_vol": "1100"},
+                {"stck_bsop_date": "20260303", "stck_clpr": "72000", "acml_vol": "1200"},
+                {"stck_bsop_date": "20260304", "stck_clpr": "73000", "acml_vol": "1300"},
+                {"stck_bsop_date": "20260305", "stck_clpr": "74000", "acml_vol": "1400"},
+            ]
+        ),
+    )
+
+    result = generate_indicators_for_symbol("005930", analyzer=analyzer)
+
+    assert result["symbol"] == "005930"
+    assert result["source_rows"] == 5
+    assert result["indicator_rows"] == 5

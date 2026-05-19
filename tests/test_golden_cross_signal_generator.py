@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.jobs.generate_golden_cross_signals import (
     GoldenCrossSignalGenerator,
     GoldenCrossSignalRequest,
@@ -36,3 +37,26 @@ def test_golden_cross_signal_generator_loads_generates_and_saves_signals():
     assert signals.iloc[2]["signal"] == "sell"
     assert "signal_reason" in signals.columns
     assert "signal_prev_ma_5" in signals.columns
+
+
+def test_generate_golden_cross_signals_for_symbol_uses_latest_indicator_file():
+    test_dir = make_test_dir("golden_cross_signal_runner")
+    processed_storage = CsvStorage(test_dir / "processed")
+    generator = GoldenCrossSignalGenerator(processed_storage=processed_storage)
+
+    processed_storage.save(
+        "daily_prices_indicators",
+        "005930_signals.csv",
+        pd.DataFrame(
+            [
+                {"date": "2026-04-01", "close": 100, "ma_5": 98.0, "ma_20": 100.0},
+                {"date": "2026-04-02", "close": 101, "ma_5": 101.0, "ma_20": 100.0},
+            ]
+        ),
+    )
+
+    result = generate_golden_cross_signals_for_symbol("005930", generator=generator)
+
+    assert result["symbol"] == "005930"
+    assert result["indicator_rows"] == 2
+    assert result["signal_rows"] == 2

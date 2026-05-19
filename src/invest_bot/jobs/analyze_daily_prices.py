@@ -27,15 +27,30 @@ def _find_latest_file(directory: Path, pattern: str) -> Path:
     return matches[0]
 
 
+def generate_indicators_for_symbol(symbol: str, analyzer: DailyPriceAnalyzer | None = None) -> dict[str, str | int]:
+    price_analyzer = analyzer or DailyPriceAnalyzer()
+    source_file = _find_latest_file(
+        price_analyzer.raw_storage.root_dir / "daily_prices",
+        f"{symbol}_*.csv",
+    )
+    request = IndicatorRequest(symbol=symbol, source_filename=source_file.name)
+    daily_prices = price_analyzer.load_daily_prices(request)
+    indicators = price_analyzer.calculate_indicators(daily_prices)
+    saved = price_analyzer.save_indicators(request.source_filename, indicators)
+    return {
+        "symbol": symbol,
+        "source_file": source_file.name,
+        "source_rows": len(daily_prices),
+        "indicator_rows": len(indicators),
+        "saved_path": str(saved.path),
+    }
+
+
 def main() -> None:
     args = _parse_args()
-    analyzer = DailyPriceAnalyzer()
     symbol = args.symbol
     try:
-        source_file = _find_latest_file(
-            analyzer.raw_storage.root_dir / "daily_prices",
-            f"{symbol}_*.csv",
-        )
+        result = generate_indicators_for_symbol(symbol)
     except FileNotFoundError as error:
         raise SystemExit(
             "\n".join(
@@ -49,19 +64,7 @@ def main() -> None:
             )
         ) from error
 
-    request = IndicatorRequest(symbol=symbol, source_filename=source_file.name)
-    daily_prices = analyzer.load_daily_prices(request)
-    indicators = analyzer.calculate_indicators(daily_prices)
-    saved = analyzer.save_indicators(request.source_filename, indicators)
-    print(
-        {
-            "symbol": symbol,
-            "source_file": source_file.name,
-            "source_rows": len(daily_prices),
-            "indicator_rows": len(indicators),
-            "saved_path": str(saved.path),
-        }
-    )
+    print(result)
 
 
 if __name__ == "__main__":

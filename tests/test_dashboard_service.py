@@ -96,7 +96,10 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
     html = service.render_html(message="005930 시장 리포트를 생성했습니다.", message_type="success")
 
     assert "invest_bot dashboard" in html
+    assert "전체 파이프라인 실행" in html
     assert "데이터 수집 실행" in html
+    assert "지표 계산 실행" in html
+    assert "골든크로스 신호 생성" in html
     assert "시장 리포트 생성" in html
     assert "시장 상황 요약 리포트" in html
     assert "최신 시장 리포트" in html
@@ -114,5 +117,8 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
     assert "최신 골든크로스 신호" in html
     assert "ma_5 crossed above ma_20." in html
     assert "column-toggle" in html
+    assert "action=\"/actions/run-full-pipeline\"" in html
     assert "action=\"/actions/collect-market-data\"" in html
+    assert "action=\"/actions/analyze-daily-prices\"" in html
+    assert "action=\"/actions/generate-golden-cross-signals\"" in html
     assert "action=\"/actions/generate-market-report\"" in html
