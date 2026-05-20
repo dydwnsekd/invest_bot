@@ -101,6 +101,7 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
     assert "지표 계산 실행" in html
     assert "골든크로스 신호 생성" in html
     assert "시장 리포트 생성" in html
+    assert "종목코드 또는 종목명" in html
     assert "시장 상황 요약 리포트" in html
     assert "최신 시장 리포트" in html
     assert "005930 시장 리포트를 생성했습니다." in html

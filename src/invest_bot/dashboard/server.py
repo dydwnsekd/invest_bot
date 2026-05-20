@@ -8,10 +8,12 @@ from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
+from invest_bot.market.symbol_lookup import SymbolLookup
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
     service = DashboardDataService()
+    symbol_lookup = SymbolLookup()
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
@@ -59,10 +61,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except ValueError:
             days = 30
 
-        symbols = [token.strip() for token in symbols_text.replace(",", "\n").splitlines() if token.strip()]
-
         try:
-            result = collect_market_data_for_symbols(symbols=symbols, days=days)
+            resolved_symbols = self._resolve_symbol_inputs(symbols_text)
+            result = collect_market_data_for_symbols(symbols=resolved_symbols, days=days)
             message = (
                 f"데이터 수집을 완료했습니다. 종목 {result['symbol_count']}개 중 "
                 f"{result['success_count']}개 성공, {result['failed_count']}개 실패입니다."
@@ -76,11 +77,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _handle_generate_market_report(self) -> None:
         form = self._read_form_body()
-        symbol = (form.get("symbol", ["005930"])[0] or "005930").strip()
+        symbol_input = (form.get("symbol", ["005930"])[0] or "005930").strip()
 
         try:
+            symbol = self._resolve_single_symbol(symbol_input)
             result = generate_market_report_for_symbol(symbol)
-            message = f"{symbol} 시장 리포트를 생성했습니다. 저장 위치: {result['saved_path']}"
+            message = f"{symbol_input} 기준 시장 리포트를 생성했습니다. 저장 위치: {result['saved_path']}"
             message_type = "success"
         except FileNotFoundError as error:
             message = str(error)
@@ -93,11 +95,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _handle_analyze_daily_prices(self) -> None:
         form = self._read_form_body()
-        symbol = (form.get("symbol", ["005930"])[0] or "005930").strip()
+        symbol_input = (form.get("symbol", ["005930"])[0] or "005930").strip()
 
         try:
+            symbol = self._resolve_single_symbol(symbol_input)
             result = generate_indicators_for_symbol(symbol)
-            message = f"{symbol} 지표 계산을 완료했습니다. 저장 위치: {result['saved_path']}"
+            message = f"{symbol_input} 기준 지표 계산을 완료했습니다. 저장 위치: {result['saved_path']}"
             message_type = "success"
         except FileNotFoundError as error:
             message = str(error)
@@ -110,11 +113,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _handle_generate_golden_cross_signals(self) -> None:
         form = self._read_form_body()
-        symbol = (form.get("symbol", ["005930"])[0] or "005930").strip()
+        symbol_input = (form.get("symbol", ["005930"])[0] or "005930").strip()
 
         try:
+            symbol = self._resolve_single_symbol(symbol_input)
             result = generate_golden_cross_signals_for_symbol(symbol)
-            message = f"{symbol} 골든크로스 신호 생성을 완료했습니다. 저장 위치: {result['saved_path']}"
+            message = f"{symbol_input} 기준 골든크로스 신호 생성을 완료했습니다. 저장 위치: {result['saved_path']}"
             message_type = "success"
         except FileNotFoundError as error:
             message = str(error)
@@ -129,7 +133,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
         form = self._read_form_body()
         symbols_text = (form.get("symbols", ["005930"])[0] or "005930").strip()
         days_text = (form.get("days", ["30"])[0] or "30").strip()
-        symbols = [token.strip() for token in symbols_text.replace(",", "\n").splitlines() if token.strip()]
 
         try:
             days = max(int(days_text), 1)
@@ -137,7 +140,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             days = 30
 
         try:
-            collect_result = collect_market_data_for_symbols(symbols=symbols, days=days)
+            resolved_symbols = self._resolve_symbol_inputs(symbols_text)
+            collect_result = collect_market_data_for_symbols(symbols=resolved_symbols, days=days)
             pipeline_symbols = collect_result["symbols"]
             analyzed = [generate_indicators_for_symbol(symbol) for symbol in pipeline_symbols]
             signaled = [generate_golden_cross_signals_for_symbol(symbol) for symbol in pipeline_symbols]
@@ -160,6 +164,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get("Content-Length", "0"))
         payload = self.rfile.read(content_length).decode("utf-8")
         return parse_qs(payload)
+
+    def _resolve_single_symbol(self, value: str) -> str:
+        return self.symbol_lookup.resolve(value).symbol
+
+    def _resolve_symbol_inputs(self, raw_value: str) -> list[str]:
+        tokens = [token.strip() for token in raw_value.replace(",", "\n").splitlines() if token.strip()]
+        return [item.symbol for item in self.symbol_lookup.resolve_many(tokens)]
 
     def _redirect_with_message(self, message: str, message_type: str) -> None:
         redirect_path = f"/?message={quote(message, safe='')}&message_type={quote(message_type, safe='')}"

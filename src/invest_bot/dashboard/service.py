@@ -843,11 +843,11 @@ class DashboardDataService:
   <div class="action-layout">
     <article class="action-card">
       <h3>전체 파이프라인 실행</h3>
-      <p>한 번의 실행으로 데이터 수집, 지표 계산, 골든크로스 신호 생성, 시장 리포트 생성을 순서대로 진행합니다. 지금까지 만든 흐름을 통째로 검증할 때 가장 편합니다.</p>
+      <p>한 번의 실행으로 데이터 수집, 지표 계산, 골든크로스 신호 생성, 시장 리포트 생성을 순서대로 진행합니다. 종목코드와 이미 알고 있는 종목명을 함께 쓸 수 있습니다.</p>
       <form class="action-form" method="post" action="/actions/run-full-pipeline">
         <div class="input-group">
-          <label for="pipeline-symbols-input">종목코드 목록</label>
-          <input id="pipeline-symbols-input" class="symbol-input" type="text" name="symbols" value="005930, 000660" placeholder="예: 005930, 000660" />
+          <label for="pipeline-symbols-input">종목코드 또는 종목명 목록</label>
+          <input id="pipeline-symbols-input" class="symbol-input" type="text" name="symbols" value="005930, SK하이닉스" placeholder="예: 005930, 삼성전자, SK하이닉스" />
         </div>
         <div class="input-group">
           <label for="pipeline-days-input">조회 일수</label>
@@ -859,11 +859,11 @@ class DashboardDataService:
     </article>
     <article class="action-card">
       <h3>데이터 수집 실행</h3>
-      <p>종목코드를 한 개 이상 입력하면 일봉, 종목 기본정보, 투자자 수급 데이터를 바로 수집합니다. 여러 종목은 줄바꿈이나 쉼표로 나눠 넣으면 됩니다.</p>
+      <p>종목코드 또는 이미 알고 있는 종목명을 한 개 이상 입력하면 일봉, 종목 기본정보, 투자자 수급 데이터를 바로 수집합니다. 여러 종목은 줄바꿈이나 쉼표로 나눠 넣으면 됩니다.</p>
       <form class="action-form" method="post" action="/actions/collect-market-data">
         <div class="input-group">
-          <label for="symbols-input">종목코드 목록</label>
-          <input id="symbols-input" class="symbol-input" type="text" name="symbols" value="005930, 000660" placeholder="예: 005930, 000660" />
+          <label for="symbols-input">종목코드 또는 종목명 목록</label>
+          <input id="symbols-input" class="symbol-input" type="text" name="symbols" value="005930, SK하이닉스" placeholder="예: 005930, 삼성전자, SK하이닉스" />
         </div>
         <div class="input-group">
           <label for="days-input">조회 일수</label>
@@ -871,15 +871,15 @@ class DashboardDataService:
         </div>
         <button class="action-button" type="submit">데이터 수집 실행</button>
       </form>
-      <p class="action-note">수집이 끝나면 아래 원본 데이터 카드에서 최신 CSV가 바로 갱신됩니다.</p>
+      <p class="action-note">종목명 입력은 이미 저장된 종목 정보 기준으로 해석합니다. 처음 수집하는 종목은 종목코드를 쓰는 편이 가장 안전합니다.</p>
     </article>
     <article class="action-card">
       <h3>지표 계산 실행</h3>
-      <p>수집된 일봉 CSV를 읽어 이동평균과 RSI를 계산합니다. 일봉 데이터가 먼저 있어야 하며, 계산 결과는 분석 데이터 카드에서 바로 확인할 수 있습니다.</p>
+      <p>수집된 일봉 CSV를 읽어 이동평균과 RSI를 계산합니다. 종목코드 또는 이미 수집된 종목명을 사용할 수 있습니다.</p>
       <form class="action-form" method="post" action="/actions/analyze-daily-prices">
         <div class="input-group">
-          <label for="analyze-symbol-input">종목코드</label>
-          <input id="analyze-symbol-input" class="symbol-input" type="text" name="symbol" value="005930" placeholder="예: 005930" />
+          <label for="analyze-symbol-input">종목코드 또는 종목명</label>
+          <input id="analyze-symbol-input" class="symbol-input" type="text" name="symbol" value="삼성전자" placeholder="예: 005930 또는 삼성전자" />
         </div>
         <button class="action-button" type="submit">지표 계산 실행</button>
       </form>
@@ -887,11 +887,11 @@ class DashboardDataService:
     </article>
     <article class="action-card">
       <h3>골든크로스 신호 생성</h3>
-      <p>계산된 지표를 바탕으로 골든크로스 전략 신호를 만듭니다. 지표 계산 결과가 먼저 있어야 하며, 신호 카드에서 최신 판단을 바로 볼 수 있습니다.</p>
+      <p>계산된 지표를 바탕으로 골든크로스 전략 신호를 만듭니다. 종목코드 또는 이미 수집된 종목명을 사용할 수 있습니다.</p>
       <form class="action-form" method="post" action="/actions/generate-golden-cross-signals">
         <div class="input-group">
-          <label for="signal-symbol-input">종목코드</label>
-          <input id="signal-symbol-input" class="symbol-input" type="text" name="symbol" value="005930" placeholder="예: 005930" />
+          <label for="signal-symbol-input">종목코드 또는 종목명</label>
+          <input id="signal-symbol-input" class="symbol-input" type="text" name="symbol" value="삼성전자" placeholder="예: 005930 또는 삼성전자" />
         </div>
         <button class="action-button" type="submit">골든크로스 신호 생성</button>
       </form>
@@ -899,11 +899,11 @@ class DashboardDataService:
     </article>
     <article class="action-card">
       <h3>시장 리포트 생성</h3>
-      <p>이미 수집과 분석이 끝난 종목이라면, 종목코드를 넣고 현재 장 상황 요약 리포트를 바로 만들 수 있습니다.</p>
+      <p>이미 수집과 분석이 끝난 종목이라면, 종목코드 또는 종목명을 넣고 현재 장 상황 요약 리포트를 바로 만들 수 있습니다.</p>
       <form class="action-form" method="post" action="/actions/generate-market-report">
         <div class="input-group">
-          <label for="symbol-input">종목코드</label>
-          <input id="symbol-input" class="symbol-input" type="text" name="symbol" value="005930" placeholder="예: 005930" />
+          <label for="symbol-input">종목코드 또는 종목명</label>
+          <input id="symbol-input" class="symbol-input" type="text" name="symbol" value="삼성전자" placeholder="예: 005930 또는 삼성전자" />
         </div>
         <button class="action-button" type="submit">시장 리포트 생성</button>
       </form>
