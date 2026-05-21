@@ -657,6 +657,7 @@ class DashboardDataService:
         """.strip()
 
     def _render_snapshot(self, snapshot: DashboardSnapshot, message: str = "", message_type: str = "info") -> str:
+        return self._render_tabbed_snapshot(snapshot, message=message, message_type=message_type)
         flash_message = self._render_flash_message(message, message_type)
         report_actions = self._render_report_action_section()
         return f"""
@@ -834,6 +835,7 @@ class DashboardDataService:
         """.strip()
 
     def _render_report_action_section(self) -> str:
+        return self._render_compact_action_section()
         return """
 <section class="section">
   <div class="section-header">
@@ -935,6 +937,393 @@ class DashboardDataService:
 </section>
         """.strip()
 
+    def _render_tabbed_snapshot(self, snapshot: DashboardSnapshot, message: str = "", message_type: str = "info") -> str:
+        flash_message = self._render_flash_message(message, message_type)
+        report_actions = self._render_compact_action_section()
+        raw_section = self._render_compact_section(
+            "원본 수집 데이터",
+            "실제 KIS 수집 결과",
+            "가격, 종목정보, 수급처럼 외부에서 받아온 원본 데이터입니다.",
+            snapshot.raw_previews,
+        )
+        processed_section = self._render_compact_section(
+            "분석 데이터",
+            "가공 및 계산 결과",
+            "원본 데이터를 바탕으로 계산한 이동평균, RSI, 전략 신호, 시장 리포트입니다.",
+            snapshot.processed_previews,
+        )
+        test_section = self._render_test_report_section()
+        return f"""
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>invest_bot dashboard</title>
+  <style>
+    :root {{ --bg:#f7f3eb; --card:#fffdf8; --ink:#182230; --muted:#667085; --line:#e7dccd; --accent:#0f766e; --accent2:#143c4b; --soft:#e3f5f0; --sand:#faf4e9; --shadow:0 18px 38px rgba(20,60,75,.09); --danger:#b42318; --danger-bg:#fee4e2; --success:#027a48; --success-bg:#e8f7ef; }}
+    * {{ box-sizing:border-box; }}
+    body {{ margin:0; font-family:"Segoe UI","Noto Sans KR",sans-serif; color:var(--ink); background:radial-gradient(circle at top left,#fff0cf 0,transparent 24%), radial-gradient(circle at top right,#d6efe9 0,transparent 22%), linear-gradient(180deg,#fcfaf6 0,var(--bg) 100%); }}
+    .page {{ max-width:1360px; margin:0 auto; padding:28px 18px 72px; }}
+    .hero {{ background:linear-gradient(135deg,var(--accent2) 0,var(--accent) 100%); color:#fff; border-radius:28px; padding:32px; box-shadow:var(--shadow); }}
+    .hero h1 {{ margin:0 0 10px; font-size:clamp(2rem,4vw,3.2rem); }}
+    .hero p {{ margin:0; max-width:760px; line-height:1.7; color:rgba(255,255,255,.9); }}
+    .hero-stats {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:22px; }}
+    .hero-stat {{ padding:14px 16px; border-radius:18px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.14); }}
+    .hero-stat strong {{ display:block; font-size:1.2rem; }}
+    .hero-stat span {{ color:rgba(255,255,255,.84); font-size:.92rem; }}
+    .test-stat {{ background:#fff; border:1px solid #efe4d6; color:var(--ink); }}
+    .test-stat span {{ color:var(--muted); }}
+    .test-stat.fail strong {{ color:var(--danger); }}
+    .tab-shell {{ margin-top:24px; }}
+    .tab-bar {{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }}
+    .tab-button {{ border:none; background:rgba(255,255,255,.85); color:var(--accent2); border-radius:999px; padding:12px 18px; font-weight:800; cursor:pointer; box-shadow:0 8px 18px rgba(20,60,75,.08); border:1px solid #eadfce; }}
+    .tab-button:hover {{ background:#fff; }}
+    .tab-button.active {{ background:linear-gradient(135deg,var(--accent2) 0,var(--accent) 100%); color:#fff; border-color:transparent; }}
+    .tab-panel {{ display:none; }}
+    .tab-panel.active {{ display:block; }}
+    .tab-panel .section:first-child {{ margin-top:0; }}
+    .section {{ margin-top:28px; }}
+    .section-header {{ display:flex; gap:12px; justify-content:space-between; align-items:end; margin-bottom:14px; }}
+    .section-header h2 {{ margin:0; font-size:1.6rem; }}
+    .section-header p {{ margin:6px 0 0; color:var(--muted); line-height:1.55; }}
+    .badge {{ display:inline-flex; padding:8px 12px; border-radius:999px; background:var(--soft); color:var(--accent); font-weight:700; font-size:.88rem; white-space:nowrap; }}
+    .cards {{ display:grid; gap:20px; }}
+    .card {{ background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:24px; padding:22px; box-shadow:var(--shadow); }}
+    .card-top {{ display:flex; gap:18px; justify-content:space-between; align-items:start; margin-bottom:18px; }}
+    .card h3 {{ margin:0; font-size:1.35rem; }}
+    .dataset-key {{ margin-top:6px; color:var(--muted); font-size:.92rem; }}
+    .meta-panel {{ min-width:240px; padding:14px 16px; border-radius:18px; background:#fff; border:1px solid #efe4d6; color:var(--muted); font-size:.92rem; line-height:1.6; word-break:break-all; }}
+    .symbol-chip {{ display:inline-flex; margin-top:10px; padding:8px 12px; border-radius:999px; background:var(--soft); color:var(--accent2); font-size:.88rem; font-weight:700; }}
+    .guide-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:18px; }}
+    .guide-card,.controls-panel,.column-card,.action-card,.flash-card {{ background:var(--card); border:1px solid #efe4d6; border-radius:18px; }}
+    .guide-card {{ padding:16px; }}
+    .guide-card h4,.controls-text h4,.info-title,.action-card h3,.flash-card h3 {{ margin:0 0 8px; font-size:1rem; color:var(--accent2); }}
+    .guide-card p,.controls-text p,.column-card p,.action-card p,.flash-card p {{ margin:0; line-height:1.6; color:#344054; }}
+    .info-title {{ margin:0 0 12px; }}
+    .card-stack {{ display:grid; gap:14px; }}
+    .inline-hint {{ margin:0 0 14px; color:var(--muted); font-size:.9rem; }}
+    .drawer {{ border:1px solid #efe4d6; border-radius:18px; background:#fffdf9; overflow:hidden; }}
+    .drawer + .drawer {{ margin-top:12px; }}
+    .drawer summary {{ list-style:none; cursor:pointer; padding:14px 16px; font-weight:800; color:var(--accent2); display:flex; align-items:center; justify-content:space-between; gap:12px; }}
+    .drawer summary::-webkit-details-marker {{ display:none; }}
+    .drawer summary::after {{ content:"열기"; color:var(--muted); font-size:.85rem; font-weight:700; }}
+    .drawer[open] summary::after {{ content:"닫기"; }}
+    .drawer-body {{ padding:0 16px 16px; }}
+    .column-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-bottom:16px; }}
+    .column-card {{ padding:14px; }}
+    .column-card-head {{ display:flex; gap:10px; justify-content:space-between; align-items:start; margin-bottom:8px; }}
+    .column-key,.th-key,.column-option small {{ color:var(--muted); font-size:.78rem; word-break:break-all; }}
+    .why {{ margin-top:8px !important; color:#475467 !important; }}
+    .mini-badge {{ display:inline-flex; padding:6px 10px; border-radius:999px; background:#fff0cb; color:#8a5a00; font-size:.76rem; font-weight:700; }}
+    .controls-panel {{ padding:16px; margin-bottom:0; background:var(--sand); }}
+    .quick-actions {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }}
+    .quick-button,.action-button {{ border:1px solid #cfe8e2; background:#fff; color:var(--accent2); border-radius:999px; padding:9px 14px; font-weight:700; cursor:pointer; }}
+    .quick-button:hover,.action-button:hover {{ background:#f4fffc; }}
+    .column-selector {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-top:14px; }}
+    .column-option {{ display:grid; grid-template-columns:auto 1fr; gap:4px 10px; align-items:start; padding:12px; border-radius:16px; background:rgba(255,255,255,.82); border:1px solid #efe4d6; }}
+    .column-option input {{ margin-top:2px; }}
+    .column-option span {{ font-size:.92rem; font-weight:700; color:#344054; }}
+    .table-wrap {{ overflow:auto; border-radius:20px; border:1px solid #efe4d6; background:#fff; }}
+    .table-toolbar {{ display:flex; gap:12px; justify-content:space-between; align-items:end; padding:16px 16px 10px; border-bottom:1px solid #f0e7db; background:#fffaf1; }}
+    .table-toolbar strong {{ display:block; margin-bottom:4px; color:var(--accent2); }}
+    .table-toolbar span,.row-picker {{ color:var(--muted); font-size:.88rem; }}
+    .row-picker {{ display:inline-flex; gap:8px; align-items:center; font-weight:700; }}
+    .row-picker select,.symbol-input {{ border:1px solid #e5d9c9; border-radius:12px; background:#fff; padding:10px 12px; }}
+    .dataset-table {{ width:100%; border-collapse:collapse; font-size:.92rem; }}
+    .dataset-table th,.dataset-table td {{ padding:11px 12px; border-bottom:1px solid #f0e7db; text-align:left; white-space:nowrap; }}
+    .dataset-table th {{ position:sticky; top:0; background:#fffaf1; z-index:1; }}
+    .dataset-table tbody tr:nth-child(even) {{ background:rgba(250,247,239,.5); }}
+    .dataset-table tbody tr:hover {{ background:rgba(223,244,239,.48); }}
+    .th-label {{ font-weight:800; color:#1f2937; }}
+    .empty,.empty-text {{ color:var(--muted); }}
+    .empty {{ padding:28px; border-radius:22px; background:rgba(255,255,255,.78); border:1px dashed #e4d7c4; line-height:1.7; }}
+    .empty-text {{ padding:18px; }}
+    .highlight-panel {{ margin-bottom:16px; padding:16px; border-radius:20px; border:1px solid #efe4d6; background:linear-gradient(180deg,#fff 0,#f7fbfa 100%); }}
+    .highlight-copy {{ margin:10px 0 0; color:#344054; line-height:1.6; }}
+    .report-highlight {{ background:linear-gradient(180deg,#fff 0,#f2fbf8 100%); }}
+    .case-list {{ display:grid; gap:10px; }}
+    .case-row {{ padding:14px 16px; border-radius:18px; background:#fff; border:1px solid #efe4d6; }}
+    .case-row-head {{ display:flex; gap:12px; justify-content:space-between; align-items:start; }}
+    .case-row-head strong {{ word-break:break-word; }}
+    .case-badge {{ display:inline-flex; padding:6px 10px; border-radius:999px; font-size:.78rem; font-weight:700; }}
+    .case-badge.passed {{ background:var(--success-bg); color:var(--success); }}
+    .case-badge.failed,.case-badge.error {{ background:var(--danger-bg); color:var(--danger); }}
+    .case-badge.skipped {{ background:#fff1d6; color:#9a6700; }}
+    .case-detail {{ margin-top:8px; color:#475467; line-height:1.55; white-space:pre-wrap; }}
+    .action-layout {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; }}
+    .action-card {{ padding:20px; }}
+    .action-form {{ display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; align-items:end; }}
+    .input-group {{ display:grid; gap:6px; min-width:220px; flex:1; }}
+    .input-group label {{ font-size:.9rem; color:var(--muted); font-weight:700; }}
+    .action-note {{ margin-top:14px !important; color:#475467 !important; }}
+    .flash-card {{ padding:16px 18px; margin-top:18px; }}
+    .flash-card.success {{ background:var(--success-bg); border-color:#b7ebc8; }}
+    .flash-card.error {{ background:var(--danger-bg); border-color:#f3c3bf; }}
+    .flash-card.info {{ background:#eef4ff; border-color:#d0ddff; }}
+    @media (max-width:920px) {{
+      .card-top,.section-header,.table-toolbar,.action-form {{ flex-direction:column; align-items:stretch; }}
+      .action-layout {{ grid-template-columns:1fr; }}
+      .meta-panel {{ min-width:0; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>invest_bot dashboard</h1>
+      <p>수집한 주식 데이터를 한 페이지에 모두 펼쳐놓기보다, 단계별로 나눠 보고 필요한 설명만 펼쳐보는 방식으로 정리했습니다.</p>
+      <div class="hero-stats">
+        <div class="hero-stat"><strong>{len(snapshot.raw_previews)}</strong><span>원본 데이터셋</span></div>
+        <div class="hero-stat"><strong>{len(snapshot.processed_previews)}</strong><span>분석 데이터셋</span></div>
+        <div class="hero-stat"><strong>관리형 실행</strong><span>수집부터 리포트 생성까지 웹에서 단계별로 눌러보며 확인할 수 있습니다.</span></div>
+      </div>
+    </section>
+    {flash_message}
+    <section class="tab-shell">
+      <div class="tab-bar" role="tablist" aria-label="dashboard sections">
+        <button type="button" class="tab-button active" data-tab-target="tab-actions">실행</button>
+        <button type="button" class="tab-button" data-tab-target="tab-raw">원본 데이터</button>
+        <button type="button" class="tab-button" data-tab-target="tab-processed">분석 데이터</button>
+        <button type="button" class="tab-button" data-tab-target="tab-tests">테스트</button>
+      </div>
+      <div id="tab-actions" class="tab-panel active">{report_actions}</div>
+      <div id="tab-raw" class="tab-panel">{raw_section}</div>
+      <div id="tab-processed" class="tab-panel">{processed_section}</div>
+      <div id="tab-tests" class="tab-panel">{test_section}</div>
+    </section>
+  </div>
+  <script>
+    const applyActiveTab = (tabId) => {{
+      document.querySelectorAll(".tab-button").forEach((button) => {{
+        button.classList.toggle("active", button.dataset.tabTarget === tabId);
+      }});
+      document.querySelectorAll(".tab-panel").forEach((panel) => {{
+        panel.classList.toggle("active", panel.id === tabId);
+      }});
+      localStorage.setItem("dashboard-active-tab", tabId);
+    }};
+    const applyRows = (select) => {{
+      const table = document.getElementById(select.dataset.target);
+      if (!table) return;
+      const limit = Number(select.value);
+      table.querySelectorAll("tbody tr").forEach((row, index) => row.style.display = index < limit ? "" : "none");
+      if (select.dataset.storageKey) localStorage.setItem(select.dataset.storageKey, String(limit));
+    }};
+    const applyColumns = (tableId) => {{
+      const boxes = Array.from(document.querySelectorAll(`.column-toggle[data-target="${{tableId}}"]`));
+      const table = document.getElementById(tableId);
+      if (!table) return;
+      boxes.forEach((box) => {{
+        const display = box.checked ? "" : "none";
+        table.querySelectorAll(`[data-column="${{box.dataset.column}}"]`).forEach((cell) => cell.style.display = display);
+      }});
+      const key = boxes.find((box) => box.dataset.storageKey)?.dataset.storageKey;
+      if (key) localStorage.setItem(key, JSON.stringify(boxes.filter((box) => box.checked).map((box) => box.dataset.column)));
+    }};
+    document.querySelectorAll(".row-selector").forEach((select) => {{
+      const saved = select.dataset.storageKey ? localStorage.getItem(select.dataset.storageKey) : null;
+      if (saved && Array.from(select.options).some((option) => option.value === saved)) select.value = saved;
+      select.addEventListener("change", () => applyRows(select));
+      applyRows(select);
+    }});
+    const grouped = new Map();
+    document.querySelectorAll(".column-toggle").forEach((box) => {{
+      if (!grouped.has(box.dataset.target)) grouped.set(box.dataset.target, []);
+      grouped.get(box.dataset.target).push(box);
+    }});
+    grouped.forEach((boxes, tableId) => {{
+      const key = boxes.find((box) => box.dataset.storageKey)?.dataset.storageKey;
+      const saved = key ? localStorage.getItem(key) : null;
+      if (saved) {{
+        try {{
+          const selected = new Set(JSON.parse(saved));
+          boxes.forEach((box) => box.checked = selected.has(box.dataset.column));
+        }} catch (_error) {{}}
+      }}
+      boxes.forEach((box) => box.addEventListener("change", () => applyColumns(tableId)));
+      applyColumns(tableId);
+    }});
+    document.querySelectorAll(".quick-button").forEach((button) => {{
+      button.addEventListener("click", () => {{
+        const boxes = Array.from(document.querySelectorAll(`.column-toggle[data-target="${{button.dataset.target}}"]`));
+        const recommended = new Set((button.dataset.columns || "").split(",").filter(Boolean));
+        boxes.forEach((box) => {{
+          if (button.dataset.mode === "all") box.checked = true;
+          else if (button.dataset.mode === "clear") box.checked = false;
+          else box.checked = recommended.has(box.dataset.column);
+        }});
+        applyColumns(button.dataset.target);
+      }});
+    }});
+    const storedTab = localStorage.getItem("dashboard-active-tab");
+    const defaultTab = storedTab && document.getElementById(storedTab) ? storedTab : "tab-actions";
+    document.querySelectorAll(".tab-button").forEach((button) => {{
+      button.addEventListener("click", () => applyActiveTab(button.dataset.tabTarget));
+    }});
+    applyActiveTab(defaultTab);
+  </script>
+</body>
+</html>
+        """.strip()
+
+    def _render_compact_action_section(self) -> str:
+        return """
+<section class="section">
+  <div class="section-header">
+    <div><h2>대시보드 실행 작업</h2><p>실행 작업은 이 탭에만 모아두고, 설명은 접어두어 기본 화면이 길어지지 않게 구성했습니다.</p></div>
+    <span class="badge">dashboard action</span>
+  </div>
+  <details class="drawer" open>
+    <summary>이 화면을 어떻게 쓰면 좋은지 보기</summary>
+    <div class="drawer-body">
+      <div class="guide-grid">
+        <article class="guide-card"><h4>1. 데이터 수집</h4><p>일봉, 종목 기본정보, 투자자 수급 데이터를 먼저 확보합니다.</p></article>
+        <article class="guide-card"><h4>2. 지표 계산</h4><p>이동평균과 RSI를 계산해 차트 해석이 가능한 상태로 만듭니다.</p></article>
+        <article class="guide-card"><h4>3. 전략 신호</h4><p>골든크로스 전략으로 매수, 매도, 관망 신호를 생성합니다.</p></article>
+        <article class="guide-card"><h4>4. 시장 리포트</h4><p>신호와 수급을 묶어 읽기 쉬운 최종 요약 리포트를 만듭니다.</p></article>
+      </div>
+    </div>
+  </details>
+  <div class="action-layout">
+    <article class="action-card">
+      <h3>전체 파이프라인 실행</h3>
+      <p>한 번의 실행으로 데이터 수집, 지표 계산, 골든크로스 신호 생성, 시장 리포트 생성을 순서대로 진행합니다. 종목코드와 이미 알고 있는 종목명을 함께 쓸 수 있습니다.</p>
+      <form class="action-form" method="post" action="/actions/run-full-pipeline">
+        <div class="input-group">
+          <label for="pipeline-symbols-input">종목코드 또는 종목명 목록</label>
+          <input id="pipeline-symbols-input" class="symbol-input" type="text" name="symbols" value="005930, SK하이닉스" placeholder="예: 005930, 삼성전자, SK하이닉스" />
+        </div>
+        <div class="input-group">
+          <label for="pipeline-days-input">조회 일수</label>
+          <input id="pipeline-days-input" class="symbol-input" type="number" min="1" name="days" value="30" />
+        </div>
+        <button class="action-button" type="submit">전체 파이프라인 실행</button>
+      </form>
+      <p class="action-note">처음 확인할 때는 이 버튼 하나로 대부분의 흐름을 끝까지 검증할 수 있습니다.</p>
+    </article>
+    <article class="action-card">
+      <h3>데이터 수집 실행</h3>
+      <p>종목코드 또는 이미 알고 있는 종목명을 한 개 이상 입력하면 일봉, 종목 기본정보, 투자자 수급 데이터를 바로 수집합니다. 여러 종목은 줄바꿈이나 쉼표로 나눠 넣으면 됩니다.</p>
+      <form class="action-form" method="post" action="/actions/collect-market-data">
+        <div class="input-group">
+          <label for="symbols-input">종목코드 또는 종목명 목록</label>
+          <input id="symbols-input" class="symbol-input" type="text" name="symbols" value="005930, SK하이닉스" placeholder="예: 005930, 삼성전자, SK하이닉스" />
+        </div>
+        <div class="input-group">
+          <label for="days-input">조회 일수</label>
+          <input id="days-input" class="symbol-input" type="number" min="1" name="days" value="30" />
+        </div>
+        <button class="action-button" type="submit">데이터 수집 실행</button>
+      </form>
+      <p class="action-note">종목명 입력은 로컬 종목 마스터와 이미 저장된 종목 정보 기준으로 해석합니다.</p>
+    </article>
+    <article class="action-card">
+      <h3>지표 계산 실행</h3>
+      <p>수집된 일봉 CSV를 읽어 이동평균과 RSI를 계산합니다. 종목코드 또는 이미 수집된 종목명을 사용할 수 있습니다.</p>
+      <form class="action-form" method="post" action="/actions/analyze-daily-prices">
+        <div class="input-group">
+          <label for="analyze-symbol-input">종목코드 또는 종목명</label>
+          <input id="analyze-symbol-input" class="symbol-input" type="text" name="symbol" value="삼성전자" placeholder="예: 005930 또는 삼성전자" />
+        </div>
+        <button class="action-button" type="submit">지표 계산 실행</button>
+      </form>
+      <p class="action-note">완료 후 `daily_prices_indicators` 카드에서 `ma_5`, `ma_20`, `rsi_14`를 확인해 보세요.</p>
+    </article>
+    <article class="action-card">
+      <h3>골든크로스 신호 생성</h3>
+      <p>계산된 지표를 바탕으로 골든크로스 전략 신호를 만듭니다. 종목코드 또는 이미 수집된 종목명을 사용할 수 있습니다.</p>
+      <form class="action-form" method="post" action="/actions/generate-golden-cross-signals">
+        <div class="input-group">
+          <label for="signal-symbol-input">종목코드 또는 종목명</label>
+          <input id="signal-symbol-input" class="symbol-input" type="text" name="symbol" value="삼성전자" placeholder="예: 005930 또는 삼성전자" />
+        </div>
+        <button class="action-button" type="submit">골든크로스 신호 생성</button>
+      </form>
+      <p class="action-note">완료 후 `golden_cross_signals` 카드에서 `buy`, `sell`, `hold` 결과를 확인할 수 있습니다.</p>
+    </article>
+    <article class="action-card">
+      <h3>시장 리포트 생성</h3>
+      <p>이미 수집과 분석이 끝난 종목이라면, 종목코드 또는 종목명을 넣고 현재 장 상황 요약 리포트를 바로 만들 수 있습니다.</p>
+      <form class="action-form" method="post" action="/actions/generate-market-report">
+        <div class="input-group">
+          <label for="symbol-input">종목코드 또는 종목명</label>
+          <input id="symbol-input" class="symbol-input" type="text" name="symbol" value="삼성전자" placeholder="예: 005930 또는 삼성전자" />
+        </div>
+        <button class="action-button" type="submit">시장 리포트 생성</button>
+      </form>
+      <p class="action-note">리포트 생성 전에는 해당 종목의 지표 계산과 골든크로스 신호 생성까지 끝나 있어야 합니다.</p>
+    </article>
+  </div>
+</section>
+        """.strip()
+
+    @staticmethod
+    def _render_compact_section(title: str, badge: str, description: str, previews: list[DatasetPreview]) -> str:
+        if not previews:
+            body = '<div class="empty">아직 표시할 CSV 데이터가 없습니다. 먼저 수집 또는 분석 스크립트를 실행해 주세요.</div>'
+        else:
+            cards = []
+            for preview in previews:
+                symbol_chip = ""
+                if preview.symbol:
+                    chip = f"종목코드 {preview.symbol}"
+                    if preview.symbol_name:
+                        chip += f" · {preview.symbol_name}"
+                    symbol_chip = f'<div class="symbol-chip">{escape(chip)}</div>'
+                cards.append(
+                    f"""
+<article class="card">
+  <div class="card-top">
+    <div>
+      <h3>{escape(preview.display_name)}</h3>
+      <div class="dataset-key">{escape(preview.name)}</div>
+      {symbol_chip}
+    </div>
+    <div class="meta-panel">
+      최신 파일<br />{escape(str(preview.path))}<br /><br />
+      데이터 행 수: {preview.row_count}<br />
+      전체 컬럼 수: {len(preview.columns)}
+    </div>
+  </div>
+  <p class="inline-hint">핵심 표와 요약만 먼저 보이고, 설명과 컬럼 정보는 아래에서 펼쳐서 확인할 수 있습니다.</p>
+  {preview.highlight_html}
+  <div class="card-stack">
+    <details class="drawer">
+      <summary>데이터 설명 보기</summary>
+      <div class="drawer-body">
+        <div class="guide-grid">
+          <article class="guide-card"><h4>이 데이터는 무엇인가</h4><p>{escape(preview.summary)}</p></article>
+          <article class="guide-card"><h4>왜 보는가</h4><p>{escape(preview.purpose)}</p></article>
+          <article class="guide-card"><h4>처음에는 무엇을 볼까</h4><p>{escape(preview.first_look)}</p></article>
+        </div>
+      </div>
+    </details>
+    <details class="drawer">
+      <summary>컬럼 설명 보기</summary>
+      <div class="drawer-body">{preview.column_help_html}</div>
+    </details>
+    <details class="drawer">
+      <summary>표에 표시할 컬럼 선택</summary>
+      <div class="drawer-body">{preview.column_selector_html}</div>
+    </details>
+  </div>
+  <div class="table-wrap">{preview.preview_html}</div>
+</article>
+                    """.strip()
+                )
+            body = '<div class="cards">' + "".join(cards) + "</div>"
+
+        return f"""
+<section class="section">
+  <div class="section-header">
+    <div><h2>{escape(title)}</h2><p>{escape(description)}</p></div>
+    <span class="badge">{escape(badge)}</span>
+  </div>
+  {body}
+</section>
+        """.strip()
+
     def _badge_class(self, status: str) -> str:
         normalized = status.strip().lower()
         if normalized in {"buy", "passed", "success", "bullish", "supportive", "strong", "active"}:
@@ -954,6 +1343,7 @@ class DashboardDataService:
 
     @staticmethod
     def _render_section(title: str, badge: str, description: str, previews: list[DatasetPreview]) -> str:
+        return DashboardDataService._render_compact_section(title, badge, description, previews)
         if not previews:
             body = '<div class="empty">아직 표시할 CSV 데이터가 없습니다. 먼저 수집 또는 분석 스크립트를 실행해 주세요.</div>'
         else:

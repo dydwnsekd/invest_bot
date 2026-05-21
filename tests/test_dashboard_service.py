@@ -96,6 +96,8 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
     html = service.render_html(message="005930 시장 리포트를 생성했습니다.", message_type="success")
 
     assert "invest_bot dashboard" in html
+    assert "tab-button" in html
+    assert "tab-panel" in html
     assert "전체 파이프라인 실행" in html
     assert "데이터 수집 실행" in html
     assert "지표 계산 실행" in html
@@ -106,6 +108,9 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
     assert "최신 시장 리포트" in html
     assert "005930 시장 리포트를 생성했습니다." in html
     assert "삼성전자" in html
+    assert "데이터 설명 보기" in html
+    assert "컬럼 설명 보기" in html
+    assert "표에 표시할 컬럼 선택" in html
     assert "컬럼 설명" in html
     assert "왜 보는가" in html
     assert "추천 컬럼만" in html
