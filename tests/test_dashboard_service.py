@@ -98,6 +98,8 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
     assert "invest_bot dashboard" in html
     assert "tab-button" in html
     assert "tab-panel" in html
+    assert "대시보드 개요" in html
+    assert "리포트 보드" in html
     assert "전체 파이프라인 실행" in html
     assert "데이터 수집 실행" in html
     assert "지표 계산 실행" in html

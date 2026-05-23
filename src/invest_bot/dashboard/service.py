@@ -939,6 +939,7 @@ class DashboardDataService:
 
     def _render_tabbed_snapshot(self, snapshot: DashboardSnapshot, message: str = "", message_type: str = "info") -> str:
         flash_message = self._render_flash_message(message, message_type)
+        overview_section = self._render_overview_section(snapshot)
         report_actions = self._render_compact_action_section()
         raw_section = self._render_compact_section(
             "원본 수집 데이터",
@@ -952,6 +953,8 @@ class DashboardDataService:
             "원본 데이터를 바탕으로 계산한 이동평균, RSI, 전략 신호, 시장 리포트입니다.",
             snapshot.processed_previews,
         )
+        data_section = f"{raw_section}{processed_section}"
+        report_section = self._render_report_section(snapshot)
         test_section = self._render_test_report_section()
         return f"""
 <!DOCTYPE html>
@@ -1046,6 +1049,22 @@ class DashboardDataService:
     .case-row {{ padding:14px 16px; border-radius:18px; background:#fff; border:1px solid #efe4d6; }}
     .case-row-head {{ display:flex; gap:12px; justify-content:space-between; align-items:start; }}
     .case-row-head strong {{ word-break:break-word; }}
+    .overview-grid {{ display:grid; grid-template-columns:1.2fr .8fr; gap:18px; }}
+    .kpi-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }}
+    .kpi-card {{ background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:22px; padding:18px; box-shadow:var(--shadow); }}
+    .kpi-card strong {{ display:block; font-size:1.6rem; color:var(--accent2); }}
+    .kpi-card span {{ display:block; margin-top:6px; color:#344054; font-weight:700; }}
+    .kpi-card p {{ margin:8px 0 0; color:var(--muted); line-height:1.5; font-size:.9rem; }}
+    .overview-stack,.report-stack {{ display:grid; gap:16px; }}
+    .summary-card {{ background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:24px; padding:20px; box-shadow:var(--shadow); }}
+    .summary-card h3 {{ margin:0 0 8px; color:var(--accent2); }}
+    .summary-card p {{ margin:0; color:#344054; line-height:1.6; }}
+    .report-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; }}
+    .report-card {{ background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:24px; padding:20px; box-shadow:var(--shadow); }}
+    .report-card-head {{ display:flex; justify-content:space-between; gap:12px; align-items:start; margin-bottom:12px; }}
+    .report-card-head h3 {{ margin:0; font-size:1.1rem; }}
+    .report-card-head p {{ margin:6px 0 0; color:var(--muted); font-size:.92rem; }}
+    .report-card .highlight-panel {{ margin-bottom:0; }}
     .case-badge {{ display:inline-flex; padding:6px 10px; border-radius:999px; font-size:.78rem; font-weight:700; }}
     .case-badge.passed {{ background:var(--success-bg); color:var(--success); }}
     .case-badge.failed,.case-badge.error {{ background:var(--danger-bg); color:var(--danger); }}
@@ -1065,6 +1084,7 @@ class DashboardDataService:
       .card-top,.section-header,.table-toolbar,.action-form {{ flex-direction:column; align-items:stretch; }}
       .action-layout {{ grid-template-columns:1fr; }}
       .meta-panel {{ min-width:0; }}
+      .overview-grid {{ grid-template-columns:1fr; }}
     }}
   </style>
 </head>
@@ -1082,14 +1102,16 @@ class DashboardDataService:
     {flash_message}
     <section class="tab-shell">
       <div class="tab-bar" role="tablist" aria-label="dashboard sections">
-        <button type="button" class="tab-button active" data-tab-target="tab-actions">실행</button>
-        <button type="button" class="tab-button" data-tab-target="tab-raw">원본 데이터</button>
-        <button type="button" class="tab-button" data-tab-target="tab-processed">분석 데이터</button>
+        <button type="button" class="tab-button active" data-tab-target="tab-overview">개요</button>
+        <button type="button" class="tab-button" data-tab-target="tab-actions">실행</button>
+        <button type="button" class="tab-button" data-tab-target="tab-data">데이터</button>
+        <button type="button" class="tab-button" data-tab-target="tab-reports">리포트</button>
         <button type="button" class="tab-button" data-tab-target="tab-tests">테스트</button>
       </div>
-      <div id="tab-actions" class="tab-panel active">{report_actions}</div>
-      <div id="tab-raw" class="tab-panel">{raw_section}</div>
-      <div id="tab-processed" class="tab-panel">{processed_section}</div>
+      <div id="tab-overview" class="tab-panel active">{overview_section}</div>
+      <div id="tab-actions" class="tab-panel">{report_actions}</div>
+      <div id="tab-data" class="tab-panel">{data_section}</div>
+      <div id="tab-reports" class="tab-panel">{report_section}</div>
       <div id="tab-tests" class="tab-panel">{test_section}</div>
     </section>
   </div>
@@ -1157,7 +1179,7 @@ class DashboardDataService:
       }});
     }});
     const storedTab = localStorage.getItem("dashboard-active-tab");
-    const defaultTab = storedTab && document.getElementById(storedTab) ? storedTab : "tab-actions";
+    const defaultTab = storedTab && document.getElementById(storedTab) ? storedTab : "tab-overview";
     document.querySelectorAll(".tab-button").forEach((button) => {{
       button.addEventListener("click", () => applyActiveTab(button.dataset.tabTarget));
     }});
@@ -1256,6 +1278,151 @@ class DashboardDataService:
     </article>
   </div>
 </section>
+        """.strip()
+
+    def _render_overview_section(self, snapshot: DashboardSnapshot) -> str:
+        test_report = self.load_test_report()
+        market_reports = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
+        signal_reports = [preview for preview in snapshot.processed_previews if preview.name == "golden_cross_signals"]
+        raw_daily = [preview for preview in snapshot.raw_previews if preview.name == "daily_prices"]
+
+        failed_tests = (test_report.failed + test_report.errors) if test_report else 0
+        kpi_cards = [
+            ("원본 데이터셋", str(len(snapshot.raw_previews)), "수집된 원본 데이터 폴더 수입니다."),
+            ("분석 데이터셋", str(len(snapshot.processed_previews)), "지표, 신호, 리포트가 생성된 데이터셋 수입니다."),
+            ("최신 리포트", str(len(market_reports)), "시장 리포트가 준비된 종목 수입니다."),
+            ("테스트 실패", str(failed_tests), "pytest 기준 실패와 에러 합계입니다."),
+        ]
+        kpi_html = "".join(
+            f'<article class="kpi-card"><strong>{escape(value)}</strong><span>{escape(label)}</span><p>{escape(copy)}</p></article>'
+            for label, value, copy in kpi_cards
+        )
+
+        latest_report_html = self._render_overview_summary_card(
+            "최신 시장 리포트",
+            "현재 장 상황을 사람이 읽기 쉽게 요약한 카드입니다.",
+            market_reports[0] if market_reports else None,
+        )
+        latest_signal_html = self._render_overview_summary_card(
+            "최신 골든크로스 신호",
+            "전략 기준의 매수, 매도, 관망 판단을 먼저 확인하는 카드입니다.",
+            signal_reports[0] if signal_reports else None,
+        )
+        latest_raw_html = self._render_overview_summary_card(
+            "최근 수집 데이터",
+            "최근 저장된 일봉 데이터셋을 빠르게 확인하는 카드입니다.",
+            raw_daily[0] if raw_daily else None,
+            use_highlight=False,
+        )
+
+        next_steps = """
+<article class="summary-card">
+  <h3>다음에 무엇을 보면 좋을까</h3>
+  <div class="guide-grid">
+    <article class="guide-card"><h4>처음 확인할 때</h4><p>전체 파이프라인 실행 후 리포트 탭에서 최종 의견과 요약을 먼저 보세요.</p></article>
+    <article class="guide-card"><h4>수치가 궁금할 때</h4><p>데이터 탭에서 필요한 표만 펼쳐서 세부 컬럼을 확인하면 됩니다.</p></article>
+    <article class="guide-card"><h4>안정성을 볼 때</h4><p>테스트 탭에서 실패 테스트와 최근 실행 명령을 확인해 주세요.</p></article>
+  </div>
+</article>
+        """.strip()
+
+        return f"""
+<section class="section">
+  <div class="section-header">
+    <div><h2>대시보드 개요</h2><p>오늘 기준으로 무엇이 준비되어 있고, 어디부터 보면 좋은지 한눈에 정리한 화면입니다.</p></div>
+    <span class="badge">overview</span>
+  </div>
+  <div class="overview-grid">
+    <div class="overview-stack">
+      <div class="kpi-grid">{kpi_html}</div>
+      {next_steps}
+    </div>
+    <div class="overview-stack">
+      {latest_report_html}
+      {latest_signal_html}
+      {latest_raw_html}
+    </div>
+  </div>
+</section>
+        """.strip()
+
+    def _render_report_section(self, snapshot: DashboardSnapshot) -> str:
+        report_previews = [preview for preview in snapshot.processed_previews if preview.name in {"market_reports", "golden_cross_signals"}]
+        if not report_previews:
+            body = '<div class="empty">아직 리포트나 전략 신호가 없습니다. 실행 탭에서 파이프라인을 먼저 돌려 주세요.</div>'
+        else:
+            cards = []
+            for preview in report_previews:
+                cards.append(self._render_report_card(preview))
+            body = f'<div class="report-grid">{"".join(cards)}</div>'
+
+        return f"""
+<section class="section">
+  <div class="section-header">
+    <div><h2>리포트 보드</h2><p>시장 해석과 전략 판단을 표보다 먼저 읽을 수 있게 카드 중심으로 모아둔 화면입니다.</p></div>
+    <span class="badge">report board</span>
+  </div>
+  {body}
+</section>
+        """.strip()
+
+    def _render_overview_summary_card(
+        self,
+        title: str,
+        description: str,
+        preview: DatasetPreview | None,
+        *,
+        use_highlight: bool = True,
+    ) -> str:
+        if preview is None:
+            return f"""
+<article class="summary-card">
+  <h3>{escape(title)}</h3>
+  <p>{escape(description)}</p>
+  <div class="empty-text">아직 표시할 데이터가 없습니다.</div>
+</article>
+            """.strip()
+
+        if use_highlight and preview.highlight_html:
+            body = preview.highlight_html
+        else:
+            body = f"""
+<div class="guide-grid">
+  <article class="guide-card"><h4>데이터셋</h4><p>{escape(preview.display_name)}</p></article>
+  <article class="guide-card"><h4>최신 파일</h4><p>{escape(preview.path.name)}</p></article>
+  <article class="guide-card"><h4>행 수</h4><p>{preview.row_count}</p></article>
+</div>
+            """.strip()
+
+        return f"""
+<article class="summary-card">
+  <h3>{escape(title)}</h3>
+  <p>{escape(description)}</p>
+  {body}
+</article>
+        """.strip()
+
+    def _render_report_card(self, preview: DatasetPreview) -> str:
+        symbol_label = preview.symbol_name or preview.symbol or preview.display_name
+        subtitle = preview.path.name
+        return f"""
+<article class="report-card">
+  <div class="report-card-head">
+    <div>
+      <h3>{escape(symbol_label)}</h3>
+      <p>{escape(preview.display_name)} · {escape(subtitle)}</p>
+    </div>
+    <span class="badge">{escape(preview.name)}</span>
+  </div>
+  {preview.highlight_html or '<div class="empty-text">아직 요약 카드가 없습니다.</div>'}
+  <details class="drawer">
+    <summary>리포트 상세 보기</summary>
+    <div class="drawer-body">
+      <p class="inline-hint">{escape(preview.summary)}</p>
+      {preview.preview_html}
+    </div>
+  </details>
+</article>
         """.strip()
 
     @staticmethod
