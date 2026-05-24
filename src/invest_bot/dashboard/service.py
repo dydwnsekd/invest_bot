@@ -978,14 +978,15 @@ class DashboardDataService:
     .test-stat {{ background:#fff; border:1px solid #efe4d6; color:var(--ink); }}
     .test-stat span {{ color:var(--muted); }}
     .test-stat.fail strong {{ color:var(--danger); }}
-    .tab-shell {{ margin-top:24px; }}
-    .tab-bar {{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }}
-    .tab-button {{ border:none; background:rgba(255,255,255,.85); color:var(--accent2); border-radius:999px; padding:12px 18px; font-weight:800; cursor:pointer; box-shadow:0 8px 18px rgba(20,60,75,.08); border:1px solid #eadfce; }}
+    .tab-shell {{ margin-top:24px; display:grid; grid-template-columns:240px minmax(0,1fr); gap:20px; align-items:start; }}
+    .tab-bar {{ display:grid; gap:10px; position:sticky; top:18px; }}
+    .tab-button {{ border:none; width:100%; text-align:left; background:rgba(255,255,255,.88); color:var(--accent2); border-radius:20px; padding:14px 18px; font-weight:800; cursor:pointer; box-shadow:0 8px 18px rgba(20,60,75,.08); border:1px solid #eadfce; }}
     .tab-button:hover {{ background:#fff; }}
     .tab-button.active {{ background:linear-gradient(135deg,var(--accent2) 0,var(--accent) 100%); color:#fff; border-color:transparent; }}
     .tab-panel {{ display:none; }}
     .tab-panel.active {{ display:block; }}
     .tab-panel .section:first-child {{ margin-top:0; }}
+    .tab-content {{ min-width:0; }}
     .section {{ margin-top:28px; }}
     .section-header {{ display:flex; gap:12px; justify-content:space-between; align-items:end; margin-bottom:14px; }}
     .section-header h2 {{ margin:0; font-size:1.6rem; }}
@@ -1085,6 +1086,8 @@ class DashboardDataService:
       .action-layout {{ grid-template-columns:1fr; }}
       .meta-panel {{ min-width:0; }}
       .overview-grid {{ grid-template-columns:1fr; }}
+      .tab-shell {{ grid-template-columns:1fr; }}
+      .tab-bar {{ position:static; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }}
     }}
   </style>
 </head>
@@ -1108,11 +1111,13 @@ class DashboardDataService:
         <button type="button" class="tab-button" data-tab-target="tab-reports">리포트</button>
         <button type="button" class="tab-button" data-tab-target="tab-tests">테스트</button>
       </div>
-      <div id="tab-overview" class="tab-panel active">{overview_section}</div>
-      <div id="tab-actions" class="tab-panel">{report_actions}</div>
-      <div id="tab-data" class="tab-panel">{data_section}</div>
-      <div id="tab-reports" class="tab-panel">{report_section}</div>
-      <div id="tab-tests" class="tab-panel">{test_section}</div>
+      <div class="tab-content">
+        <div id="tab-overview" class="tab-panel active">{overview_section}</div>
+        <div id="tab-actions" class="tab-panel">{report_actions}</div>
+        <div id="tab-data" class="tab-panel">{data_section}</div>
+        <div id="tab-reports" class="tab-panel">{report_section}</div>
+        <div id="tab-tests" class="tab-panel">{test_section}</div>
+      </div>
     </section>
   </div>
   <script>
