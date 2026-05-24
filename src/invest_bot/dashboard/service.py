@@ -668,11 +668,14 @@ class DashboardDataService:
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>invest_bot dashboard</title>
   <style>
-    :root {{ --bg:#f7f3eb; --card:#fffdf8; --ink:#182230; --muted:#667085; --line:#e7dccd; --accent:#0f766e; --accent2:#143c4b; --soft:#e3f5f0; --sand:#faf4e9; --shadow:0 18px 38px rgba(20,60,75,.09); --danger:#b42318; --danger-bg:#fee4e2; --success:#027a48; --success-bg:#e8f7ef; }}
+    :root {{ --bg:#f7f3eb; --card:#fffdf8; --card-strong:#fffaf1; --ink:#182230; --muted:#667085; --line:#e7dccd; --accent:#0f766e; --accent2:#143c4b; --soft:#e3f5f0; --sand:#faf4e9; --gold:#d9a441; --shadow:0 18px 38px rgba(20,60,75,.09); --shadow-strong:0 24px 54px rgba(20,60,75,.14); --danger:#b42318; --danger-bg:#fee4e2; --success:#027a48; --success-bg:#e8f7ef; }}
     * {{ box-sizing:border-box; }}
     body {{ margin:0; font-family:"Segoe UI","Noto Sans KR",sans-serif; color:var(--ink); background:radial-gradient(circle at top left,#fff0cf 0,transparent 24%), radial-gradient(circle at top right,#d6efe9 0,transparent 22%), linear-gradient(180deg,#fcfaf6 0,var(--bg) 100%); }}
-    .page {{ max-width:1360px; margin:0 auto; padding:28px 18px 72px; }}
-    .hero {{ background:linear-gradient(135deg,var(--accent2) 0,var(--accent) 100%); color:#fff; border-radius:28px; padding:32px; box-shadow:var(--shadow); }}
+    .page {{ max-width:1380px; margin:0 auto; padding:28px 18px 72px; }}
+    .hero {{ position:relative; overflow:hidden; background:linear-gradient(135deg,var(--accent2) 0,var(--accent) 100%); color:#fff; border-radius:32px; padding:34px; box-shadow:var(--shadow-strong); }}
+    .hero::before {{ content:""; position:absolute; inset:auto -80px -110px auto; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle,#ffffff36 0,#ffffff10 45%,transparent 70%); }}
+    .hero::after {{ content:""; position:absolute; inset:20px auto auto -80px; width:220px; height:220px; border-radius:50%; background:radial-gradient(circle,#ffe3a144 0,#ffe3a114 55%,transparent 72%); }}
+    .hero > * {{ position:relative; z-index:1; }}
     .hero h1 {{ margin:0 0 10px; font-size:clamp(2rem,4vw,3.2rem); }}
     .hero p {{ margin:0; max-width:760px; line-height:1.7; color:rgba(255,255,255,.9); }}
     .hero-stats {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:22px; }}
@@ -686,16 +689,16 @@ class DashboardDataService:
     .section-header {{ display:flex; gap:12px; justify-content:space-between; align-items:end; margin-bottom:14px; }}
     .section-header h2 {{ margin:0; font-size:1.6rem; }}
     .section-header p {{ margin:6px 0 0; color:var(--muted); line-height:1.55; }}
-    .badge {{ display:inline-flex; padding:8px 12px; border-radius:999px; background:var(--soft); color:var(--accent); font-weight:700; font-size:.88rem; white-space:nowrap; }}
+    .badge {{ display:inline-flex; padding:8px 12px; border-radius:999px; background:var(--soft); color:var(--accent); font-weight:700; font-size:.88rem; white-space:nowrap; box-shadow:inset 0 0 0 1px #cfe8e2; }}
     .cards {{ display:grid; gap:20px; }}
-    .card {{ background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:24px; padding:22px; box-shadow:var(--shadow); }}
+    .card {{ background:rgba(255,253,248,.95); border:1px solid var(--line); border-radius:26px; padding:22px; box-shadow:var(--shadow); }}
     .card-top {{ display:flex; gap:18px; justify-content:space-between; align-items:start; margin-bottom:18px; }}
     .card h3 {{ margin:0; font-size:1.35rem; }}
     .dataset-key {{ margin-top:6px; color:var(--muted); font-size:.92rem; }}
     .meta-panel {{ min-width:240px; padding:14px 16px; border-radius:18px; background:#fff; border:1px solid #efe4d6; color:var(--muted); font-size:.92rem; line-height:1.6; word-break:break-all; }}
     .symbol-chip {{ display:inline-flex; margin-top:10px; padding:8px 12px; border-radius:999px; background:var(--soft); color:var(--accent2); font-size:.88rem; font-weight:700; }}
     .guide-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:18px; }}
-    .guide-card,.controls-panel,.column-card,.action-card,.flash-card {{ background:var(--card); border:1px solid #efe4d6; border-radius:18px; }}
+    .guide-card,.controls-panel,.column-card,.action-card,.flash-card {{ background:var(--card); border:1px solid #efe4d6; border-radius:20px; }}
     .guide-card {{ padding:16px; }}
     .guide-card h4,.controls-text h4,.info-title,.action-card h3,.flash-card h3 {{ margin:0 0 8px; font-size:1rem; color:var(--accent2); }}
     .guide-card p,.controls-text p,.column-card p,.action-card p,.flash-card p {{ margin:0; line-height:1.6; color:#344054; }}
@@ -978,15 +981,21 @@ class DashboardDataService:
     .test-stat {{ background:#fff; border:1px solid #efe4d6; color:var(--ink); }}
     .test-stat span {{ color:var(--muted); }}
     .test-stat.fail strong {{ color:var(--danger); }}
-    .tab-shell {{ margin-top:24px; display:grid; grid-template-columns:240px minmax(0,1fr); gap:20px; align-items:start; }}
-    .tab-bar {{ display:grid; gap:10px; position:sticky; top:18px; }}
-    .tab-button {{ border:none; width:100%; text-align:left; background:rgba(255,255,255,.88); color:var(--accent2); border-radius:20px; padding:14px 18px; font-weight:800; cursor:pointer; box-shadow:0 8px 18px rgba(20,60,75,.08); border:1px solid #eadfce; }}
-    .tab-button:hover {{ background:#fff; }}
+    .tab-shell {{ margin-top:24px; display:grid; grid-template-columns:260px minmax(0,1fr); gap:22px; align-items:start; }}
+    .tab-bar {{ display:grid; gap:12px; position:sticky; top:18px; }}
+    .tab-nav-card {{ background:linear-gradient(180deg,#fffdf9 0,#fff8ee 100%); border:1px solid var(--line); border-radius:26px; padding:18px; box-shadow:var(--shadow); }}
+    .tab-nav-card strong {{ display:block; color:var(--accent2); font-size:1.05rem; letter-spacing:-0.02em; }}
+    .tab-nav-card p {{ margin:8px 0 0; color:#475467; line-height:1.6; font-size:.92rem; }}
+    .tab-button {{ position:relative; border:none; width:100%; text-align:left; background:rgba(255,255,255,.9); color:var(--accent2); border-radius:22px; padding:15px 18px; font-weight:800; cursor:pointer; box-shadow:0 10px 22px rgba(20,60,75,.08); border:1px solid #eadfce; transition:transform .18s ease, box-shadow .18s ease, background .18s ease; }}
+    .tab-button::before {{ content:""; position:absolute; inset:10px auto 10px 10px; width:4px; border-radius:999px; background:transparent; }}
+    .tab-button:hover {{ background:#fff; transform:translateX(3px); box-shadow:0 14px 26px rgba(20,60,75,.11); }}
     .tab-button.active {{ background:linear-gradient(135deg,var(--accent2) 0,var(--accent) 100%); color:#fff; border-color:transparent; }}
+    .tab-button.active::before {{ background:linear-gradient(180deg,#ffe4a4 0,#ffffff 100%); }}
     .tab-panel {{ display:none; }}
     .tab-panel.active {{ display:block; }}
     .tab-panel .section:first-child {{ margin-top:0; }}
     .tab-content {{ min-width:0; }}
+    .content-shell {{ background:linear-gradient(180deg,rgba(255,255,255,.58) 0,rgba(255,252,246,.82) 100%); border:1px solid rgba(231,220,205,.9); border-radius:30px; padding:22px; box-shadow:var(--shadow); }}
     .section {{ margin-top:28px; }}
     .section-header {{ display:flex; gap:12px; justify-content:space-between; align-items:end; margin-bottom:14px; }}
     .section-header h2 {{ margin:0; font-size:1.6rem; }}
@@ -1007,9 +1016,9 @@ class DashboardDataService:
     .info-title {{ margin:0 0 12px; }}
     .card-stack {{ display:grid; gap:14px; }}
     .inline-hint {{ margin:0 0 14px; color:var(--muted); font-size:.9rem; }}
-    .drawer {{ border:1px solid #efe4d6; border-radius:18px; background:#fffdf9; overflow:hidden; }}
+    .drawer {{ border:1px solid #efe4d6; border-radius:20px; background:#fffdf9; overflow:hidden; }}
     .drawer + .drawer {{ margin-top:12px; }}
-    .drawer summary {{ list-style:none; cursor:pointer; padding:14px 16px; font-weight:800; color:var(--accent2); display:flex; align-items:center; justify-content:space-between; gap:12px; }}
+    .drawer summary {{ list-style:none; cursor:pointer; padding:14px 16px; font-weight:800; color:var(--accent2); display:flex; align-items:center; justify-content:space-between; gap:12px; background:linear-gradient(180deg,#fffdf9 0,#fff8ef 100%); }}
     .drawer summary::-webkit-details-marker {{ display:none; }}
     .drawer summary::after {{ content:"열기"; color:var(--muted); font-size:.85rem; font-weight:700; }}
     .drawer[open] summary::after {{ content:"닫기"; }}
@@ -1043,27 +1052,29 @@ class DashboardDataService:
     .empty,.empty-text {{ color:var(--muted); }}
     .empty {{ padding:28px; border-radius:22px; background:rgba(255,255,255,.78); border:1px dashed #e4d7c4; line-height:1.7; }}
     .empty-text {{ padding:18px; }}
-    .highlight-panel {{ margin-bottom:16px; padding:16px; border-radius:20px; border:1px solid #efe4d6; background:linear-gradient(180deg,#fff 0,#f7fbfa 100%); }}
+    .highlight-panel {{ margin-bottom:16px; padding:18px; border-radius:22px; border:1px solid #efe4d6; background:linear-gradient(180deg,#fff 0,#f7fbfa 100%); box-shadow:0 12px 22px rgba(20,60,75,.05); }}
     .highlight-copy {{ margin:10px 0 0; color:#344054; line-height:1.6; }}
-    .report-highlight {{ background:linear-gradient(180deg,#fff 0,#f2fbf8 100%); }}
+    .report-highlight {{ background:linear-gradient(180deg,#fff 0,#f2fbf8 100%); border-color:#d8efe8; }}
     .case-list {{ display:grid; gap:10px; }}
     .case-row {{ padding:14px 16px; border-radius:18px; background:#fff; border:1px solid #efe4d6; }}
     .case-row-head {{ display:flex; gap:12px; justify-content:space-between; align-items:start; }}
     .case-row-head strong {{ word-break:break-word; }}
     .overview-grid {{ display:grid; grid-template-columns:1.2fr .8fr; gap:18px; }}
     .kpi-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }}
-    .kpi-card {{ background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:22px; padding:18px; box-shadow:var(--shadow); }}
-    .kpi-card strong {{ display:block; font-size:1.6rem; color:var(--accent2); }}
+    .kpi-card {{ position:relative; overflow:hidden; background:linear-gradient(180deg,#fffdf9 0,#fff7ec 100%); border:1px solid var(--line); border-radius:24px; padding:18px; box-shadow:var(--shadow); }}
+    .kpi-card::after {{ content:""; position:absolute; right:-22px; top:-18px; width:72px; height:72px; border-radius:24px; background:linear-gradient(135deg,#e3f5f0 0,#fff2d6 100%); transform:rotate(18deg); opacity:.75; }}
+    .kpi-card strong {{ position:relative; z-index:1; display:block; font-size:1.75rem; color:var(--accent2); letter-spacing:-0.04em; }}
     .kpi-card span {{ display:block; margin-top:6px; color:#344054; font-weight:700; }}
     .kpi-card p {{ margin:8px 0 0; color:var(--muted); line-height:1.5; font-size:.9rem; }}
     .overview-stack,.report-stack {{ display:grid; gap:16px; }}
-    .summary-card {{ background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:24px; padding:20px; box-shadow:var(--shadow); }}
+    .summary-card {{ background:rgba(255,253,248,.94); border:1px solid var(--line); border-radius:26px; padding:20px; box-shadow:var(--shadow); }}
     .summary-card h3 {{ margin:0 0 8px; color:var(--accent2); }}
     .summary-card p {{ margin:0; color:#344054; line-height:1.6; }}
     .report-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; }}
-    .report-card {{ background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:24px; padding:20px; box-shadow:var(--shadow); }}
+    .report-card {{ background:rgba(255,253,248,.95); border:1px solid var(--line); border-radius:26px; padding:20px; box-shadow:var(--shadow); transition:transform .18s ease, box-shadow .18s ease; }}
+    .report-card:hover {{ transform:translateY(-2px); box-shadow:0 18px 28px rgba(20,60,75,.11); }}
     .report-card-head {{ display:flex; justify-content:space-between; gap:12px; align-items:start; margin-bottom:12px; }}
-    .report-card-head h3 {{ margin:0; font-size:1.1rem; }}
+    .report-card-head h3 {{ margin:0; font-size:1.15rem; letter-spacing:-0.02em; }}
     .report-card-head p {{ margin:6px 0 0; color:var(--muted); font-size:.92rem; }}
     .report-card .highlight-panel {{ margin-bottom:0; }}
     .case-badge {{ display:inline-flex; padding:6px 10px; border-radius:999px; font-size:.78rem; font-weight:700; }}
@@ -1072,12 +1083,12 @@ class DashboardDataService:
     .case-badge.skipped {{ background:#fff1d6; color:#9a6700; }}
     .case-detail {{ margin-top:8px; color:#475467; line-height:1.55; white-space:pre-wrap; }}
     .action-layout {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; }}
-    .action-card {{ padding:20px; }}
+    .action-card {{ padding:20px; background:linear-gradient(180deg,#fffdf9 0,#fff9f2 100%); }}
     .action-form {{ display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; align-items:end; }}
     .input-group {{ display:grid; gap:6px; min-width:220px; flex:1; }}
     .input-group label {{ font-size:.9rem; color:var(--muted); font-weight:700; }}
     .action-note {{ margin-top:14px !important; color:#475467 !important; }}
-    .flash-card {{ padding:16px 18px; margin-top:18px; }}
+    .flash-card {{ padding:16px 18px; margin-top:18px; box-shadow:var(--shadow); }}
     .flash-card.success {{ background:var(--success-bg); border-color:#b7ebc8; }}
     .flash-card.error {{ background:var(--danger-bg); border-color:#f3c3bf; }}
     .flash-card.info {{ background:#eef4ff; border-color:#d0ddff; }}
@@ -1088,6 +1099,8 @@ class DashboardDataService:
       .overview-grid {{ grid-template-columns:1fr; }}
       .tab-shell {{ grid-template-columns:1fr; }}
       .tab-bar {{ position:static; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }}
+      .tab-button {{ text-align:center; }}
+      .tab-button::before {{ display:none; }}
     }}
   </style>
 </head>
@@ -1105,13 +1118,17 @@ class DashboardDataService:
     {flash_message}
     <section class="tab-shell">
       <div class="tab-bar" role="tablist" aria-label="dashboard sections">
+        <div class="tab-nav-card">
+          <strong>Admin Navigation</strong>
+          <p>왼쪽에서 작업 흐름을 고르고, 오른쪽에서 해당 화면만 집중해서 보는 구조입니다.</p>
+        </div>
         <button type="button" class="tab-button active" data-tab-target="tab-overview">개요</button>
         <button type="button" class="tab-button" data-tab-target="tab-actions">실행</button>
         <button type="button" class="tab-button" data-tab-target="tab-data">데이터</button>
         <button type="button" class="tab-button" data-tab-target="tab-reports">리포트</button>
         <button type="button" class="tab-button" data-tab-target="tab-tests">테스트</button>
       </div>
-      <div class="tab-content">
+      <div class="tab-content content-shell">
         <div id="tab-overview" class="tab-panel active">{overview_section}</div>
         <div id="tab-actions" class="tab-panel">{report_actions}</div>
         <div id="tab-data" class="tab-panel">{data_section}</div>
