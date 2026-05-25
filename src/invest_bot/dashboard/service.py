@@ -483,7 +483,7 @@ class DashboardDataService:
         rows = []
         for index, row in enumerate(safe_frame.itertuples(index=False), start=1):
             cells = [
-                f'<td data-column="{escape(column)}" title="{escape(self._column_meta(column).description)}">{escape(str(value))}</td>'
+                f'<td data-column="{escape(column)}" title="{escape(self._column_meta(column).description)}">{escape(self._format_display_value(column, value))}</td>'
                 for column, value in zip(safe_frame.columns, row)
             ]
             rows.append(f'<tr data-row-index="{index}">{"".join(cells)}</tr>')
@@ -1059,8 +1059,9 @@ class DashboardDataService:
     .case-row {{ padding:14px 16px; border-radius:18px; background:#fff; border:1px solid #efe4d6; }}
     .case-row-head {{ display:flex; gap:12px; justify-content:space-between; align-items:start; }}
     .case-row-head strong {{ word-break:break-word; }}
-    .overview-grid {{ display:grid; grid-template-columns:1.2fr .8fr; gap:18px; }}
-    .kpi-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }}
+    .overview-grid {{ display:grid; gap:18px; }}
+    .overview-main-grid {{ display:grid; grid-template-columns:1.15fr .85fr; gap:18px; }}
+    .kpi-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }}
     .kpi-card {{ position:relative; overflow:hidden; background:linear-gradient(180deg,#fffdf9 0,#fff7ec 100%); border:1px solid var(--line); border-radius:24px; padding:18px; box-shadow:var(--shadow); }}
     .kpi-card::after {{ content:""; position:absolute; right:-22px; top:-18px; width:72px; height:72px; border-radius:24px; background:linear-gradient(135deg,#e3f5f0 0,#fff2d6 100%); transform:rotate(18deg); opacity:.75; }}
     .kpi-card strong {{ position:relative; z-index:1; display:block; font-size:1.75rem; color:var(--accent2); letter-spacing:-0.04em; }}
@@ -1096,7 +1097,8 @@ class DashboardDataService:
       .card-top,.section-header,.table-toolbar,.action-form {{ flex-direction:column; align-items:stretch; }}
       .action-layout {{ grid-template-columns:1fr; }}
       .meta-panel {{ min-width:0; }}
-      .overview-grid {{ grid-template-columns:1fr; }}
+      .overview-main-grid {{ grid-template-columns:1fr; }}
+      .kpi-grid {{ grid-template-columns:1fr; }}
       .tab-shell {{ grid-template-columns:1fr; }}
       .tab-bar {{ position:static; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }}
       .tab-button {{ text-align:center; }}
@@ -1355,14 +1357,16 @@ class DashboardDataService:
     <span class="badge">overview</span>
   </div>
   <div class="overview-grid">
-    <div class="overview-stack">
-      <div class="kpi-grid">{kpi_html}</div>
-      {next_steps}
-    </div>
-    <div class="overview-stack">
-      {latest_report_html}
-      {latest_signal_html}
-      {latest_raw_html}
+    <div class="kpi-grid">{kpi_html}</div>
+    <div class="overview-main-grid">
+      <div class="overview-stack">
+        {next_steps}
+      </div>
+      <div class="overview-stack">
+        {latest_report_html}
+        {latest_signal_html}
+        {latest_raw_html}
+      </div>
     </div>
   </div>
 </section>
@@ -1434,7 +1438,7 @@ class DashboardDataService:
       <h3>{escape(symbol_label)}</h3>
       <p>{escape(preview.display_name)} · {escape(subtitle)}</p>
     </div>
-    <span class="badge">{escape(preview.name)}</span>
+    <span class="badge">{escape(preview.display_name)}</span>
   </div>
   {preview.highlight_html or '<div class="empty-text">아직 요약 카드가 없습니다.</div>'}
   <details class="drawer">
@@ -1446,6 +1450,26 @@ class DashboardDataService:
   </details>
 </article>
         """.strip()
+
+    def _format_display_value(self, column: str, value: object) -> str:
+        if value is None:
+            return ""
+
+        text = str(value).strip()
+        if not text:
+            return ""
+
+        if column in {
+            "signal",
+            "golden_cross_signal",
+            "final_opinion",
+            "trend_state",
+            "rsi_state",
+            "volume_state",
+            "investor_flow",
+        }:
+            return self._state_label(text)
+        return text
 
     @staticmethod
     def _render_compact_section(title: str, badge: str, description: str, previews: list[DatasetPreview]) -> str:
