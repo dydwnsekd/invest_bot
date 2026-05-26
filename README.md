@@ -170,6 +170,14 @@ python scripts/run_dashboard.py
 
 - [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
+### 7. Streamlit 대시보드 초안 실행
+
+```powershell
+streamlit run streamlit_app.py
+```
+
+이 버전은 기존 admin 흐름을 유지한 채 Streamlit 스타일의 사이드바, 카드, 탭 구조로 재구성한 초안입니다.
+
 ## 데이터 저장 경로
 
 ### 수집 결과

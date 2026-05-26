@@ -1,0 +1,14 @@
+[theme]
+base = "light"
+primaryColor = "#0f766e"
+backgroundColor = "#f4efe6"
+secondaryBackgroundColor = "#fffaf2"
+textColor = "#1f2937"
+borderColor = "#d6d3d1"
+showWidgetBorder = true
+baseFontSize = 15
+font = "sans serif"
+
+[server]
+runOnSave = true
+
