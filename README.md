@@ -178,6 +178,12 @@ streamlit run streamlit_app.py
 
 이 버전은 기존 admin 흐름을 유지한 채 Streamlit 스타일의 사이드바, 카드, 탭 구조로 재구성한 초안입니다.
 
+프로젝트 실행 스크립트로는 아래 명령도 사용할 수 있습니다.
+
+```powershell
+python scripts/run_streamlit_dashboard.py
+```
+
 ## 데이터 저장 경로
 
 ### 수집 결과
