@@ -81,6 +81,35 @@ def _apply_custom_style() -> None:
             color: #f8fafc;
         }
 
+        [data-testid="stSidebar"] .stButton > button {
+            width: 100%;
+            border-radius: 0.95rem;
+            border: 1px solid rgba(148, 163, 184, 0.26);
+            background: rgba(30, 41, 59, 0.82);
+            color: #f8fafc;
+            font-weight: 700;
+            box-shadow: none;
+            transition: all 0.16s ease;
+        }
+
+        [data-testid="stSidebar"] .stButton > button:hover {
+            border-color: rgba(45, 212, 191, 0.6);
+            background: rgba(51, 65, 85, 0.96);
+            color: #ffffff;
+        }
+
+        [data-testid="stSidebar"] .stButton > button[kind="primary"] {
+            background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+            border-color: rgba(20, 184, 166, 0.65);
+            color: #f8fffe;
+            box-shadow: 0 10px 24px rgba(15, 118, 110, 0.24);
+        }
+
+        [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+            background: linear-gradient(135deg, #2dd4bf 0%, #0f766e 100%);
+            color: #ffffff;
+        }
+
         .hero-shell {
             padding: 1.4rem 1.6rem;
             border-radius: 1.4rem;
@@ -187,6 +216,40 @@ def _apply_custom_style() -> None:
             text-transform: uppercase;
             color: #cbd5e1;
         }
+
+        .sidebar-info-card {
+            margin-top: 0.35rem;
+            padding: 0.95rem 1rem;
+            border-radius: 1rem;
+            background: rgba(30, 41, 59, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+        }
+
+        .sidebar-info-title {
+            margin: 0 0 0.6rem 0;
+            font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .sidebar-info-label {
+            margin-top: 0.45rem;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #94a3b8;
+        }
+
+        .sidebar-info-value {
+            margin-top: 0.18rem;
+            padding: 0.42rem 0.55rem;
+            border-radius: 0.7rem;
+            background: rgba(15, 23, 42, 0.5);
+            color: #f8fafc;
+            font-size: 0.82rem;
+            word-break: break-all;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -205,9 +268,18 @@ def _render_sidebar(service: DashboardDataService) -> None:
                 st.rerun()
 
         st.divider()
-        st.markdown("### 데이터 위치")
-        st.caption(f"원본: `{service.raw_root}`")
-        st.caption(f"가공: `{service.processed_root}`")
+        st.markdown(
+            f"""
+            <div class="sidebar-info-card">
+              <div class="sidebar-info-title">데이터 위치</div>
+              <div class="sidebar-info-label">원본 데이터</div>
+              <div class="sidebar-info-value">{escape(str(service.raw_root))}</div>
+              <div class="sidebar-info-label">분석 데이터</div>
+              <div class="sidebar-info-value">{escape(str(service.processed_root))}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def _render_header() -> None:
