@@ -69,8 +69,58 @@ def _apply_custom_style() -> None:
                 linear-gradient(180deg, #f7f2e9 0%, #f3ede2 100%);
         }
 
-        [data-testid="stAppViewContainer"] * {
+        [data-testid="stAppViewContainer"],
+        [data-testid="stAppViewContainer"] p,
+        [data-testid="stAppViewContainer"] div,
+        [data-testid="stAppViewContainer"] span,
+        [data-testid="stAppViewContainer"] label,
+        [data-testid="stAppViewContainer"] h1,
+        [data-testid="stAppViewContainer"] h2,
+        [data-testid="stAppViewContainer"] h3,
+        [data-testid="stAppViewContainer"] h4,
+        [data-testid="stAppViewContainer"] h5,
+        [data-testid="stAppViewContainer"] h6,
+        [data-testid="stAppViewContainer"] button,
+        [data-testid="stSidebar"],
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] div,
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] h4,
+        [data-testid="stSidebar"] h5,
+        [data-testid="stSidebar"] h6,
+        [data-testid="stSidebar"] button {
             font-family: "Noto Sans KR", "Space Grotesk", sans-serif;
+        }
+
+        .material-symbols-rounded,
+        .material-symbols-outlined,
+        .material-icons,
+        [class*="material-symbols"],
+        [data-testid="stExpandSidebarButton"],
+        [data-testid="stExpandSidebarButton"] *,
+        [data-testid="stSidebarCollapseButton"] span,
+        [data-testid="stSidebarNavCollapseButton"] span {
+            font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
+            font-weight: normal !important;
+            font-style: normal !important;
+            font-size: 1.25rem !important;
+            line-height: 1 !important;
+            letter-spacing: normal !important;
+            text-transform: none !important;
+            display: inline-block !important;
+            white-space: nowrap !important;
+            word-wrap: normal !important;
+            direction: ltr !important;
+            -webkit-font-smoothing: antialiased !important;
+            font-variation-settings:
+                "FILL" 0,
+                "wght" 400,
+                "GRAD" 0,
+                "opsz" 24;
         }
 
         [data-testid="stSidebar"] {
