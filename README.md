@@ -148,6 +148,30 @@ python scripts/run_collection.py 005930 000660 035420
 python scripts/run_collection.py --symbols-file symbols.txt --days 60
 ```
 
+### 3-1. 정기 다중 종목 수집
+
+설정 예시 파일:
+
+- `config/collection_schedule.yaml.example` -> `config/collection_schedule.yaml`
+
+한 번만 실행:
+
+```powershell
+python scripts/run_scheduled_collection.py --once
+```
+
+주기 실행:
+
+```powershell
+python scripts/run_scheduled_collection.py
+```
+
+테스트용 제한 실행:
+
+```powershell
+python scripts/run_scheduled_collection.py --max-runs 2
+```
+
 ### 4. 지표 계산
 
 ```powershell

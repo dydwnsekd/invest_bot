@@ -2,7 +2,7 @@
 
 ## 목표
 
-국내주식 전략 연구에 필요한 기본 데이터를 안정적으로 수집하고 저장한다.
+국내주식 자동매매에 필요한 데이터를 안정적으로 수집하고, 여러 종목을 반복적으로 운영할 수 있는 수집 기반을 만든다.
 
 ## 완료된 항목
 
@@ -12,17 +12,19 @@
 - [x] 투자자 수급 일별 데이터 수집 구현
 - [x] 수집 결과 CSV 저장 구현
 - [x] 수집 실행 스크립트 작성
+- [x] 다중 종목 일괄 수집 구현
+- [x] 설정 파일 기반 정기 다중 종목 수집 스케줄링 구현
+- [x] 단건 실행 및 테스트용 제한 실행(`--once`, `--max-runs`) 지원
 
 ## 남은 항목
 
-- [ ] 다중 종목 일괄 수집
-- [ ] 종목 리스트 입력 방식 추가
+- [ ] 종목 리스트 입력 방식 고도화
 - [ ] 분봉 데이터 수집
 - [ ] 현재가/호가 데이터 수집
 - [ ] 공매도/프로그램 매매/뉴스 수집
-- [ ] 재시도 및 실패 로그 정책 추가
+- [ ] 수집 실패 재시도 및 상세 로그 고도화
 
-## 저장 구조
+## 데이터 구조
 
 ```text
 data/raw/domestic_stock/
@@ -32,6 +34,12 @@ data/raw/domestic_stock/
   investor_daily/
   investor_daily_summary/
 ```
+
+## 스케줄링 관련 파일
+
+- [scheduled_collection.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/scheduled_collection.py)
+- [run_scheduled_collection.py](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_scheduled_collection.py)
+- [collection_schedule.yaml.example](/C:/Users/user/PycharmProjects/invest_bot/config/collection_schedule.yaml.example)
 
 ## 관련 파일
 

@@ -1,0 +1,7 @@
+symbols:
+  - "005930"
+  - "000660"
+days: 30
+interval_minutes: 1440
+run_on_startup: true
+log_path: logs/collection_scheduler.log

@@ -146,6 +146,7 @@ env.bak/
 venv.bak/
 config/app.yaml
 config/kis_credentials.yaml
+config/collection_schedule.yaml
 
 # Spyder project settings
 .spyderproject
