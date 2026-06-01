@@ -10,6 +10,7 @@ from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
+from invest_bot.jobs.scheduled_collection import load_schedule_status
 from invest_bot.market.symbol_lookup import SymbolLookup
 
 
@@ -28,6 +29,7 @@ def main() -> None:
 
     service = DashboardDataService()
     symbol_lookup = SymbolLookup()
+    schedule_status = _load_optional_schedule_status()
 
     snapshot = service.build_snapshot()
     test_report = service.load_test_report()
@@ -39,15 +41,15 @@ def main() -> None:
     if "action_message_type" not in st.session_state:
         st.session_state.action_message_type = "info"
 
-    _render_sidebar(service)
+    _render_sidebar(service, schedule_status)
     _render_header()
     _render_action_feedback()
 
     tab = st.session_state.selected_tab
     if tab == "개요":
-        _render_overview_tab(snapshot, test_report)
+        _render_overview_tab(snapshot, test_report, schedule_status)
     elif tab == "실행":
-        _render_actions_tab(symbol_lookup)
+        _render_actions_tab(symbol_lookup, schedule_status)
     elif tab == "데이터":
         _render_data_tab(snapshot, service)
     elif tab == "리포트":
@@ -306,7 +308,7 @@ def _apply_custom_style() -> None:
     )
 
 
-def _render_sidebar(service: DashboardDataService) -> None:
+def _render_sidebar(service: DashboardDataService, schedule_status) -> None:
     with st.sidebar:
         st.markdown("## invest_bot")
         st.caption("수집, 분석, 신호, 리포트를 하나의 운영 화면에서 확인합니다.")
@@ -330,6 +332,20 @@ def _render_sidebar(service: DashboardDataService) -> None:
             """,
             unsafe_allow_html=True,
         )
+
+        if schedule_status is not None:
+            st.markdown(
+                f"""
+                <div class="sidebar-info-card">
+                  <div class="sidebar-info-title">정기 수집 상태</div>
+                  <div class="sidebar-info-label">대상 종목 수</div>
+                  <div class="sidebar-info-value">{len(schedule_status.schedule.symbols)}개</div>
+                  <div class="sidebar-info-label">수집 주기</div>
+                  <div class="sidebar-info-value">{schedule_status.schedule.interval_minutes}분</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 def _render_header() -> None:
@@ -361,7 +377,7 @@ def _render_action_feedback() -> None:
         st.info(message)
 
 
-def _render_overview_tab(snapshot, test_report: TestReportPreview | None) -> None:
+def _render_overview_tab(snapshot, test_report: TestReportPreview | None, schedule_status) -> None:
     report_previews = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
     signal_previews = [preview for preview in snapshot.processed_previews if preview.name == "golden_cross_signals"]
 
@@ -395,14 +411,21 @@ def _render_overview_tab(snapshot, test_report: TestReportPreview | None) -> Non
 
     with right:
         _render_latest_report_summary(report_previews)
+        if schedule_status is not None:
+            st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+            _render_schedule_status_summary(schedule_status)
 
 
-def _render_actions_tab(symbol_lookup: SymbolLookup) -> None:
+def _render_actions_tab(symbol_lookup: SymbolLookup, schedule_status) -> None:
     st.markdown('<h3 class="section-title">실행 패널</h3>', unsafe_allow_html=True)
     st.markdown(
         '<div class="section-copy">기존 admin web 액션과 같은 흐름을 Streamlit에서 바로 실행할 수 있습니다.</div>',
         unsafe_allow_html=True,
     )
+
+    if schedule_status is not None:
+        _render_schedule_status_panel(schedule_status)
+        st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
     with st.container(border=True):
         st.markdown("#### 공통 입력")
@@ -811,6 +834,69 @@ def _render_latest_report_summary(report_previews: list[DatasetPreview]) -> None
         badge_columns = st.columns(2)
         badge_columns[0].metric("최종 의견", str(row.get("final_opinion", "hold")).upper())
         badge_columns[1].metric("추세", str(row.get("trend_state", "neutral")).upper())
+
+
+def _load_optional_schedule_status():
+    try:
+        return load_schedule_status()
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def _render_schedule_status_summary(schedule_status) -> None:
+    with st.container(border=True):
+        st.markdown('<h3 class="section-title">정기 수집 요약</h3>', unsafe_allow_html=True)
+        if not schedule_status.log_exists:
+            st.caption("아직 정기 수집 로그가 없습니다. `run_scheduled_collection.py --once`로 첫 실행을 남겨보세요.")
+            return
+
+        cols = st.columns(2)
+        cols[0].metric("마지막 실행", _compact_datetime(schedule_status.last_finished_at))
+        cols[1].metric("다음 예정 시각", _compact_datetime(schedule_status.next_run_at))
+        status_text = "성공" if schedule_status.last_failed_count == 0 else "일부 실패"
+        st.caption(
+            f"최근 결과: {status_text} · 성공 {schedule_status.last_success_count} · 실패 {schedule_status.last_failed_count}"
+        )
+
+
+def _render_schedule_status_panel(schedule_status) -> None:
+    with st.container(border=True):
+        st.markdown("#### 정기 수집 상태")
+        config_left, config_right, config_tail = st.columns(3)
+        config_left.metric("대상 종목 수", len(schedule_status.schedule.symbols))
+        config_right.metric("수집 주기(분)", schedule_status.schedule.interval_minutes)
+        config_tail.metric("누적 로그 실행 수", schedule_status.total_logged_runs)
+
+        st.caption(
+            f"수집 일수 {schedule_status.schedule.days}일 · 시작 즉시 실행 {'예' if schedule_status.schedule.run_on_startup else '아니오'}"
+        )
+
+        latest_left, latest_right = st.columns(2)
+        latest_left.markdown(f"**마지막 시작 시각**  \n{_compact_datetime(schedule_status.last_started_at)}")
+        latest_right.markdown(f"**마지막 종료 시각**  \n{_compact_datetime(schedule_status.last_finished_at)}")
+
+        next_run = _compact_datetime(schedule_status.next_run_at)
+        if schedule_status.next_run_at:
+            st.info(f"다음 실행 예정 시각: {next_run}")
+        elif not schedule_status.log_exists:
+            st.warning("아직 정기 수집 실행 이력이 없습니다.")
+
+        if schedule_status.recent_entries:
+            recent_frame = pd.DataFrame(schedule_status.recent_entries)
+            with st.expander("최근 수집 로그 보기"):
+                st.dataframe(recent_frame, use_container_width=True, hide_index=True)
+
+
+def _compact_datetime(value: str) -> str:
+    if not value:
+        return "-"
+    try:
+        parsed = pd.to_datetime(value)
+    except Exception:  # noqa: BLE001
+        return value
+    if pd.isna(parsed):
+        return value
+    return parsed.strftime("%Y-%m-%d %H:%M")
 
 
 def _run_collect_action(symbol_lookup: SymbolLookup, symbols_text: str, days: int) -> None:

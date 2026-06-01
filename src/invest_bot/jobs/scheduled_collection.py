@@ -45,7 +45,7 @@ class CollectionScheduleConfig:
 
         log_path = Path(str(payload.get("log_path", "logs/collection_scheduler.log")))
         if not log_path.is_absolute():
-            log_path = Path(__file__).resolve().parents[3] / log_path
+            log_path = config_path.parent / log_path
 
         return cls(
             symbols=symbols,
@@ -54,6 +54,20 @@ class CollectionScheduleConfig:
             run_on_startup=bool(payload.get("run_on_startup", True)),
             log_path=log_path,
         )
+
+
+@dataclass(slots=True)
+class CollectionScheduleStatus:
+    schedule: CollectionScheduleConfig
+    log_exists: bool
+    last_event: str = ""
+    last_started_at: str = ""
+    last_finished_at: str = ""
+    next_run_at: str = ""
+    last_success_count: int = 0
+    last_failed_count: int = 0
+    total_logged_runs: int = 0
+    recent_entries: list[dict[str, object]] | None = None
 
 
 @dataclass(slots=True)
@@ -136,6 +150,45 @@ def _load_symbols_from_file(path: Path) -> list[str]:
 
 def _should_continue(completed_runs: int, max_runs: int | None) -> bool:
     return max_runs is None or completed_runs < max_runs
+
+
+def load_schedule_status(path: str | Path | None = None, tail: int = 20) -> CollectionScheduleStatus:
+    schedule = CollectionScheduleConfig.from_file(path)
+    log_exists = schedule.log_path.exists()
+    entries: list[dict[str, object]] = []
+
+    if log_exists:
+        with open(schedule.log_path, encoding="utf-8") as file:
+            for line in file:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    payload = json.loads(stripped)
+                except json.JSONDecodeError:
+                    continue
+                entries.append(payload)
+
+    status = CollectionScheduleStatus(
+        schedule=schedule,
+        log_exists=log_exists,
+        recent_entries=entries[-tail:],
+    )
+
+    for entry in entries:
+        event = str(entry.get("event", ""))
+        status.last_event = event or status.last_event
+        if event == "collection_started":
+            status.last_started_at = str(entry.get("started_at", ""))
+        elif event == "collection_finished":
+            status.last_finished_at = str(entry.get("finished_at", ""))
+            status.last_success_count = int(entry.get("success_count", 0))
+            status.last_failed_count = int(entry.get("failed_count", 0))
+            status.total_logged_runs += 1
+        elif event == "collection_waiting":
+            status.next_run_at = str(entry.get("next_run_at", ""))
+
+    return status
 
 
 def _parse_args() -> argparse.Namespace:

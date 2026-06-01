@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from invest_bot.jobs.scheduled_collection import CollectionScheduleConfig, ScheduledCollectionRunner
+from invest_bot.jobs.scheduled_collection import CollectionScheduleConfig, ScheduledCollectionRunner, load_schedule_status
 from tests.helpers import make_test_dir
 
 
@@ -105,3 +105,61 @@ def test_scheduled_collection_runner_repeats_with_interval_and_max_runs():
     assert completed_runs == 2
     assert collector_calls == [10, 10]
     assert sleep_calls == [300, 300]
+
+
+def test_load_schedule_status_summarizes_recent_log_entries():
+    test_dir = make_test_dir("scheduled_collection_status")
+    config_file = test_dir / "collection_schedule.yaml"
+    config_file.write_text(
+        "\n".join(
+            [
+                "symbols:",
+                "  - '005930'",
+                "days: 25",
+                "interval_minutes: 120",
+                "run_on_startup: true",
+                "log_path: collection.log",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    log_file = test_dir / "collection.log"
+    log_file.write_text(
+        "\n".join(
+            [
+                json.dumps({"event": "collection_started", "started_at": "2026-05-31T09:00:00"}, ensure_ascii=False),
+                json.dumps(
+                    {
+                        "event": "collection_finished",
+                        "finished_at": "2026-05-31T09:00:10",
+                        "success_count": 2,
+                        "failed_count": 1,
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "event": "collection_waiting",
+                        "next_run_at": "2026-05-31T11:00:10",
+                        "wait_seconds": 7200,
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    status = load_schedule_status(config_file)
+
+    assert status.log_exists is True
+    assert status.schedule.symbols == ["005930"]
+    assert status.last_event == "collection_waiting"
+    assert status.last_started_at == "2026-05-31T09:00:00"
+    assert status.last_finished_at == "2026-05-31T09:00:10"
+    assert status.next_run_at == "2026-05-31T11:00:10"
+    assert status.last_success_count == 2
+    assert status.last_failed_count == 1
+    assert status.total_logged_runs == 1
+    assert status.recent_entries is not None
+    assert len(status.recent_entries) == 3
