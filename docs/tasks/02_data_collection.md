@@ -11,10 +11,9 @@
 - [x] 종목 기본정보 수집 구현
 - [x] 투자자 수급 일별 데이터 수집 구현
 - [x] 수집 결과 CSV 저장 구현
-- [x] 수집 실행 스크립트 작성
-- [x] 다중 종목 일괄 수집 구현
-- [x] 설정 파일 기반 정기 다중 종목 수집 스케줄링 구현
-- [x] 단건 실행 및 테스트용 제한 실행(`--once`, `--max-runs`) 지원
+- [x] 단일/다중 종목 수집 스크립트 작성
+- [x] 파일 기반 정기 다중 종목 수집 스케줄링 초안 구현
+- [x] 1회 실행 및 테스트용 제한 실행 지원
 
 ## 남은 항목
 
@@ -37,15 +36,15 @@ data/raw/domestic_stock/
 
 ## 스케줄링 관련 파일
 
-- [scheduled_collection.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/scheduled_collection.py)
-- [run_scheduled_collection.py](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_scheduled_collection.py)
-- [collection_schedule.yaml.example](/C:/Users/user/PycharmProjects/invest_bot/config/collection_schedule.yaml.example)
+- [`scheduled_collection.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/scheduled_collection.py)
+- [`run_scheduled_collection.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_scheduled_collection.py)
+- [`collection_schedule.yaml.example`](/C:/Users/user/PycharmProjects/invest_bot/config/collection_schedule.yaml.example)
 
 ## 관련 파일
 
-- [kis_client.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/clients/kis_client.py)
-- [domestic_stock.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/domestic_stock.py)
-- [collector.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/collector.py)
-- [storage.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/storage.py)
-- [collect_market_data.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/collect_market_data.py)
-- [run_collection.py](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_collection.py)
+- [`kis_client.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/clients/kis_client.py)
+- [`domestic_stock.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/domestic_stock.py)
+- [`collector.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/collector.py)
+- [`storage.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/storage.py)
+- [`collect_market_data.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/collect_market_data.py)
+- [`run_collection.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_collection.py)

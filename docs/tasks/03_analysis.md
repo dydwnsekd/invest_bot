@@ -2,7 +2,7 @@
 
 ## 목표
 
-수집된 일봉 CSV를 기반으로 전략 연구에 필요한 기본 지표를 계산한다.
+수집된 일봉 CSV를 기반으로 전략 연구에 필요한 기본 지표를 계산하고 저장한다.
 
 ## 완료된 항목
 
@@ -13,16 +13,19 @@
 - [x] `rsi_14` 계산 구현
 - [x] 분석 결과 CSV 저장 구현
 - [x] 분석 실행 스크립트 작성
+- [x] 지표 해석 가이드 문서 작성
 
 ## 남은 항목
 
 - [ ] 컬럼명 표준 스키마 확정
-- [ ] 추가 지표 MACD, Bollinger Bands, ATR
+- [ ] 추가 지표 확장
+  - MACD
+  - Bollinger Bands
+  - ATR
 - [ ] 수급 데이터와 지표 결합 분석
-- [ ] 결측치 및 이상치 처리 정책 정리
-- [ ] 분석 결과에 신호 컬럼 추가
+- [ ] 결측치/이상치 처리 정책 정리
 
-## 저장 구조
+## 데이터 구조
 
 ```text
 data/processed/domestic_stock/
@@ -31,6 +34,7 @@ data/processed/domestic_stock/
 
 ## 관련 파일
 
-- [analysis.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/analysis.py)
-- [analyze_daily_prices.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/analyze_daily_prices.py)
-- [run_daily_analysis.py](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_daily_analysis.py)
+- [`analysis.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/analysis.py)
+- [`analyze_daily_prices.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/analyze_daily_prices.py)
+- [`run_daily_analysis.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_daily_analysis.py)
+- [`indicator_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/indicator_guide.md)

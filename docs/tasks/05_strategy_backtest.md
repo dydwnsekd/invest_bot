@@ -25,14 +25,18 @@
 - [ ] RSI 기반 보조 전략 구현
 - [ ] 전략 조합 구조 설계
 - [ ] 성능 지표 확장
+  - MDD
+  - 승률
+  - 평균 수익률
+  - 손익비
 - [ ] 백테스트 결과 비교 리포트 정리
 - [ ] Streamlit 대시보드에 백테스트 결과 표시
 
 ## 관련 파일
 
-- [base.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/strategy/base.py)
-- [golden_cross.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/strategy/golden_cross.py)
-- [generate_golden_cross_signals.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/generate_golden_cross_signals.py)
-- [generate_backtest.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/generate_backtest.py)
-- [run_backtest.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/run_backtest.py)
-- [run_backtest.py](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_backtest.py)
+- [`base.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/strategy/base.py)
+- [`golden_cross.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/strategy/golden_cross.py)
+- [`generate_golden_cross_signals.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/generate_golden_cross_signals.py)
+- [`generate_backtest.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/generate_backtest.py)
+- [`run_backtest.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/run_backtest.py)
+- [`run_backtest.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_backtest.py)
