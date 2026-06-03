@@ -12,6 +12,7 @@
 - [x] task 문서 구조 작성
 - [x] 지표 설명 가이드 작성
 - [x] 시장 리포트 설명 가이드 작성
+- [x] 세션 분리 원칙 및 새 세션 프롬프트 문서 작성
 
 ## 남은 항목
 
@@ -24,6 +25,7 @@
 
 - [`README.md`](/C:/Users/user/PycharmProjects/invest_bot/README.md)
 - [`agent.md`](/C:/Users/user/PycharmProjects/invest_bot/agent.md)
+- [`claude_session_prompts.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/operations/claude_session_prompts.md)
 - [`SKILL.md`](/C:/Users/user/PycharmProjects/invest_bot/skills/invest-bot-reference-reader/SKILL.md)
 - [`indicator_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/indicator_guide.md)
 - [`market_report_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/market_report_guide.md)
