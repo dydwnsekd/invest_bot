@@ -315,7 +315,7 @@ def _render_sidebar(service: DashboardDataService, schedule_status) -> None:
         st.markdown('<div class="sidebar-nav-title">Navigation</div>', unsafe_allow_html=True)
         for tab_name in TAB_NAMES:
             button_type = "primary" if st.session_state.selected_tab == tab_name else "secondary"
-            if st.button(tab_name, use_container_width=True, type=button_type, key=f"nav_{tab_name}"):
+            if st.button(tab_name, width="stretch", type=button_type, key=f"nav_{tab_name}"):
                 st.session_state.selected_tab = tab_name
                 st.rerun()
 
@@ -439,15 +439,15 @@ def _render_actions_tab(symbol_lookup: SymbolLookup, schedule_status) -> None:
 
     action_columns = st.columns(5, gap="small")
 
-    if action_columns[0].button("데이터 수집", use_container_width=True, type="primary"):
+    if action_columns[0].button("데이터 수집", width="stretch", type="primary"):
         _run_collect_action(symbol_lookup, symbols_text, int(days))
-    if action_columns[1].button("지표 계산", use_container_width=True):
+    if action_columns[1].button("지표 계산", width="stretch"):
         _run_single_symbol_action(symbol_lookup, symbols_text, generate_indicators_for_symbol, "지표 계산")
-    if action_columns[2].button("신호 생성", use_container_width=True):
+    if action_columns[2].button("신호 생성", width="stretch"):
         _run_single_symbol_action(symbol_lookup, symbols_text, generate_golden_cross_signals_for_symbol, "골든크로스 신호 생성")
-    if action_columns[3].button("리포트 생성", use_container_width=True):
+    if action_columns[3].button("리포트 생성", width="stretch"):
         _run_single_symbol_action(symbol_lookup, symbols_text, generate_market_report_for_symbol, "시장 리포트 생성")
-    if action_columns[4].button("전체 파이프라인", use_container_width=True):
+    if action_columns[4].button("전체 파이프라인", width="stretch"):
         _run_full_pipeline_action(symbol_lookup, symbols_text, int(days))
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
@@ -660,11 +660,11 @@ def _render_test_tab(test_report: TestReportPreview | None) -> None:
             for case in failed_cases:
                 st.error(f"{case.name}: {case.detail}")
 
-        with st.expander("전체 테스트 케이스 보기"):
+        if st.toggle("전체 테스트 케이스 보기", key="toggle_test_cases"):
             frame = pd.DataFrame(
                 [{"name": case.name, "status": case.status, "detail": case.detail} for case in test_report.test_cases]
             )
-            st.dataframe(frame, use_container_width=True, hide_index=True)
+            st.dataframe(frame, width="stretch", hide_index=True)
 
 
 def _render_dataset_preview(preview: DatasetPreview, service: DashboardDataService) -> None:
@@ -686,12 +686,12 @@ def _render_dataset_preview(preview: DatasetPreview, service: DashboardDataServi
         meta_left.metric("행 수", preview.row_count)
         meta_right.metric("컬럼 수", len(preview.columns))
 
-        with st.expander("데이터 설명 보기"):
+        if st.toggle("데이터 설명 보기", key=f"toggle_summary_{preview.name}_{preview.symbol}_{preview.path.name}"):
             st.markdown(f"- **무엇인가요?** {preview.summary}")
             st.markdown(f"- **왜 보나요?** {preview.purpose}")
             st.markdown(f"- **처음에는 무엇을 보면 좋을까요?** {preview.first_look}")
 
-        with st.expander("컬럼 설명 보기"):
+        if st.toggle("컬럼 설명 보기", key=f"toggle_columns_{preview.name}_{preview.symbol}_{preview.path.name}"):
             for column in preview.columns:
                 label = service.COLUMN_META.get(column)
                 if label is None:
@@ -699,23 +699,31 @@ def _render_dataset_preview(preview: DatasetPreview, service: DashboardDataServi
                 else:
                     st.markdown(f"- `{column}` / **{label.label}**: {label.description} {label.why}")
 
-        with st.expander("표 옵션"):
-            rows = st.slider(
-                "표시 행 수",
-                min_value=3,
-                max_value=min(max(len(frame), 3), 50),
-                value=min(max(len(frame), 3), 8),
-                key=f"rows_{preview.name}_{preview.symbol}_{preview.path.name}",
-            )
+        if st.toggle("표 옵션", key=f"toggle_options_{preview.name}_{preview.symbol}_{preview.path.name}"):
+            max_rows = max(1, min(len(frame), 50))
+            if max_rows == 1:
+                rows = 1
+                st.caption("표시 가능한 행이 1개라 행 수 선택은 생략합니다.")
+            else:
+                rows = st.slider(
+                    "표시 행 수",
+                    min_value=1,
+                    max_value=max_rows,
+                    value=min(max_rows, 8),
+                    key=f"rows_{preview.name}_{preview.symbol}_{preview.path.name}",
+                )
             selected_columns = st.multiselect(
                 "표시할 컬럼",
                 options=list(frame.columns),
                 default=default_columns,
                 key=f"cols_{preview.name}_{preview.symbol}_{preview.path.name}",
             )
+        else:
+            rows = min(max(1, len(frame)), 8)
+            selected_columns = default_columns
 
         table = frame[selected_columns] if selected_columns else frame
-        st.dataframe(_format_frame_for_display(table.head(rows), service), use_container_width=True, hide_index=True)
+        st.dataframe(_format_frame_for_display(table.head(rows), service), width="stretch", hide_index=True)
 
 
 def _render_market_report_card(
@@ -764,10 +772,10 @@ def _render_market_report_card(
             chart_frame = indicator_frame.copy()
             chart_frame["date"] = pd.to_datetime(chart_frame["date"], errors="coerce")
             chart_frame = chart_frame.dropna(subset=["date"]).set_index("date")[["close", "ma_5", "ma_20"]].tail(60)
-            st.line_chart(chart_frame, height=280, use_container_width=True)
+            st.line_chart(chart_frame, height=280, width="stretch")
 
-        with st.expander("리포트 상세 보기"):
-            st.dataframe(_format_frame_for_display(frame, service), use_container_width=True, hide_index=True)
+        if st.toggle("리포트 상세 보기", key=f"toggle_report_detail_{preview.symbol}_{preview.path.name}"):
+            st.dataframe(_format_frame_for_display(frame, service), width="stretch", hide_index=True)
 
 
 def _render_signal_card(preview: DatasetPreview, service: DashboardDataService) -> None:
@@ -883,8 +891,8 @@ def _render_schedule_status_panel(schedule_status) -> None:
 
         if schedule_status.recent_entries:
             recent_frame = pd.DataFrame(schedule_status.recent_entries)
-            with st.expander("최근 수집 로그 보기"):
-                st.dataframe(recent_frame, use_container_width=True, hide_index=True)
+            if st.toggle("최근 수집 로그 보기", key="toggle_schedule_logs"):
+                st.dataframe(recent_frame, width="stretch", hide_index=True)
 
 
 def _compact_datetime(value: str) -> str:
