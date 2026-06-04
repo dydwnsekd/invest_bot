@@ -25,7 +25,7 @@
 
 - [`README.md`](/C:/Users/user/PycharmProjects/invest_bot/README.md)
 - [`agent.md`](/C:/Users/user/PycharmProjects/invest_bot/agent.md)
-- [`claude_session_prompts.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/operations/claude_session_prompts.md)
+- [`codex_session_prompts.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/operations/codex_session_prompts.md)
 - [`SKILL.md`](/C:/Users/user/PycharmProjects/invest_bot/skills/invest-bot-reference-reader/SKILL.md)
 - [`indicator_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/indicator_guide.md)
 - [`market_report_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/market_report_guide.md)
