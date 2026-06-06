@@ -96,8 +96,10 @@
 - [x] 프로젝트용 skill 초안 작성
 - [x] 지표 가이드 문서 작성
 - [x] 시장 리포트 가이드 문서 작성
+- [x] DB 마이그레이션 준비 문서 작성 (`ERD`, `docker-compose`, repository interfaces`)
 - [ ] 작업 문서 갱신 규칙 정리
 - [ ] 운영 로그 확인 가이드
 
 관련 문서:
 - [`07_operations_docs.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/07_operations_docs.md)
+- [`db_migration_plan.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/operations/db_migration_plan.md)
