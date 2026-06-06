@@ -60,6 +60,13 @@
 - `pytest` 기반 테스트
 - 수집, 분석, 전략, 리포트, 대시보드, 스케줄링, 백테스트 테스트 포함
 
+### DB 마이그레이션 초안
+
+- Postgres 기반 docker-compose 초안 포함
+- `.env` / 환경변수 기반 DB 설정 로드 지원
+- 저장소(Repository) 계약과 ERD/마이그레이션 계획 문서화 완료
+- 실제 Alembic/SQLAlchemy 마이그레이션은 아직 미구현이며, 현재 `migrate` 컨테이너는 준비 상태 점검만 수행
+
 ## 프로젝트 구조
 
 ```text
