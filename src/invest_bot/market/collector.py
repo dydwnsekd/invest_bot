@@ -14,6 +14,7 @@ from invest_bot.market.domestic_stock import (
     InvestorDailyRequest,
     StockInfoRequest,
 )
+from invest_bot.market.repositories import DatasetStorage
 from invest_bot.market.storage import CsvStorage, SavedDataset
 
 
@@ -40,7 +41,7 @@ class BatchCollectionResult:
 class MarketDataCollector:
     """Facade for the currently supported domestic stock collection flows."""
 
-    def __init__(self, settings: AppSettings, storage: CsvStorage | None = None) -> None:
+    def __init__(self, settings: AppSettings, storage: DatasetStorage | None = None) -> None:
         self.settings = settings
         self.collector = DomesticStockDataCollector(KISClient(settings=settings))
         self.storage = storage or CsvStorage()
