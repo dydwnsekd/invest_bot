@@ -6,28 +6,35 @@ Introduce DB-backed repositories behind stable contracts so the existing jobs an
 
 ## Repository contracts
 
-### `SymbolRepository`
+현재 코드 기준 DB contract는 `src/invest_bot/db/contracts.py`를 canonical source로 본다.
 
-- `get_by_code(symbol_code: str) -> dict[str, str] | None`
-- `find_by_name(name: str) -> list[dict[str, str]]`
-- `upsert_many(entries: list[dict[str, str]]) -> int`
+### `StockRepository`
+
+- `upsert(record: StockRecord) -> None`
+- `get_by_symbol(symbol: str) -> StockRecord | None`
+- `list_all() -> Sequence[StockRecord]`
 
 ### `DailyPriceRepository`
 
-- `save_prices(symbol_code: str, rows: list[dict[str, object]]) -> int`
-- `load_prices(symbol_code: str, start_date: str | None = None, end_date: str | None = None) -> list[dict[str, object]]`
-- `latest_trade_date(symbol_code: str) -> str | None`
+- `replace_for_symbol(symbol: str, records: Sequence[DailyPriceRecord]) -> None`
+- `list_for_symbol(symbol: str, limit: int | None = None) -> Sequence[DailyPriceRecord]`
+- `latest_trade_date(symbol: str) -> date | None`
 
 ### `StockInfoRepository`
 
-- `save_snapshot(symbol_code: str, payload: dict[str, object], collected_at: str) -> None`
-- `latest_snapshot(symbol_code: str) -> dict[str, object] | None`
+- 이 문서 시점에는 별도 protocol로 분리되지 않았고, ORM table은 `stock_info_snapshots`로 준비돼 있다.
+- 다음 단계에서 snapshot save/load contract를 별도 protocol로 분리할 수 있다.
 
-### `AnalysisRunRepository`
+### `InvestorDailyRepository`
 
-- `start_run(symbol_code: str, analysis_type: str) -> str`
-- `complete_run(run_id: str, artifacts: dict[str, object]) -> None`
-- `fail_run(run_id: str, reason: str) -> None`
+- `replace_for_symbol(symbol: str, records: Sequence[InvestorDailyRecord]) -> None`
+- `list_for_symbol(symbol: str, limit: int | None = None) -> Sequence[InvestorDailyRecord]`
+- `latest_trade_date(symbol: str) -> date | None`
+
+### `MarketReportRepository`
+
+- `save(record: MarketReportRecord) -> None`
+- `latest_for_symbol(symbol: str) -> MarketReportRecord | None`
 
 ## Compatibility rules
 
@@ -38,7 +45,8 @@ Introduce DB-backed repositories behind stable contracts so the existing jobs an
 
 ## Initial adapter strategy
 
-1. Keep `StockMasterRepository` as the first adapter for `SymbolRepository`.
+1. Keep `StockMasterRepository` as the first adapter for symbol catalog lookups.
 2. Introduce PostgreSQL repositories alongside existing CSV storage.
-3. Migrate read paths behind feature flags or constructor wiring.
-4. Remove direct file writes only after parity tests pass.
+3. Introduce duplicate-collection guards with `latest_trade_date()` plus DB unique constraints.
+4. Migrate read paths behind feature flags or constructor wiring.
+5. Replace direct file writes only after parity tests pass.

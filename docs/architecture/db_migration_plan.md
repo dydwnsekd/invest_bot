@@ -7,13 +7,14 @@ Replace the current file-oriented persistence path with a PostgreSQL-backed data
 ## Scope
 
 - PostgreSQL service lifecycle in `docker-compose.yml`
-- Alembic-based schema migrations
+- SQLAlchemy schema bootstrap followed by Alembic-based schema migrations
 - Repository interfaces for symbols, prices, stock info snapshots, and analysis runs
 - Compatibility path from CSV-backed repositories to DB-backed repositories
 
 ## Phases
 
 1. **Schema bootstrap**
+   - add SQLAlchemy engine/session bootstrap and current table metadata registration
    - add Alembic configuration and initial revision for `symbols`, `daily_prices`, `stock_info_snapshots`, and `analysis_runs`
    - add local DB settings parsing and connection bootstrap
 2. **Repository adapters**
@@ -38,7 +39,7 @@ Replace the current file-oriented persistence path with a PostgreSQL-backed data
 
 ## Risks
 
-- `docker-compose.yml` currently references an Alembic command before Alembic config is checked in
+- `migrate` currently uses `create_all()` bootstrap, so schema drift cannot yet be tracked by revision history
 - shared runtime files such as `docker-compose.yml`, `Dockerfile`, and `settings.py` are high-collision surfaces
 - DB migration can break current CSV-relative path assumptions if adapter boundaries are not preserved
 
@@ -51,5 +52,5 @@ Replace the current file-oriented persistence path with a PostgreSQL-backed data
 
 ## Handoff notes
 
-- The next implementation lane should add Alembic config and DB settings before enabling the `migrate` service in end-to-end runtime tests.
+- The next implementation lane should replace bootstrap-only `migrate` behavior with Alembic revision execution.
 - Existing `StockMasterRepository` and `CsvStorage` remain the compatibility baseline for parity tests.

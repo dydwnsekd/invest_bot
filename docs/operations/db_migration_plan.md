@@ -151,20 +151,19 @@ erDiagram
 `docker-compose.yml`은 이번 단계에서 다음 원칙으로 정리했다.
 
 - `db` service는 기본으로 유지한다.
-- `migrate` service는 실제 migration stack이 아직 없으므로 `migrations` profile 뒤로 숨긴다.
-- `web`/`scheduler`/`collector`는 더 이상 `migrate` 성공을 하드 의존하지 않는다.
+- `migrate` service는 현재 Alembic 전 단계의 **SQLAlchemy schema bootstrap**을 담당한다.
+- `web`/`scheduler`/`collector`는 `migrate` 성공을 선행 조건으로 둔다.
 - `env_file`은 repo에 실제 존재하는 `.env.example`을 사용해 초안 실행 가능성을 높인다.
 
 예상 실행 흐름:
 
 ```bash
-docker compose up db web
+docker compose up db migrate web
 ```
 
 향후 migration stack이 추가되면:
 
 ```bash
-docker compose --profile migrations run --rm migrate
 docker compose up db web scheduler
 ```
 
@@ -179,9 +178,10 @@ docker compose up db web scheduler
 
 ### Phase 2 — Migration bootstrap
 
-- [ ] `requirements.txt`에 DB driver/ORM/migration dependency 추가 (`SQLAlchemy`, `alembic`, `psycopg` 등)
+- [x] `requirements.txt`에 DB driver/ORM/migration dependency 추가 (`SQLAlchemy`, `alembic`, `psycopg` 등)
 - [ ] `alembic.ini` 및 migration environment 생성
-- [ ] `src/invest_bot/db/` 아래 engine, session, ORM model 추가
+- [x] `src/invest_bot/db/` 아래 engine, session, ORM model 추가
+- [x] compose `migrate` service가 current schema bootstrap을 수행하도록 연결
 - [ ] 첫 migration에서 `stock_master`, `stock_info_snapshots`, `daily_price_bars`, `investor_daily_flows` 생성
 
 ### Phase 3 — Dual-write / adapter migration
@@ -218,4 +218,27 @@ docker compose up db web scheduler
 - Alembic 초기 migration 생성
 - `StockMasterRepositoryProtocol`의 DB 구현체 추가
 - 최소 1개 write path를 DB-backed adapter로 대체
+
+## Python runtime and test guidance
+
+- Python 관련 명령은 repo 내부 `.venv`를 기준으로 실행한다.
+- 새 환경 준비:
+
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt -r requirements-dev.txt
+```
+
+- 빠른 검증 순서:
+
+```bash
+.venv/bin/python -m pytest tests/test_settings.py tests/test_db_bootstrap.py tests/test_db_migration_artifacts.py tests/test_market_report_generator.py
+.venv/bin/python -m pytest
+```
+
+## Delivery rule
+
+- 변경 결과는 바로 commit 하지 말고, 기능별 변경사항과 핵심 파일 내용을 정리한 markdown 보고서를 먼저 작성해 사용자에게 전달한다.
 - compose `migrate` profile이 실제 성공하는 상태 검증
