@@ -63,24 +63,29 @@ class AppSettings:
             loaded_credentials = yaml.safe_load(credentials_file.read_text(encoding="utf-8")) or {}
             raw_data.update({str(key): value for key, value in loaded_credentials.items()})
 
-        raw_data.update(_load_environment_overrides())
+        def configured_value(env_name: str, yaml_key: str, default: str) -> str:
+            value = os.getenv(env_name)
+            if value is not None:
+                return value
+            configured = raw_data.get(yaml_key, default)
+            return str(configured)
 
-        mode = str(raw_data.get("trading_mode", TradingMode.MOCK.value)).lower()
+        mode = configured_value("INVEST_BOT_TRADING_MODE", "trading_mode", TradingMode.MOCK.value).lower()
         return cls(
-            app_name=str(raw_data.get("app_name", "invest_bot")),
-            market=str(raw_data.get("market", "domestic_stock")),
+            app_name=configured_value("INVEST_BOT_APP_NAME", "app_name", "invest_bot"),
+            market=configured_value("INVEST_BOT_MARKET", "market", "domestic_stock"),
             trading_mode=TradingMode(mode),
-            environment=str(raw_data.get("environment", "local")),
-            log_level=str(raw_data.get("log_level", "INFO")).upper(),
-            kis_live_app_key=str(raw_data.get("kis_app_key", "")),
-            kis_live_app_secret=str(raw_data.get("kis_app_secret", "")),
-            kis_mock_app_key=str(raw_data.get("kis_mock_app_key", "")),
-            kis_mock_app_secret=str(raw_data.get("kis_mock_app_secret", "")),
-            db_host=str(raw_data.get("db_host", "localhost")),
-            db_port=int(str(raw_data.get("db_port", 5432))),
-            db_name=str(raw_data.get("db_name", "invest_bot")),
-            db_user=str(raw_data.get("db_user", "invest_bot")),
-            db_password=str(raw_data.get("db_password", "invest_bot")),
+            environment=configured_value("INVEST_BOT_ENVIRONMENT", "environment", "local"),
+            log_level=configured_value("INVEST_BOT_LOG_LEVEL", "log_level", "INFO").upper(),
+            kis_live_app_key=configured_value("INVEST_BOT_KIS_APP_KEY", "kis_app_key", ""),
+            kis_live_app_secret=configured_value("INVEST_BOT_KIS_APP_SECRET", "kis_app_secret", ""),
+            kis_mock_app_key=configured_value("INVEST_BOT_KIS_MOCK_APP_KEY", "kis_mock_app_key", ""),
+            kis_mock_app_secret=configured_value("INVEST_BOT_KIS_MOCK_APP_SECRET", "kis_mock_app_secret", ""),
+            db_host=configured_value("INVEST_BOT_DB_HOST", "db_host", "localhost"),
+            db_port=int(configured_value("INVEST_BOT_DB_PORT", "db_port", "5432")),
+            db_name=configured_value("INVEST_BOT_DB_NAME", "db_name", "invest_bot"),
+            db_user=configured_value("INVEST_BOT_DB_USER", "db_user", "invest_bot"),
+            db_password=configured_value("INVEST_BOT_DB_PASSWORD", "db_password", "invest_bot"),
         )
 
     @property
@@ -105,30 +110,5 @@ class AppSettings:
     def database_url(self) -> str:
         user = quote_plus(self.db_user)
         password = quote_plus(self.db_password)
-        host = self.db_host.strip() or "localhost"
-        return f"postgresql://{user}:{password}@{host}:{self.db_port}/{self.db_name}"
-
-
-def _load_environment_overrides() -> dict[str, object]:
-    mapping = {
-        "app_name": "INVEST_BOT_APP_NAME",
-        "market": "INVEST_BOT_MARKET",
-        "trading_mode": "INVEST_BOT_TRADING_MODE",
-        "environment": "INVEST_BOT_ENVIRONMENT",
-        "log_level": "INVEST_BOT_LOG_LEVEL",
-        "kis_app_key": "INVEST_BOT_KIS_APP_KEY",
-        "kis_app_secret": "INVEST_BOT_KIS_APP_SECRET",
-        "kis_mock_app_key": "INVEST_BOT_KIS_MOCK_APP_KEY",
-        "kis_mock_app_secret": "INVEST_BOT_KIS_MOCK_APP_SECRET",
-        "db_host": "INVEST_BOT_DB_HOST",
-        "db_port": "INVEST_BOT_DB_PORT",
-        "db_name": "INVEST_BOT_DB_NAME",
-        "db_user": "INVEST_BOT_DB_USER",
-        "db_password": "INVEST_BOT_DB_PASSWORD",
-    }
-    overrides: dict[str, object] = {}
-    for key, env_name in mapping.items():
-        value = os.getenv(env_name)
-        if value not in (None, ""):
-            overrides[key] = value
-    return overrides
+        name = quote_plus(self.db_name)
+        return f"postgresql://{user}:{password}@{self.db_host}:{self.db_port}/{name}"

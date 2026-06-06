@@ -25,11 +25,12 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: invest-bot-migrate
+    profiles: ["migrations"]
     depends_on:
       db:
         condition: service_healthy
     env_file:
-      - .env
+      - .env.example
     environment:
       INVEST_BOT_APP_ROLE: migrate
       PYTHONPATH: /app/src
@@ -44,10 +45,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     env_file:
-      - .env
+      - .env.example
     environment:
       INVEST_BOT_APP_ROLE: scheduler
       PYTHONPATH: /app/src
@@ -63,10 +62,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     env_file:
-      - .env
+      - .env.example
     environment:
       INVEST_BOT_APP_ROLE: web
       PYTHONPATH: /app/src
@@ -87,10 +84,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     env_file:
-      - .env
+      - .env.example
     environment:
       INVEST_BOT_APP_ROLE: collector
       PYTHONPATH: /app/src

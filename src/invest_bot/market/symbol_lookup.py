@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from invest_bot.market.repositories import SymbolMasterRepository
+from invest_bot.market.repositories import StockMasterRepositoryProtocol
 from invest_bot.market.stock_master import StockMasterRepository
 
 
@@ -22,7 +22,7 @@ class SymbolLookup:
     def __init__(
         self,
         stock_info_dir: str | Path = "data/raw/domestic_stock/stock_info",
-        master_repository: SymbolMasterRepository | None = None,
+        master_repository: StockMasterRepositoryProtocol | None = None,
     ) -> None:
         stock_dir = Path(stock_info_dir)
         if stock_dir.is_absolute():

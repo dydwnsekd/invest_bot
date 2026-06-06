@@ -40,24 +40,22 @@ def test_app_settings_loads_file_values():
     assert settings.kis_app_key == "live-key"
     assert settings.kis_app_secret == "live-secret"
     assert settings.trading_mode is TradingMode.LIVE
-    assert settings.database_url == "postgresql://db_user:db_password@db:5433/custom_db"
 
 
-def test_app_settings_environment_overrides(monkeypatch):
-    test_dir = make_test_dir("settings_env")
-    config_path = test_dir / "app.yaml"
-    config_path.write_text("trading_mode: mock\n", encoding="utf-8")
 
-    monkeypatch.setenv("INVEST_BOT_TRADING_MODE", "live")
-    monkeypatch.setenv("INVEST_BOT_DB_HOST", "postgres")
-    monkeypatch.setenv("INVEST_BOT_DB_PORT", "5544")
-    monkeypatch.setenv("INVEST_BOT_DB_NAME", "env_db")
-    monkeypatch.setenv("INVEST_BOT_DB_USER", "env_user")
-    monkeypatch.setenv("INVEST_BOT_DB_PASSWORD", "env_password")
+def test_app_settings_reads_database_env_contract(monkeypatch):
+    monkeypatch.setenv("INVEST_BOT_DB_HOST", "db")
+    monkeypatch.setenv("INVEST_BOT_DB_PORT", "15432")
+    monkeypatch.setenv("INVEST_BOT_DB_NAME", "invest_bot_dev")
+    monkeypatch.setenv("INVEST_BOT_DB_USER", "tester")
+    monkeypatch.setenv("INVEST_BOT_DB_PASSWORD", "secret")
 
-    settings = AppSettings.from_file(config_path)
+    test_dir = make_test_dir("settings_db_env")
+    settings = AppSettings.from_file(test_dir / "missing.yaml")
 
-    assert settings.trading_mode is TradingMode.LIVE
-    assert settings.db_host == "postgres"
-    assert settings.db_port == 5544
-    assert settings.database_url == "postgresql://env_user:env_password@postgres:5544/env_db"
+    assert settings.db_host == "db"
+    assert settings.db_port == 15432
+    assert settings.db_name == "invest_bot_dev"
+    assert settings.db_user == "tester"
+    assert settings.db_password == "secret"
+    assert settings.database_url == "postgresql://tester:secret@db:15432/invest_bot_dev"

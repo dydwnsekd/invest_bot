@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from invest_bot.market.repositories import DatasetStorage
 from invest_bot.market.storage import CsvStorage, SavedDataset
 from invest_bot.strategy import GoldenCrossStrategy
 
@@ -17,7 +18,7 @@ class GoldenCrossSignalRequest:
 class GoldenCrossSignalGenerator:
     """Generate golden-cross signals from saved indicator CSV files."""
 
-    def __init__(self, processed_storage: CsvStorage | None = None) -> None:
+    def __init__(self, processed_storage: DatasetStorage | None = None) -> None:
         self.processed_storage = processed_storage or CsvStorage("data/processed/domestic_stock")
         self.strategy = GoldenCrossStrategy()
 
@@ -55,4 +56,3 @@ class GoldenCrossSignalGenerator:
 
     def save_signals(self, filename: str, frame: pd.DataFrame) -> SavedDataset:
         return self.processed_storage.save("golden_cross_signals", filename, frame)
-

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from invest_bot.market.repositories import DatasetStorage
 from invest_bot.market.storage import CsvStorage, SavedDataset
 
 
@@ -22,7 +23,7 @@ class BacktestResult:
 class GoldenCrossBacktestGenerator:
     """Draft backtest runner for golden cross signals."""
 
-    def __init__(self, processed_storage: CsvStorage | None = None) -> None:
+    def __init__(self, processed_storage: DatasetStorage | None = None) -> None:
         self.processed_storage = processed_storage or CsvStorage("data/processed/domestic_stock")
 
     def load_signal_frame(self, request: BacktestRequest) -> pd.DataFrame:

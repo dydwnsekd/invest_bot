@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pandas as pd
 from pandas.errors import EmptyDataError
 
+from invest_bot.market.repositories import DatasetStorage
 from invest_bot.market.storage import CsvStorage, SavedDataset
 
 
@@ -22,8 +23,8 @@ class MarketReportGenerator:
 
     def __init__(
         self,
-        raw_storage: CsvStorage | None = None,
-        processed_storage: CsvStorage | None = None,
+        raw_storage: DatasetStorage | None = None,
+        processed_storage: DatasetStorage | None = None,
     ) -> None:
         self.raw_storage = raw_storage or CsvStorage("data/raw/domestic_stock")
         self.processed_storage = processed_storage or CsvStorage("data/processed/domestic_stock")
