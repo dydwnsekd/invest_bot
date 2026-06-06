@@ -324,5 +324,3 @@ data/processed/test_reports/
 - `reference/open-trading-api/`
 
 다만 현재 프로젝트는 reference를 그대로 복사하지 않고, 필요한 기능을 분리해서 독립 프로젝트 구조로 정리하는 방향을 따릅니다.
-
-git 연동 test
