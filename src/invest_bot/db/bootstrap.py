@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import cast
 
 from invest_bot.config.settings import AppSettings, PROJECT_ROOT
 
@@ -42,7 +43,8 @@ def main() -> None:
 
     print("invest_bot DB migration draft readiness")
     print(f"database_url={report['database_url']}")
-    for name, artifact in report["artifacts"].items():
+    artifacts = cast(dict[str, dict[str, object]], report["artifacts"])
+    for name, artifact in artifacts.items():
         state = "ok" if artifact["exists"] else "missing"
         print(f"- {name}: {state} ({artifact['path']})")
     print(report["next_step"])

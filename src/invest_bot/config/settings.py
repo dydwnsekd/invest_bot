@@ -77,7 +77,7 @@ class AppSettings:
             kis_mock_app_key=str(raw_data.get("kis_mock_app_key", "")),
             kis_mock_app_secret=str(raw_data.get("kis_mock_app_secret", "")),
             db_host=str(raw_data.get("db_host", "localhost")),
-            db_port=int(raw_data.get("db_port", 5432)),
+            db_port=int(str(raw_data.get("db_port", 5432))),
             db_name=str(raw_data.get("db_name", "invest_bot")),
             db_user=str(raw_data.get("db_user", "invest_bot")),
             db_password=str(raw_data.get("db_password", "invest_bot")),

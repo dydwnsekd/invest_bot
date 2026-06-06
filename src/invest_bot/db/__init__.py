@@ -1,4 +1,3 @@
-from .bootstrap import build_readiness_report
 from .contracts import (
     DailyPriceRecord,
     DailyPriceRepository,
@@ -19,5 +18,4 @@ __all__ = [
     "MarketReportRepository",
     "StockRecord",
     "StockRepository",
-    "build_readiness_report",
 ]
