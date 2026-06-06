@@ -249,6 +249,19 @@ data/processed/domestic_stock/
 data/processed/test_reports/
 ```
 
+## DB 마이그레이션 준비 문서
+
+현재 저장소의 실행 경로는 아직 CSV 기반입니다. 다만 Postgres 전환을 위한 설계 초안은 아래 문서로 정리되어 있습니다.
+
+- [`docs/operations/db_migration_plan.md`](docs/operations/db_migration_plan.md)
+
+이 문서에는 다음 내용이 포함됩니다.
+
+- 현재 CSV 저장 구조 기준 1차 ERD
+- `docker-compose.yml` 초안 검토 결과
+- Repository 인터페이스 경계 제안
+- DB 마이그레이션 구현 순서와 위험요인
+
 ## 현재 주요 파일
 
 ### 데이터 수집

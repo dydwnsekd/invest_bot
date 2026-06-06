@@ -13,6 +13,7 @@
 - [x] 지표 설명 가이드 작성
 - [x] 시장 리포트 설명 가이드 작성
 - [x] 세션 분리 원칙 및 새 세션 프롬프트 문서 작성
+- [x] DB 마이그레이션 준비 문서 작성 (`ERD`, `docker-compose` 초안 검토, repository interface 제안 포함)
 
 ## 남은 항목
 
@@ -29,3 +30,4 @@
 - [`SKILL.md`](/C:/Users/user/PycharmProjects/invest_bot/skills/invest-bot-reference-reader/SKILL.md)
 - [`indicator_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/indicator_guide.md)
 - [`market_report_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/market_report_guide.md)
+- [`db_migration_plan.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/operations/db_migration_plan.md)
