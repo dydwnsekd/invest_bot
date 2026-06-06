@@ -1,0 +1,99 @@
+services:
+  db:
+    image: postgres:17
+    container_name: invest-bot-db
+    environment:
+      POSTGRES_DB: ${INVEST_BOT_DB_NAME:-invest_bot}
+      POSTGRES_USER: ${INVEST_BOT_DB_USER:-invest_bot}
+      POSTGRES_PASSWORD: ${INVEST_BOT_DB_PASSWORD:-invest_bot}
+    ports:
+      - "${INVEST_BOT_DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${INVEST_BOT_DB_USER:-invest_bot} -d ${INVEST_BOT_DB_NAME:-invest_bot}
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: invest-bot-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      INVEST_BOT_APP_ROLE: migrate
+      PYTHONPATH: /app/src
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    restart: "no"
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: invest-bot-scheduler
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      INVEST_BOT_APP_ROLE: scheduler
+      PYTHONPATH: /app/src
+    command: ["python", "scripts/run_scheduled_collection.py"]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: invest-bot-web
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      INVEST_BOT_APP_ROLE: web
+      PYTHONPATH: /app/src
+      INVEST_BOT_DASHBOARD_HOST: 0.0.0.0
+      INVEST_BOT_DASHBOARD_PORT: ${INVEST_BOT_DASHBOARD_PORT:-8000}
+    ports:
+      - "${INVEST_BOT_DASHBOARD_PORT:-8000}:8000"
+    command: ["python", "scripts/run_dashboard.py"]
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: invest-bot-collector
+    profiles: ["jobs"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      INVEST_BOT_APP_ROLE: collector
+      PYTHONPATH: /app/src
+    command: ["python", "scripts/run_collection.py", "005930"]
+    restart: "no"
+
+volumes:
+  postgres_data:
