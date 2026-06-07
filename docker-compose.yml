@@ -30,11 +30,12 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - .env.example
+      - .env
     environment:
       INVEST_BOT_APP_ROLE: migrate
       PYTHONPATH: /app/src
-    command: ["python", "-m", "invest_bot.db.bootstrap", "--json"]
+      DATABASE_URL: postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}
+    command: ["python", "-m", "alembic", "upgrade", "head"]
     restart: "no"
 
   scheduler:
@@ -45,8 +46,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
-      - .env.example
+      - .env
     environment:
       INVEST_BOT_APP_ROLE: scheduler
       PYTHONPATH: /app/src
@@ -62,8 +65,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
-      - .env.example
+      - .env
     environment:
       INVEST_BOT_APP_ROLE: web
       PYTHONPATH: /app/src
@@ -84,12 +89,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
-      - .env.example
+      - .env
     environment:
       INVEST_BOT_APP_ROLE: collector
       PYTHONPATH: /app/src
       DATABASE_URL: postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}
+      INVEST_BOT_ENABLE_DB_WRITE: "true"
     command: ["python", "scripts/run_collection.py", "005930"]
     restart: "no"
 

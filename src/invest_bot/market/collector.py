@@ -7,13 +7,14 @@ import pandas as pd
 
 from invest_bot.clients.kis_client import KISClient
 from invest_bot.config.settings import AppSettings
+from invest_bot.db.write_path import SqlAlchemyMarketDataWriter
 from invest_bot.market.domestic_stock import (
     DailyPriceRequest,
     DomesticStockDataCollector,
     InvestorDailyRequest,
     StockInfoRequest,
 )
-from invest_bot.market.repositories import DatasetStorage
+from invest_bot.market.repositories import DatasetStorage, MarketDataWriter
 from invest_bot.market.storage import CsvStorage, SavedDataset
 
 
@@ -40,10 +41,21 @@ class BatchCollectionResult:
 class MarketDataCollector:
     """Facade for the currently supported domestic stock collection flows."""
 
-    def __init__(self, settings: AppSettings, storage: DatasetStorage | None = None) -> None:
+    def __init__(
+        self,
+        settings: AppSettings,
+        storage: DatasetStorage | None = None,
+        db_writer: MarketDataWriter | None = None,
+    ) -> None:
         self.settings = settings
         self.collector = DomesticStockDataCollector(KISClient(settings=settings))
         self.storage = storage or CsvStorage()
+        self.db_writer = db_writer or self._build_default_db_writer()
+
+    def _build_default_db_writer(self) -> MarketDataWriter | None:
+        if not self.settings.enable_db_write:
+            return None
+        return SqlAlchemyMarketDataWriter(self.settings.database_url, default_market=self.settings.market)
 
     def collect(self, request: CollectionRequest) -> dict[str, str | int]:
         return {"symbol": request.symbol, "timeframe": request.timeframe, "limit": request.limit, "status": "ready"}
@@ -75,14 +87,19 @@ class MarketDataCollector:
             filename=f"{symbol}_{date_range}.csv",
             frame=prices,
         )
+        if self.db_writer is not None:
+            self.db_writer.save_daily_prices(symbol, start_date, end_date, summary, prices)
         return summary_result, prices_result
 
     def save_stock_info(self, symbol: str, stock_info: pd.DataFrame) -> SavedDataset:
-        return self.storage.save(
+        result = self.storage.save(
             dataset="stock_info",
             filename=f"{symbol}.csv",
             frame=stock_info,
         )
+        if self.db_writer is not None:
+            self.db_writer.save_stock_info(symbol, stock_info)
+        return result
 
     def save_investor_daily(
         self, symbol: str, target_date: date, investor_daily: pd.DataFrame, investor_summary: pd.DataFrame
@@ -98,6 +115,8 @@ class MarketDataCollector:
             filename=f"{symbol}_{file_suffix}.csv",
             frame=investor_summary,
         )
+        if self.db_writer is not None:
+            self.db_writer.save_investor_daily(symbol, target_date, investor_daily, investor_summary)
         return detail_result, summary_result
 
     def collect_symbol_bundle(self, symbol: str, start_date: date, end_date: date) -> BatchCollectionResult:

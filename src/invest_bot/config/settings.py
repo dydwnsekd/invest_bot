@@ -37,6 +37,7 @@ class AppSettings:
     db_name: str = "invest_bot"
     db_user: str = "invest_bot"
     db_password: str = "invest_bot"
+    enable_db_write: bool = False
 
     @classmethod
     def from_file(
@@ -70,6 +71,15 @@ class AppSettings:
             configured = raw_data.get(yaml_key, default)
             return str(configured)
 
+        def configured_bool(env_name: str, yaml_key: str, default: bool = False) -> bool:
+            value = os.getenv(env_name)
+            if value is not None:
+                return value.strip().lower() in {"1", "true", "yes", "on"}
+            configured = raw_data.get(yaml_key, default)
+            if isinstance(configured, bool):
+                return configured
+            return str(configured).strip().lower() in {"1", "true", "yes", "on"}
+
         mode = configured_value("INVEST_BOT_TRADING_MODE", "trading_mode", TradingMode.MOCK.value).lower()
         return cls(
             app_name=configured_value("INVEST_BOT_APP_NAME", "app_name", "invest_bot"),
@@ -86,6 +96,7 @@ class AppSettings:
             db_name=configured_value("INVEST_BOT_DB_NAME", "db_name", "invest_bot"),
             db_user=configured_value("INVEST_BOT_DB_USER", "db_user", "invest_bot"),
             db_password=configured_value("INVEST_BOT_DB_PASSWORD", "db_password", "invest_bot"),
+            enable_db_write=configured_bool("INVEST_BOT_ENABLE_DB_WRITE", "enable_db_write", False),
         )
 
     @property
@@ -108,7 +119,11 @@ class AppSettings:
 
     @property
     def database_url(self) -> str:
+        direct_url = os.getenv("DATABASE_URL", "").strip()
+        if direct_url:
+            return direct_url
+
         user = quote_plus(self.db_user)
         password = quote_plus(self.db_password)
         name = quote_plus(self.db_name)
-        return f"postgresql://{user}:{password}@{self.db_host}:{self.db_port}/{name}"
+        return f"postgresql+psycopg://{user}:{password}@{self.db_host}:{self.db_port}/{name}"

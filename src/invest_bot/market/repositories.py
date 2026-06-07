@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import Protocol
 
@@ -9,19 +10,27 @@ from invest_bot.market.storage import SavedDataset
 
 
 class DatasetStorage(Protocol):
-    """Persistence contract for saving and locating named datasets."""
-
     root_dir: Path
 
     def save(self, dataset: str, filename: str, frame: pd.DataFrame) -> SavedDataset:
-        """Persist a dataset frame and return the saved artifact metadata."""
+        ...
+
+
+class MarketDataWriter(Protocol):
+    def save_daily_prices(
+        self, symbol: str, start_date: date, end_date: date, summary: pd.DataFrame, prices: pd.DataFrame
+    ) -> None: ...
+
+    def save_stock_info(self, symbol: str, stock_info: pd.DataFrame) -> None: ...
+
+    def save_investor_daily(
+        self, symbol: str, target_date: date, investor_daily: pd.DataFrame, investor_summary: pd.DataFrame
+    ) -> None: ...
 
 
 class StockMasterRepositoryProtocol(Protocol):
-    """Contract for loading and refreshing stock master reference entries."""
-
     def load_entries(self) -> list[dict[str, str]]:
-        """Return normalized stock master entries."""
+        ...
 
     def ensure_updated(self, force: bool = False) -> Path:
-        """Refresh the backing source when needed and return the local path."""
+        ...

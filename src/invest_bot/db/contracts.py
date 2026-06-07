@@ -16,21 +16,31 @@ class StockRecord:
 class DailyPriceRecord:
     symbol: str
     trade_date: date
-    open_price: float
-    high_price: float
-    low_price: float
-    close_price: float
-    volume: float
+    open_price: float | None
+    high_price: float | None
+    low_price: float | None
+    close_price: float | None
+    volume: float | None
     collected_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class StockInfoSnapshotRecord:
+    symbol: str
+    product_name: str
+    market_code: str
+    raw_payload: str
+    captured_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
 class InvestorDailyRecord:
     symbol: str
     trade_date: date
-    investor_type: str
-    net_volume: float
-    net_amount: float
+    foreign_net_qty: float | None
+    institutional_net_qty: float | None
+    personal_net_qty: float | None
+    raw_payload: str
     collected_at: datetime
 
 
@@ -57,12 +67,21 @@ class DailyPriceRepository(Protocol):
 
     def list_for_symbol(self, symbol: str, limit: int | None = None) -> Sequence[DailyPriceRecord]: ...
 
+    def latest_trade_date(self, symbol: str) -> date | None: ...
+
+
+@runtime_checkable
+class StockInfoSnapshotRepository(Protocol):
+    def save(self, record: StockInfoSnapshotRecord) -> None: ...
+
 
 @runtime_checkable
 class InvestorDailyRepository(Protocol):
     def replace_for_symbol(self, symbol: str, records: Sequence[InvestorDailyRecord]) -> None: ...
 
     def list_for_symbol(self, symbol: str, limit: int | None = None) -> Sequence[InvestorDailyRecord]: ...
+
+    def latest_trade_date(self, symbol: str) -> date | None: ...
 
 
 @runtime_checkable

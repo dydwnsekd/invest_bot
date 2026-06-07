@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
@@ -16,8 +16,10 @@ class Symbol(Base):
     symbol_name: Mapped[str] = mapped_column(String(120), nullable=False)
     market: Mapped[str] = mapped_column(String(32), nullable=False)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False
+    )
 
     daily_price_rows: Mapped[list[DailyPrice]] = relationship(back_populates="symbol_ref", cascade="all, delete-orphan")
     stock_info_snapshots: Mapped[list[StockInfoSnapshot]] = relationship(
@@ -42,7 +44,7 @@ class DailyPrice(Base):
     volume: Mapped[int | None] = mapped_column()
     turnover: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
     source_filename: Mapped[str | None] = mapped_column(String(255))
-    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
 
     symbol_ref: Mapped[Symbol] = relationship(back_populates="daily_price_rows")
 
@@ -53,11 +55,9 @@ class StockInfoSnapshot(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     symbol: Mapped[str] = mapped_column(ForeignKey("symbols.symbol", ondelete="CASCADE"), nullable=False, index=True)
-    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    market_cap: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
-    listed_shares: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
-    par_value: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
-    settlement_month: Mapped[str | None] = mapped_column(String(16))
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    product_name: Mapped[str | None] = mapped_column(String(120))
+    market_code: Mapped[str | None] = mapped_column(String(32))
     raw_payload: Mapped[str | None] = mapped_column(Text)
     source_filename: Mapped[str | None] = mapped_column(String(255))
 
@@ -71,11 +71,11 @@ class InvestorDaily(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     symbol: Mapped[str] = mapped_column(ForeignKey("symbols.symbol", ondelete="CASCADE"), nullable=False, index=True)
     trade_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    investor_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    buy_amount: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
-    sell_amount: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
-    net_amount: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    foreign_net_qty: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    institutional_net_qty: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    personal_net_qty: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    raw_payload: Mapped[str | None] = mapped_column(Text)
     source_filename: Mapped[str | None] = mapped_column(String(255))
-    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
 
     symbol_ref: Mapped[Symbol] = relationship(back_populates="investor_daily_rows")

@@ -11,7 +11,7 @@ from invest_bot.config.settings import AppSettings, PROJECT_ROOT
 def build_readiness_report(settings: AppSettings | None = None) -> dict[str, object]:
     resolved_settings = settings or AppSettings.from_file()
     plan_path = PROJECT_ROOT / "docs" / "operations" / "db_migration_plan.md"
-    erd_path = PROJECT_ROOT / "docs" / "operations" / "db_erd.md"
+    erd_path = PROJECT_ROOT / "docs" / "architecture" / "db_migration_erd.md"
     contracts_path = PROJECT_ROOT / "src" / "invest_bot" / "db" / "contracts.py"
     compose_path = PROJECT_ROOT / "docker-compose.yml"
     return {
