@@ -28,7 +28,7 @@ def test_docker_compose_defines_db_migration_startup_flow():
 
     assert compose["volumes"] == {"postgres_data": None}
     assert services["db"]["image"] == "postgres:17"
-    assert services["migrate"]["command"] == ["python", "-m", "alembic", "upgrade", "head"]
+    assert services["migrate"]["command"] == ["python", "-m", "invest_bot.db.migrate_runtime"]
     assert services["migrate"]["depends_on"]["db"]["condition"] == "service_healthy"
 
     for service_name in ["scheduler", "web", "collector"]:

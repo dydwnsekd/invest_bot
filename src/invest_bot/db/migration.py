@@ -4,6 +4,10 @@ import os
 from urllib.parse import quote_plus
 
 from invest_bot.db.metadata import Base
+import invest_bot.db.models  # noqa: F401
+
+
+MANAGED_TABLES = frozenset(Base.metadata.tables.keys())
 
 
 def build_database_url() -> str:
@@ -19,4 +23,10 @@ def build_database_url() -> str:
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{name}"
 
 
-__all__ = ["Base", "build_database_url"]
+def should_stamp_existing_schema(existing_tables: set[str], *, has_version_table: bool) -> bool:
+    if has_version_table:
+        return False
+    return bool(MANAGED_TABLES) and MANAGED_TABLES.issubset(existing_tables)
+
+
+__all__ = ["Base", "MANAGED_TABLES", "build_database_url", "should_stamp_existing_schema"]

@@ -1,4 +1,5 @@
 from invest_bot.db import Base, build_database_url
+from invest_bot.db.migration import should_stamp_existing_schema
 
 
 def test_build_database_url_prefers_explicit_database_url(monkeypatch):
@@ -19,3 +20,16 @@ def test_build_database_url_builds_from_invest_bot_env(monkeypatch):
 
 def test_initial_db_metadata_exposes_expected_tables():
     assert {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily"}.issubset(Base.metadata.tables)
+
+
+def test_should_stamp_existing_schema_when_bootstrap_tables_exist_without_version_table():
+    existing_tables = {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily"}
+    assert should_stamp_existing_schema(existing_tables, has_version_table=False) is True
+
+
+def test_should_not_stamp_when_alembic_version_exists_or_schema_is_incomplete():
+    assert should_stamp_existing_schema({"symbols", "daily_prices"}, has_version_table=False) is False
+    assert should_stamp_existing_schema(
+        {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily", "alembic_version"},
+        has_version_table=True,
+    ) is False
