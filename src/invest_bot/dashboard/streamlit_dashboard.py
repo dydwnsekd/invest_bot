@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from html import escape
+import re
 
 import pandas as pd
 import streamlit as st
@@ -11,11 +12,47 @@ from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
 from invest_bot.jobs.scheduled_collection import load_schedule_status
-from invest_bot.market.symbol_lookup import SymbolLookup
+from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolLookup
 
 
 APP_TITLE = "invest_bot admin"
-TAB_NAMES = ("개요", "실행", "데이터", "리포트", "테스트")
+TAB_NAMES = ("상태판", "작업 실행", "리포트 해석", "데이터 탐색", "검증")
+NUMERIC_COLUMNS = {
+    "close",
+    "open",
+    "high",
+    "low",
+    "volume",
+    "turnover",
+    "ma_5",
+    "ma_20",
+    "ma_60",
+    "volume_ma_5",
+    "rsi_14",
+    "signal_prev_ma_5",
+    "signal_prev_ma_20",
+    "signal_ma_5",
+    "signal_ma_20",
+    "foreign_net",
+    "institutional_net",
+    "personal_net",
+    "frgn_ntby_qty",
+    "orgn_ntby_qty",
+    "prsn_ntby_qty",
+    "stck_prpr",
+    "prdy_vrss",
+    "prdy_ctrt",
+    "row_count",
+}
+STATE_COLUMNS = {
+    "signal",
+    "golden_cross_signal",
+    "final_opinion",
+    "trend_state",
+    "rsi_state",
+    "volume_state",
+    "investor_flow",
+}
 
 
 def main() -> None:
@@ -35,7 +72,7 @@ def main() -> None:
     test_report = service.load_test_report()
 
     if "selected_tab" not in st.session_state:
-        st.session_state.selected_tab = "개요"
+        st.session_state.selected_tab = "상태판"
     if "action_message" not in st.session_state:
         st.session_state.action_message = None
     if "action_message_type" not in st.session_state:
@@ -46,14 +83,14 @@ def main() -> None:
     _render_action_feedback()
 
     tab = st.session_state.selected_tab
-    if tab == "개요":
+    if tab == "상태판":
         _render_overview_tab(snapshot, test_report, schedule_status)
-    elif tab == "실행":
+    elif tab == "작업 실행":
         _render_actions_tab(symbol_lookup, schedule_status)
-    elif tab == "데이터":
-        _render_data_tab(snapshot, service)
-    elif tab == "리포트":
+    elif tab == "리포트 해석":
         _render_reports_tab(snapshot, service)
+    elif tab == "데이터 탐색":
+        _render_data_tab(snapshot, service)
     else:
         _render_test_tab(test_report)
 
@@ -302,6 +339,33 @@ def _apply_custom_style() -> None:
             font-size: 0.82rem;
             word-break: break-all;
         }
+
+        div[data-baseweb="tab-list"] {
+            gap: 0.45rem;
+            padding: 0.3rem;
+            border-radius: 1rem;
+            background: rgba(255, 250, 242, 0.82);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+        }
+
+        button[data-baseweb="tab"] {
+            height: 2.8rem;
+            padding: 0 1rem;
+            border-radius: 0.85rem;
+            color: #475569;
+            background: transparent;
+        }
+
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 247, 237, 0.96));
+            color: #0f172a;
+            border: 1px solid rgba(15, 118, 110, 0.18);
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+        }
+
+        button[data-baseweb="tab"]::after {
+            background: transparent !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -312,7 +376,7 @@ def _render_sidebar(service: DashboardDataService, schedule_status) -> None:
     with st.sidebar:
         st.markdown("## invest_bot")
         st.caption("수집, 분석, 신호, 리포트를 하나의 운영 화면에서 확인합니다.")
-        st.markdown('<div class="sidebar-nav-title">Navigation</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-nav-title">화면 이동</div>', unsafe_allow_html=True)
         for tab_name in TAB_NAMES:
             button_type = "primary" if st.session_state.selected_tab == tab_name else "secondary"
             if st.button(tab_name, width="stretch", type=button_type, key=f"nav_{tab_name}"):
@@ -352,10 +416,10 @@ def _render_header() -> None:
     st.markdown(
         """
         <div class="hero-shell">
-          <div class="eyebrow">Streamlit draft</div>
-          <h1 class="hero-title">국내주식 자동매매 운영 대시보드 초안</h1>
+          <div class="eyebrow">Streamlit 운영 화면</div>
+          <h1 class="hero-title">국내주식 운영 대시보드</h1>
           <div class="hero-copy">
-            현재 HTML 대시보드의 흐름을 유지하면서, Streamlit 스타일의 카드형 개요, 사이드바 실행, 데이터 탐색, 리포트 보드를 재구성한 버전입니다.
+            지금 상태를 빠르게 파악하고, 필요한 작업을 실행한 뒤, 리포트와 데이터를 자연스럽게 이어서 확인할 수 있도록 화면 흐름을 정리한 Streamlit 운영 화면입니다.
           </div>
         </div>
         """,
@@ -391,35 +455,36 @@ def _render_overview_tab(snapshot, test_report: TestReportPreview | None, schedu
 
     with left:
         st.markdown('<div class="streamlit-card">', unsafe_allow_html=True)
-        st.markdown('<h3 class="section-title">다음에 무엇을 보면 좋을까요</h3>', unsafe_allow_html=True)
+        st.markdown('<h3 class="section-title">처음 보는 사람을 위한 진행 순서</h3>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="section-copy">현재 구축된 파이프라인을 기준으로, 관리자가 먼저 확인해야 할 포인트를 정리했습니다.</div>',
+            '<div class="section-copy">이 화면은 상태 파악부터 실행, 결과 확인까지 한 번에 이어지도록 구성했습니다.</div>',
             unsafe_allow_html=True,
         )
         st.markdown(
             """
-            1. `실행` 탭에서 데이터 수집 또는 전체 파이프라인을 먼저 돌립니다.
-            2. `리포트` 탭에서 최신 종목 상태와 최종 의견을 확인합니다.
-            3. `데이터` 탭에서 원본 데이터와 지표 계산 결과를 필요할 때만 내려가서 검토합니다.
-            4. `테스트` 탭에서 실패가 있는지 마지막으로 점검합니다.
+            1. `상태판`에서 최신 리포트, 신호, 정기 수집 상태를 먼저 읽습니다.
+            2. 업데이트가 필요하면 `작업 실행`에서 데이터 수집 또는 전체 파이프라인을 돌립니다.
+            3. `리포트 해석`에서 종목별 판단과 이유를 비교합니다.
+            4. 숫자가 더 필요할 때만 `데이터 탐색`으로 내려가 원본과 분석 데이터를 확인합니다.
+            5. 마지막으로 `검증`에서 테스트 실패가 없는지 점검합니다.
             """
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-        _render_latest_signal_summary(signal_previews)
+        _render_latest_signal_summary(signal_previews, service=DashboardDataService())
 
     with right:
-        _render_latest_report_summary(report_previews)
+        _render_latest_report_summary(report_previews, service=DashboardDataService())
         if schedule_status is not None:
             st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
             _render_schedule_status_summary(schedule_status)
 
 
 def _render_actions_tab(symbol_lookup: SymbolLookup, schedule_status) -> None:
-    st.markdown('<h3 class="section-title">실행 패널</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">작업 실행</h3>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-copy">기존 admin web 액션과 같은 흐름을 Streamlit에서 바로 실행할 수 있습니다.</div>',
+        '<div class="section-copy">수집부터 리포트 생성까지 필요한 작업을 여기서 바로 실행합니다.</div>',
         unsafe_allow_html=True,
     )
 
@@ -467,7 +532,7 @@ def _render_actions_tab(symbol_lookup: SymbolLookup, schedule_status) -> None:
 def _render_data_tab(snapshot, service: DashboardDataService) -> None:
     st.markdown('<h3 class="section-title">데이터 탐색</h3>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-copy">원본 수집물과 분석 산출물을 같은 구조로 살펴보되, 설명은 필요할 때만 펼쳐 보도록 구성했습니다.</div>',
+        '<div class="section-copy">원본 수집 데이터와 분석 결과를 같은 규칙으로 보여 줍니다. 먼저 추천 컬럼만 보고, 필요할 때만 자세히 펼쳐 보도록 구성했습니다.</div>',
         unsafe_allow_html=True,
     )
 
@@ -481,9 +546,9 @@ def _render_data_tab(snapshot, service: DashboardDataService) -> None:
 
 
 def _render_reports_tab(snapshot, service: DashboardDataService) -> None:
-    st.markdown('<h3 class="section-title">리포트 보드</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">리포트 해석</h3>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-copy">차트를 잘 모르는 사람도 읽기 쉽도록, 리포트와 신호를 카드형으로 먼저 보여줍니다.</div>',
+        '<div class="section-copy">종목별 현재 판단과 이유를 한국어 기준으로 먼저 읽고, 필요하면 상세 수치와 차트까지 이어서 확인할 수 있습니다.</div>',
         unsafe_allow_html=True,
     )
 
@@ -633,9 +698,9 @@ def _sort_report_entries(report_entries: list[dict[str, object]], sort_option: s
 
 
 def _render_test_tab(test_report: TestReportPreview | None) -> None:
-    st.markdown('<h3 class="section-title">테스트 상태</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">검증 상태</h3>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-copy">현재 코드가 깨지지 않았는지와 최근 실패 테스트를 운영 화면에서 같이 점검할 수 있습니다.</div>',
+        '<div class="section-copy">대시보드와 파이프라인 변경이 기존 동작을 깨지 않았는지 최근 테스트 결과로 확인합니다.</div>',
         unsafe_allow_html=True,
     )
 
@@ -672,13 +737,16 @@ def _render_dataset_preview(preview: DatasetPreview, service: DashboardDataServi
     default_columns = [column for column in preview.recommended_columns if column in frame.columns]
     if "symbol_name" in frame.columns and "symbol_name" not in default_columns:
         default_columns.insert(0, "symbol_name")
+    if "symbol_name" in default_columns and "symbol" in default_columns:
+        default_columns.remove("symbol")
     if not default_columns:
         default_columns = list(frame.columns[: min(6, len(frame.columns))])
 
     with st.container(border=True):
         title = preview.display_name
-        if preview.symbol_name:
-            title = f"{title} · {preview.symbol_name} ({preview.symbol})"
+        symbol_label = _format_symbol_display(preview.symbol, preview.symbol_name)
+        if symbol_label:
+            title = f"{title} · {symbol_label}"
         st.markdown(f"#### {title}")
         st.caption(f"{preview.summary} · {preview.path.name}")
 
@@ -737,16 +805,19 @@ def _render_market_report_card(
     row = frame.iloc[-1]
     opinion = str(row.get("final_opinion", "unknown"))
     opinion_label = _state_label(service, opinion)
+    symbol_label = _format_symbol_display(preview.symbol, preview.symbol_name or str(row.get("symbol_name", "")))
+    summary = _localize_report_summary_from_row(service, row)
+    reason = _localize_reason(str(row.get("golden_cross_reason", "")))
 
     with st.container(border=True):
         st.markdown(
             f"""
             <div class="summary-box">
-              <div class="muted-label">{escape(preview.symbol)} · {escape(preview.symbol_name or "종목명 없음")}</div>
+              <div class="muted-label">{escape(symbol_label or "종목 정보 없음")}</div>
               <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:0.35rem;">
                 <div>
-                  <h3 class="section-title">{escape(preview.symbol_name or preview.symbol)}</h3>
-                  <div class="section-copy">{escape(str(row.get("summary", "")))}</div>
+                  <h3 class="section-title">{escape(preview.symbol_name or str(row.get("symbol_name", "")) or preview.symbol)}</h3>
+                  <div class="section-copy">{escape(summary)}</div>
                 </div>
                 <div class="badge badge-{escape(opinion)}">{escape(opinion_label)}</div>
               </div>
@@ -767,6 +838,9 @@ def _render_market_report_card(
         detail_columns[2].metric("20일선", _format_number(row.get("ma_20")))
         detail_columns[3].metric("RSI 14", _format_number(row.get("rsi_14")))
 
+        if reason:
+            st.caption(f"판단 근거: {reason}")
+
         indicator_frame = _load_indicator_frame_for_symbol(preview.symbol)
         if indicator_frame is not None:
             chart_frame = indicator_frame.copy()
@@ -785,13 +859,15 @@ def _render_signal_card(preview: DatasetPreview, service: DashboardDataService) 
     row = frame.iloc[-1]
     signal = str(row.get("signal", "unknown"))
     signal_label = _state_label(service, signal)
+    symbol_label = _format_symbol_display(preview.symbol, preview.symbol_name)
+    reason = _localize_reason(str(row.get("signal_reason", "")))
 
     st.markdown(
         f"""
         <div class="streamlit-card">
-          <div class="muted-label">{escape(preview.symbol)} · {escape(preview.symbol_name or "종목명 없음")}</div>
+          <div class="muted-label">{escape(symbol_label or "종목 정보 없음")}</div>
           <h4 class="section-title" style="margin-top:0.35rem;">{escape(signal_label)}</h4>
-          <div class="section-copy">{escape(str(row.get("signal_reason", "")))}</div>
+          <div class="section-copy">{escape(reason)}</div>
           <div style="margin-top:0.7rem;">
             <span class="badge badge-{escape(signal)}">{escape(signal_label)}</span>
           </div>
@@ -805,7 +881,7 @@ def _render_signal_card(preview: DatasetPreview, service: DashboardDataService) 
     stat_columns[1].metric("20일선", _format_number(row.get("signal_ma_20")))
 
 
-def _render_latest_signal_summary(signal_previews: list[DatasetPreview]) -> None:
+def _render_latest_signal_summary(signal_previews: list[DatasetPreview], service: DashboardDataService) -> None:
     with st.container(border=True):
         st.markdown('<h3 class="section-title">최신 신호 요약</h3>', unsafe_allow_html=True)
         if not signal_previews:
@@ -819,11 +895,14 @@ def _render_latest_signal_summary(signal_previews: list[DatasetPreview]) -> None
             return
 
         row = frame.iloc[-1]
-        st.metric("대표 신호", str(row.get("signal", "hold")).upper())
-        st.caption(str(row.get("signal_reason", "")))
+        symbol_label = _format_symbol_display(latest.symbol, latest.symbol_name or str(row.get("symbol_name", "")))
+        if symbol_label:
+            st.caption(symbol_label)
+        st.metric("대표 신호", _state_label(service, str(row.get("signal", "hold"))))
+        st.caption(_localize_reason(str(row.get("signal_reason", ""))))
 
 
-def _render_latest_report_summary(report_previews: list[DatasetPreview]) -> None:
+def _render_latest_report_summary(report_previews: list[DatasetPreview], service: DashboardDataService) -> None:
     with st.container(border=True):
         st.markdown('<h3 class="section-title">최신 리포트 카드</h3>', unsafe_allow_html=True)
         if not report_previews:
@@ -837,11 +916,12 @@ def _render_latest_report_summary(report_previews: list[DatasetPreview]) -> None
             return
 
         row = frame.iloc[-1]
-        st.markdown(f"#### {row.get('symbol_name', latest.symbol)}")
-        st.caption(str(row.get("summary", "")))
+        symbol_label = _format_symbol_display(str(row.get("symbol", latest.symbol)), str(row.get("symbol_name", latest.symbol_name)))
+        st.markdown(f"#### {symbol_label}")
+        st.caption(_localize_report_summary_from_row(service, row))
         badge_columns = st.columns(2)
-        badge_columns[0].metric("최종 의견", str(row.get("final_opinion", "hold")).upper())
-        badge_columns[1].metric("추세", str(row.get("trend_state", "neutral")).upper())
+        badge_columns[0].metric("최종 의견", _state_label(service, str(row.get("final_opinion", "hold"))))
+        badge_columns[1].metric("추세", _state_label(service, str(row.get("trend_state", "neutral"))))
 
 
 def _load_optional_schedule_status():
@@ -909,10 +989,12 @@ def _compact_datetime(value: str) -> str:
 
 def _run_collect_action(symbol_lookup: SymbolLookup, symbols_text: str, days: int) -> None:
     try:
-        symbols = _resolve_many(symbol_lookup, symbols_text)
-        result = collect_market_data_for_symbols(symbols=symbols, days=days)
+        resolved_items = _resolve_many(symbol_lookup, symbols_text)
+        result = collect_market_data_for_symbols(symbols=[item.symbol for item in resolved_items], days=days)
+        label_summary = ", ".join(_format_symbol_display(item.symbol, item.symbol_name) for item in resolved_items[:3])
+        suffix = "" if len(resolved_items) <= 3 else f" 외 {len(resolved_items) - 3}개"
         _set_action_message(
-            f"데이터 수집 완료: {result['success_count']}개 성공, {result['failed_count']}개 실패",
+            f"데이터 수집 완료: {label_summary}{suffix} · {result['success_count']}개 성공, {result['failed_count']}개 실패",
             "success" if result["failed_count"] == 0 else "info",
         )
     except Exception as error:  # noqa: BLE001
@@ -922,9 +1004,12 @@ def _run_collect_action(symbol_lookup: SymbolLookup, symbols_text: str, days: in
 
 def _run_single_symbol_action(symbol_lookup: SymbolLookup, symbols_text: str, callback, action_name: str) -> None:
     try:
-        symbol = _resolve_single(symbol_lookup, symbols_text)
-        result = callback(symbol)
-        _set_action_message(f"{action_name} 완료: {result['saved_path']}", "success")
+        resolved = _resolve_single(symbol_lookup, symbols_text)
+        result = callback(resolved.symbol)
+        _set_action_message(
+            f"{action_name} 완료: {_format_symbol_display(resolved.symbol, resolved.symbol_name)} · {result['saved_path']}",
+            "success",
+        )
     except Exception as error:  # noqa: BLE001
         _set_action_message(f"{action_name} 중 오류가 발생했습니다: {error}", "error")
     st.rerun()
@@ -932,14 +1017,16 @@ def _run_single_symbol_action(symbol_lookup: SymbolLookup, symbols_text: str, ca
 
 def _run_full_pipeline_action(symbol_lookup: SymbolLookup, symbols_text: str, days: int) -> None:
     try:
-        symbols = _resolve_many(symbol_lookup, symbols_text)
-        collect_result = collect_market_data_for_symbols(symbols=symbols, days=days)
+        resolved_items = _resolve_many(symbol_lookup, symbols_text)
+        collect_result = collect_market_data_for_symbols(symbols=[item.symbol for item in resolved_items], days=days)
         for symbol in collect_result["symbols"]:
             generate_indicators_for_symbol(symbol)
             generate_golden_cross_signals_for_symbol(symbol)
             generate_market_report_for_symbol(symbol)
+        label_summary = ", ".join(_format_symbol_display(item.symbol, item.symbol_name) for item in resolved_items[:3])
+        suffix = "" if len(resolved_items) <= 3 else f" 외 {len(resolved_items) - 3}개"
         _set_action_message(
-            f"전체 파이프라인 완료: {collect_result['symbol_count']}개 종목 처리",
+            f"전체 파이프라인 완료: {label_summary}{suffix} · {collect_result['symbol_count']}개 종목 처리",
             "success" if collect_result["failed_count"] == 0 else "info",
         )
     except Exception as error:  # noqa: BLE001
@@ -947,18 +1034,18 @@ def _run_full_pipeline_action(symbol_lookup: SymbolLookup, symbols_text: str, da
     st.rerun()
 
 
-def _resolve_single(symbol_lookup: SymbolLookup, symbols_text: str) -> str:
+def _resolve_single(symbol_lookup: SymbolLookup, symbols_text: str) -> ResolvedSymbol:
     tokens = [token.strip() for token in symbols_text.replace(",", "\n").splitlines() if token.strip()]
     if not tokens:
         raise ValueError("종목코드 또는 종목명을 입력해 주세요.")
-    return symbol_lookup.resolve(tokens[0]).symbol
+    return symbol_lookup.resolve(tokens[0])
 
 
-def _resolve_many(symbol_lookup: SymbolLookup, symbols_text: str) -> list[str]:
+def _resolve_many(symbol_lookup: SymbolLookup, symbols_text: str) -> list[ResolvedSymbol]:
     tokens = [token.strip() for token in symbols_text.replace(",", "\n").splitlines() if token.strip()]
     if not tokens:
         raise ValueError("종목코드 또는 종목명을 입력해 주세요.")
-    return [item.symbol for item in symbol_lookup.resolve_many(tokens)]
+    return symbol_lookup.resolve_many(tokens)
 
 
 def _set_action_message(message: str, message_type: str) -> None:
@@ -998,21 +1085,121 @@ def _format_frame_for_display(frame: pd.DataFrame, service: DashboardDataService
 def _format_display_value(service: DashboardDataService, column: str, value: object) -> object:
     if pd.isna(value):
         return value
-    if column in {
-        "signal",
-        "golden_cross_signal",
-        "final_opinion",
-        "trend_state",
-        "rsi_state",
-        "volume_state",
-        "investor_flow",
-    }:
+    if column == "symbol_name":
+        return str(value).strip()
+    if column == "symbol":
+        return str(value)
+    if column in STATE_COLUMNS:
         return _state_label(service, str(value))
+    if column in {"summary"}:
+        return _localize_report_summary(service, str(value))
+    if column in {"signal_reason", "golden_cross_reason"}:
+        return _localize_reason(str(value))
+    if column in NUMERIC_COLUMNS:
+        return _format_number(value)
     return value
 
 
 def _state_label(service: DashboardDataService, value: str) -> str:
     return service.STATE_LABELS.get(value, value)
+
+
+def _format_symbol_display(symbol: str, symbol_name: str) -> str:
+    code = str(symbol).strip()
+    name = str(symbol_name).strip()
+    if name and code:
+        return f"{name} ({code})"
+    return name or code
+
+
+def _localize_reason(reason: str) -> str:
+    text = reason.strip()
+    if not text:
+        return ""
+    if match := re.fullmatch(r"(?P<short>[\w_]+)\s+crossed\s+above\s+(?P<long>[\w_]+)\.?", text, flags=re.IGNORECASE):
+        return f"{_humanize_indicator_name(match.group('short'))}이 {_humanize_indicator_name(match.group('long'))}을 상향 돌파했습니다."
+    if match := re.fullmatch(r"(?P<short>[\w_]+)\s+crossed\s+below\s+(?P<long>[\w_]+)\.?", text, flags=re.IGNORECASE):
+        return f"{_humanize_indicator_name(match.group('short'))}이 {_humanize_indicator_name(match.group('long'))}을 하향 이탈했습니다."
+    if match := re.fullmatch(
+        r"(?P<short>[\w_]+)\s+and\s+(?P<long>[\w_]+)\s+did\s+not\s+cross\.?",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return f"{_humanize_indicator_name(match.group('short'))}과 {_humanize_indicator_name(match.group('long'))}의 교차는 아직 확인되지 않았습니다."
+    replacements = {
+        "Not enough data to detect a crossover.": "교차 여부를 판단할 데이터가 아직 충분하지 않습니다.",
+        "At least two rows are required to detect a crossover.": "교차 여부를 판단하려면 최소 두 시점의 데이터가 필요합니다.",
+    }
+    if text in replacements:
+        return replacements[text]
+    if text.startswith("Missing indicators:"):
+        missing = text.removeprefix("Missing indicators:").strip()
+        return f"판단에 필요한 지표가 부족합니다: {missing}"
+    return text
+
+
+def _localize_report_summary(service: DashboardDataService, summary: str) -> str:
+    text = summary.strip()
+    if not text:
+        return ""
+    pattern = re.compile(
+        r"Trend is (?P<trend>[^,]+),\s*golden cross signal is (?P<signal>[^,]+),\s*RSI state is (?P<rsi>[^,]+),\s*volume is (?P<volume>[^,]+),\s*and investor flow is (?P<flow>[^.]+)\.?",
+        flags=re.IGNORECASE,
+    )
+    if match := pattern.fullmatch(text):
+        return _compose_localized_report_summary(
+            service,
+            trend_state=match.group("trend").strip(),
+            signal=match.group("signal").strip(),
+            rsi_state=match.group("rsi").strip(),
+            volume_state=match.group("volume").strip(),
+            investor_flow=match.group("flow").strip(),
+        )
+    return text
+
+
+def _localize_report_summary_from_row(service: DashboardDataService, row: pd.Series) -> str:
+    summary = str(row.get("summary", "")).strip()
+    trend_state = str(row.get("trend_state", "")).strip()
+    signal = str(row.get("golden_cross_signal", "")).strip()
+    rsi_state = str(row.get("rsi_state", "")).strip()
+    volume_state = str(row.get("volume_state", "")).strip()
+    investor_flow = str(row.get("investor_flow", "")).strip()
+    if all((trend_state, signal, rsi_state, volume_state, investor_flow)):
+        return _compose_localized_report_summary(
+            service,
+            trend_state=trend_state,
+            signal=signal,
+            rsi_state=rsi_state,
+            volume_state=volume_state,
+            investor_flow=investor_flow,
+        )
+    return _localize_report_summary(service, summary)
+
+
+def _compose_localized_report_summary(
+    service: DashboardDataService,
+    *,
+    trend_state: str,
+    signal: str,
+    rsi_state: str,
+    volume_state: str,
+    investor_flow: str,
+) -> str:
+    return (
+        f"추세는 {_state_label(service, trend_state)}이고, 골든크로스 신호는 {_state_label(service, signal)}이며, "
+        f"RSI 상태는 {_state_label(service, rsi_state)}, 거래량은 {_state_label(service, volume_state)}, "
+        f"수급은 {_state_label(service, investor_flow)}입니다."
+    )
+
+
+def _humanize_indicator_name(value: str) -> str:
+    mapping = {
+        "ma_5": "5일 이동평균선",
+        "ma_20": "20일 이동평균선",
+        "ma_60": "60일 이동평균선",
+    }
+    return mapping.get(value.strip().lower(), value.strip())
 
 
 def _format_number(value: object) -> str:

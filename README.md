@@ -45,8 +45,7 @@
 
 ### 대시보드
 
-- HTML 기반 로컬 대시보드
-- Streamlit 기반 대시보드 초안
+- Streamlit 기반 운영 대시보드
 - 원본/분석/신호/리포트 데이터 조회
 - 시장 리포트 생성 실행
 - 데이터 수집 실행
@@ -124,6 +123,64 @@ pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 ## 실행 방법
+
+### Docker Compose로 실행
+
+대시보드를 포함한 기본 서비스는 `docker-compose.yml` 기준으로 아래 순서로 실행합니다.
+
+전체 이미지 빌드:
+
+```bash
+docker compose build
+```
+
+백그라운드 실행:
+
+```bash
+docker compose up -d
+```
+
+실행 상태 확인:
+
+```bash
+docker compose ps
+```
+
+대시보드 로그 확인:
+
+```bash
+docker compose logs -f web
+```
+
+`web` 서비스만 다시 빌드하고 실행:
+
+```bash
+docker compose up -d --build web
+```
+
+대시보드 접속 확인:
+
+```bash
+curl -I --max-time 5 http://127.0.0.1:8000
+```
+
+접속 주소:
+
+```text
+http://127.0.0.1:8000
+```
+
+전체 종료:
+
+```bash
+docker compose down
+```
+
+볼륨까지 함께 정리:
+
+```bash
+docker compose down -v
+```
 
 ### 1. 테스트
 
@@ -207,7 +264,7 @@ python scripts/run_backtest.py 005930
 - `sell` 신호 발생 시 다음 거래일 종가 청산
 - 미청산 포지션은 마지막 거래일 종가로 강제 종료
 
-### 9. HTML 대시보드 실행
+### 9. 대시보드 실행
 
 ```powershell
 python scripts/run_dashboard.py
@@ -217,7 +274,7 @@ python scripts/run_dashboard.py
 
 - [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
-### 10. Streamlit 대시보드 실행
+직접 Streamlit 런처를 써도 됩니다:
 
 ```powershell
 python scripts/run_streamlit_dashboard.py
@@ -294,7 +351,6 @@ data/processed/test_reports/
 ### 대시보드
 
 - [`service.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/service.py)
-- [`server.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/server.py)
 - [`streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_dashboard.py)
 
 ## 현재 진행 상태
@@ -306,8 +362,7 @@ data/processed/test_reports/
 - [x] 골든크로스 신호 생성
 - [x] 시장 리포트 생성
 - [x] 골든크로스 백테스트 초안
-- [x] HTML 대시보드
-- [x] Streamlit 대시보드 초안
+- [x] Streamlit 대시보드
 - [x] 다중 종목 배치 수집
 - [x] 정기 수집 스케줄링 초안
 - [ ] 백테스트 결과 시각화

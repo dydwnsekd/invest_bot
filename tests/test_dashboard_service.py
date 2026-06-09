@@ -7,7 +7,7 @@ from invest_bot.market.storage import CsvStorage
 from tests.helpers import make_test_dir
 
 
-def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
+def test_dashboard_service_builds_streamlit_snapshot_and_test_report() -> None:
     test_dir = make_test_dir("dashboard_service")
     raw_storage = CsvStorage(test_dir / "raw")
     processed_storage = CsvStorage(test_dir / "processed")
@@ -23,32 +23,6 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
         "daily_prices",
         "005930_20260301_20260329.csv",
         pd.DataFrame([{"date": "20260329", "close": 70000, "volume": 1000}]),
-    )
-    raw_storage.save(
-        "investor_daily",
-        "005930_20260329.csv",
-        pd.DataFrame([{"stck_bsop_date": "20260329", "frgn_ntby_qty": 1200, "orgn_ntby_qty": 300, "prsn_ntby_qty": -1500}]),
-    )
-    processed_storage.save(
-        "daily_prices_indicators",
-        "005930_20260301_20260329.csv",
-        pd.DataFrame([{"date": "20260329", "close": 70000, "ma_5": 69000, "ma_20": 68000, "ma_60": 65000, "rsi_14": 55.2}]),
-    )
-    processed_storage.save(
-        "golden_cross_signals",
-        "005930_20260301_20260329.csv",
-        pd.DataFrame(
-            [
-                {
-                    "date": "20260329",
-                    "close": 70000,
-                    "signal": "buy",
-                    "signal_reason": "ma_5 crossed above ma_20.",
-                    "signal_ma_5": 70500,
-                    "signal_ma_20": 70000,
-                }
-            ]
-        ),
     )
     processed_storage.save(
         "market_reports",
@@ -93,40 +67,29 @@ def test_dashboard_service_renders_saved_raw_processed_and_test_report_data():
         processed_root=test_dir / "processed",
         test_report_path=report_dir / "pytest_results.xml",
     )
-    html = service.render_html(message="005930 시장 리포트를 생성했습니다.", message_type="success")
 
-    assert "invest_bot dashboard" in html
-    assert "tab-button" in html
-    assert "tab-panel" in html
-    assert "대시보드 개요" in html
-    assert "리포트 보드" in html
-    assert "전체 파이프라인 실행" in html
-    assert "데이터 수집 실행" in html
-    assert "지표 계산 실행" in html
-    assert "골든크로스 신호 생성" in html
-    assert "시장 리포트 생성" in html
-    assert "종목코드 또는 종목명" in html
-    assert "시장 상황 요약 리포트" in html
-    assert "최신 시장 리포트" in html
-    assert "005930 시장 리포트를 생성했습니다." in html
-    assert "삼성전자" in html
-    assert "데이터 설명 보기" in html
-    assert "컬럼 설명 보기" in html
-    assert "표에 표시할 컬럼 선택" in html
-    assert "컬럼 설명" in html
-    assert "왜 보는가" in html
-    assert "추천 컬럼만" in html
-    assert "표시 행 수" in html
-    assert "테스트 결과" in html
-    assert "전체 테스트" in html
-    assert "test_sell_signal" in html
-    assert "failed" in html
-    assert "골든크로스 신호" in html
-    assert "최신 골든크로스 신호" in html
-    assert "ma_5 crossed above ma_20." in html
-    assert "column-toggle" in html
-    assert "action=\"/actions/run-full-pipeline\"" in html
-    assert "action=\"/actions/collect-market-data\"" in html
-    assert "action=\"/actions/analyze-daily-prices\"" in html
-    assert "action=\"/actions/generate-golden-cross-signals\"" in html
-    assert "action=\"/actions/generate-market-report\"" in html
+    snapshot = service.build_snapshot()
+    report = service.load_test_report()
+
+    assert [preview.name for preview in snapshot.raw_previews] == ["daily_prices", "stock_info"]
+    assert [preview.name for preview in snapshot.processed_previews] == ["market_reports"]
+
+    raw_preview = snapshot.raw_previews[0]
+    assert raw_preview.display_name == "일봉 가격 데이터"
+    assert raw_preview.symbol == "005930"
+    assert raw_preview.symbol_name == "삼성전자"
+    assert raw_preview.recommended_columns[:3] == ["symbol_name", "symbol", "date"]
+    assert raw_preview.row_count == 1
+
+    report_preview = snapshot.processed_previews[0]
+    assert report_preview.display_name == "시장 상황 요약 리포트"
+    assert report_preview.symbol_name == "삼성전자"
+    assert "final_opinion" in report_preview.recommended_columns
+
+    assert report is not None
+    assert report.total == 2
+    assert report.passed == 1
+    assert report.failed == 1
+    assert report.command == "python -m pytest tests/test_golden_cross_strategy.py"
+    assert report.test_cases[1].name == "tests.test_golden_cross_strategy::test_sell_signal"
+    assert report.test_cases[1].status == "failed"

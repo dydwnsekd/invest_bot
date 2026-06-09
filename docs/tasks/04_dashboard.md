@@ -6,8 +6,7 @@
 
 ## 완료된 항목
 
-- [x] HTML 기반 로컬 대시보드 구현
-- [x] Streamlit 기반 대시보드 초안 구현
+- [x] Streamlit 기반 대시보드 구현
 - [x] raw/processed 데이터 미리보기 구현
 - [x] 골든크로스 신호 및 시장 리포트 표시
 - [x] 테스트 결과 표시
@@ -27,22 +26,15 @@
 
 ## 접속 정보
 
-HTML 대시보드:
+대시보드:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-Streamlit 대시보드:
-
-```text
-http://localhost:8501
-```
-
 ## 관련 파일
 
 - [`service.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/service.py)
-- [`server.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/server.py)
 - [`streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_dashboard.py)
 - [`run_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_dashboard.py)
 - [`run_streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_streamlit_dashboard.py)
