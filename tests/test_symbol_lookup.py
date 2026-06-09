@@ -99,3 +99,25 @@ def test_symbol_lookup_raises_for_unknown_name():
 
     with pytest.raises(ValueError):
         lookup.resolve("없는종목")
+
+
+def test_symbol_lookup_lists_deduplicated_entries_for_picker():
+    test_dir = make_test_dir("symbol_lookup_list_entries")
+    storage = CsvStorage(test_dir / "raw")
+    storage.save("stock_info", "005930.csv", pd.DataFrame([{"pdno": "005930", "prdt_abrv_name": "삼성전자"}]))
+    storage.save("stock_info", "000660.csv", pd.DataFrame([{"pdno": "000660", "prdt_abrv_name": "SK하이닉스"}]))
+    repo = StubStockMasterRepository(test_dir / "stock_master.csv")
+    repo.write_entries(
+        [
+            {"symbol": "005930", "symbol_name": "삼성전자", "market": "KOSPI"},
+            {"symbol": "000660", "symbol_name": "SK하이닉스", "market": "KOSPI"},
+        ]
+    )
+    lookup = SymbolLookup(test_dir / "raw" / "stock_info", master_repository=repo)
+
+    entries = lookup.list_entries()
+
+    assert [(entry.symbol, entry.symbol_name) for entry in entries] == [
+        ("000660", "SK하이닉스"),
+        ("005930", "삼성전자"),
+    ]

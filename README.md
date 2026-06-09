@@ -134,6 +134,9 @@ pip install -r requirements.txt -r requirements-dev.txt
 docker compose build
 ```
 
+기본 실행 경로에는 `db`, `migrate`, `web`, `scheduler`가 포함됩니다.
+`migrate`는 별도 프로필 없이 함께 평가되며, `web`과 `scheduler`는 마이그레이션 성공 후 시작됩니다.
+
 백그라운드 실행:
 
 ```bash

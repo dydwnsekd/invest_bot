@@ -12,7 +12,7 @@ from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
 from invest_bot.jobs.scheduled_collection import load_schedule_status
-from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolLookup
+from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolEntry, SymbolLookup
 
 
 APP_TITLE = "invest_bot admin"
@@ -492,39 +492,91 @@ def _render_actions_tab(symbol_lookup: SymbolLookup, schedule_status) -> None:
         _render_schedule_status_panel(schedule_status)
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
+    symbol_entries = symbol_lookup.list_entries()
+    selection_map = {entry.symbol: entry for entry in symbol_entries}
+    available_symbols = list(selection_map.keys())
+    default_multi_symbols = _default_selected_symbols(
+        available_symbols,
+        st.session_state.get("streamlit_selected_symbols", ["005930"]),
+    )
+    default_single_symbol = _default_single_symbol(
+        available_symbols,
+        st.session_state.get("streamlit_single_symbol", "005930"),
+    )
+
     with st.container(border=True):
-        st.markdown("#### 공통 입력")
-        symbols_text = st.text_area(
-            "종목코드 또는 종목명",
-            value=st.session_state.get("streamlit_symbols", "005930"),
-            help="여러 종목은 쉼표 또는 줄바꿈으로 구분합니다. 예: 005930, SK하이닉스",
-        )
+        st.markdown("#### 여러 종목 작업")
+        st.caption("데이터 수집과 전체 파이프라인처럼 여러 종목을 한 번에 돌리는 작업입니다.")
+        if available_symbols:
+            selected_symbols = st.multiselect(
+                "여러 종목 선택",
+                options=available_symbols,
+                default=default_multi_symbols,
+                format_func=lambda symbol: _format_symbol_option(selection_map[symbol]),
+                help="종목명 또는 종목코드를 입력하면 자동완성된 전체 목록에서 선택할 수 있습니다.",
+                placeholder="예: 삼성전자, SK하이닉스",
+                key="multi_symbol_picker",
+            )
+        else:
+            selected_symbols = []
+            st.warning("선택 가능한 종목 목록이 아직 없습니다. 먼저 종목 마스터 또는 stock_info 데이터를 준비해 주세요.")
+        st.session_state.streamlit_selected_symbols = selected_symbols
+        selected_items = [
+            ResolvedSymbol(raw_input=symbol, symbol=symbol, symbol_name=selection_map[symbol].symbol_name)
+            for symbol in selected_symbols
+        ]
+        if selected_items:
+            st.caption(f"선택된 종목 {len(selected_items)}개: {', '.join(_format_symbol_option(item) for item in selected_items[:4])}")
+        else:
+            st.caption("여러 종목 작업을 실행하려면 자동완성 목록에서 종목을 하나 이상 선택해 주세요.")
         days = st.number_input("수집 일수", min_value=1, max_value=3650, value=30, step=1)
-        st.session_state.streamlit_symbols = symbols_text
+        multi_columns = st.columns(2, gap="small")
+        if multi_columns[0].button("데이터 수집", width="stretch", type="primary"):
+            _run_collect_action(selected_items, int(days))
+        if multi_columns[1].button("전체 파이프라인", width="stretch"):
+            _run_full_pipeline_action(selected_items, int(days))
 
-    action_columns = st.columns(5, gap="small")
-
-    if action_columns[0].button("데이터 수집", width="stretch", type="primary"):
-        _run_collect_action(symbol_lookup, symbols_text, int(days))
-    if action_columns[1].button("지표 계산", width="stretch"):
-        _run_single_symbol_action(symbol_lookup, symbols_text, generate_indicators_for_symbol, "지표 계산")
-    if action_columns[2].button("신호 생성", width="stretch"):
-        _run_single_symbol_action(symbol_lookup, symbols_text, generate_golden_cross_signals_for_symbol, "골든크로스 신호 생성")
-    if action_columns[3].button("리포트 생성", width="stretch"):
-        _run_single_symbol_action(symbol_lookup, symbols_text, generate_market_report_for_symbol, "시장 리포트 생성")
-    if action_columns[4].button("전체 파이프라인", width="stretch"):
-        _run_full_pipeline_action(symbol_lookup, symbols_text, int(days))
+    st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown("#### 한 종목 작업")
+        st.caption("지표 계산, 신호 생성, 리포트 생성처럼 한 종목씩 확인하면서 실행하는 작업입니다.")
+        if available_symbols:
+            primary_symbol = st.selectbox(
+                "한 종목 선택",
+                options=available_symbols,
+                index=available_symbols.index(default_single_symbol) if default_single_symbol in available_symbols else 0,
+                format_func=lambda symbol: _format_symbol_option(selection_map[symbol]),
+                help="종목명 또는 종목코드로 검색해서 한 종목만 선택합니다.",
+                key="single_symbol_picker",
+            )
+            st.session_state.streamlit_single_symbol = primary_symbol
+            primary_item = ResolvedSymbol(
+                raw_input=primary_symbol,
+                symbol=primary_symbol,
+                symbol_name=selection_map[primary_symbol].symbol_name,
+            )
+            st.caption(f"현재 선택: {_format_symbol_option(primary_item)}")
+        else:
+            primary_item = None
+            st.caption("한 종목 작업을 실행하려면 선택 가능한 종목 목록이 먼저 준비되어야 합니다.")
+        single_columns = st.columns(3, gap="small")
+        if single_columns[0].button("지표 계산", width="stretch"):
+            _run_single_symbol_action(primary_item, generate_indicators_for_symbol, "지표 계산")
+        if single_columns[1].button("신호 생성", width="stretch"):
+            _run_single_symbol_action(primary_item, generate_golden_cross_signals_for_symbol, "골든크로스 신호 생성")
+        if single_columns[2].button("리포트 생성", width="stretch"):
+            _run_single_symbol_action(primary_item, generate_market_report_for_symbol, "시장 리포트 생성")
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
     with st.container(border=True):
         st.markdown("#### 실행 가이드")
         st.markdown(
             """
+            - `여러 종목 작업`: 데이터 수집, 전체 파이프라인처럼 배치 실행이 자연스러운 작업입니다.
+            - `한 종목 작업`: 지표 계산, 신호 생성, 리포트 생성처럼 결과를 한 종목씩 확인하기 좋은 작업입니다.
             - `데이터 수집`: KIS에서 원본 데이터를 내려받습니다.
-            - `지표 계산`: 일봉 CSV를 읽어 `ma_5`, `ma_20`, `ma_60`, `rsi_14`를 계산합니다.
-            - `신호 생성`: 골든크로스 전략 기준 `buy / sell / hold`를 만듭니다.
-            - `리포트 생성`: 추세, RSI, 거래량, 수급을 묶어 한 줄 의견을 생성합니다.
-            - `전체 파이프라인`: 위 단계를 순서대로 한 번에 실행합니다.
+            - `전체 파이프라인`: 수집 후 지표 계산, 신호 생성, 리포트 생성까지 한 번에 실행합니다.
+            - `지표 계산 / 신호 생성 / 리포트 생성`: 선택한 한 종목만 대상으로 실행합니다.
             """
         )
 
@@ -987,9 +1039,9 @@ def _compact_datetime(value: str) -> str:
     return parsed.strftime("%Y-%m-%d %H:%M")
 
 
-def _run_collect_action(symbol_lookup: SymbolLookup, symbols_text: str, days: int) -> None:
+def _run_collect_action(selected_items: list[ResolvedSymbol], days: int) -> None:
     try:
-        resolved_items = _resolve_many(symbol_lookup, symbols_text)
+        resolved_items = _require_selected_items(selected_items)
         result = collect_market_data_for_symbols(symbols=[item.symbol for item in resolved_items], days=days)
         label_summary = ", ".join(_format_symbol_display(item.symbol, item.symbol_name) for item in resolved_items[:3])
         suffix = "" if len(resolved_items) <= 3 else f" 외 {len(resolved_items) - 3}개"
@@ -1002,9 +1054,9 @@ def _run_collect_action(symbol_lookup: SymbolLookup, symbols_text: str, days: in
     st.rerun()
 
 
-def _run_single_symbol_action(symbol_lookup: SymbolLookup, symbols_text: str, callback, action_name: str) -> None:
+def _run_single_symbol_action(selected_item: ResolvedSymbol | None, callback, action_name: str) -> None:
     try:
-        resolved = _resolve_single(symbol_lookup, symbols_text)
+        resolved = _require_single_selected_item(selected_item)
         result = callback(resolved.symbol)
         _set_action_message(
             f"{action_name} 완료: {_format_symbol_display(resolved.symbol, resolved.symbol_name)} · {result['saved_path']}",
@@ -1015,9 +1067,9 @@ def _run_single_symbol_action(symbol_lookup: SymbolLookup, symbols_text: str, ca
     st.rerun()
 
 
-def _run_full_pipeline_action(symbol_lookup: SymbolLookup, symbols_text: str, days: int) -> None:
+def _run_full_pipeline_action(selected_items: list[ResolvedSymbol], days: int) -> None:
     try:
-        resolved_items = _resolve_many(symbol_lookup, symbols_text)
+        resolved_items = _require_selected_items(selected_items)
         collect_result = collect_market_data_for_symbols(symbols=[item.symbol for item in resolved_items], days=days)
         for symbol in collect_result["symbols"]:
             generate_indicators_for_symbol(symbol)
@@ -1034,18 +1086,16 @@ def _run_full_pipeline_action(symbol_lookup: SymbolLookup, symbols_text: str, da
     st.rerun()
 
 
-def _resolve_single(symbol_lookup: SymbolLookup, symbols_text: str) -> ResolvedSymbol:
-    tokens = [token.strip() for token in symbols_text.replace(",", "\n").splitlines() if token.strip()]
-    if not tokens:
-        raise ValueError("종목코드 또는 종목명을 입력해 주세요.")
-    return symbol_lookup.resolve(tokens[0])
+def _require_selected_items(selected_items: list[ResolvedSymbol]) -> list[ResolvedSymbol]:
+    if not selected_items:
+        raise ValueError("자동완성 목록에서 종목을 하나 이상 선택해 주세요.")
+    return selected_items
 
 
-def _resolve_many(symbol_lookup: SymbolLookup, symbols_text: str) -> list[ResolvedSymbol]:
-    tokens = [token.strip() for token in symbols_text.replace(",", "\n").splitlines() if token.strip()]
-    if not tokens:
-        raise ValueError("종목코드 또는 종목명을 입력해 주세요.")
-    return symbol_lookup.resolve_many(tokens)
+def _require_single_selected_item(selected_item: ResolvedSymbol | None) -> ResolvedSymbol:
+    if selected_item is None:
+        raise ValueError("단일 작업을 실행하려면 대상 종목을 하나 선택해 주세요.")
+    return selected_item
 
 
 def _set_action_message(message: str, message_type: str) -> None:
@@ -1110,6 +1160,27 @@ def _format_symbol_display(symbol: str, symbol_name: str) -> str:
     if name and code:
         return f"{name} ({code})"
     return name or code
+
+
+def _format_symbol_option(entry: SymbolEntry | ResolvedSymbol) -> str:
+    return _format_symbol_display(entry.symbol, entry.symbol_name)
+
+
+def _default_selected_symbols(available_symbols: list[str], persisted_selection: list[str]) -> list[str]:
+    persisted = [symbol for symbol in persisted_selection if symbol in available_symbols]
+    if persisted:
+        return persisted
+    if "005930" in available_symbols:
+        return ["005930"]
+    return available_symbols[:1]
+
+
+def _default_single_symbol(available_symbols: list[str], persisted_symbol: str) -> str:
+    if persisted_symbol in available_symbols:
+        return persisted_symbol
+    if "005930" in available_symbols:
+        return "005930"
+    return available_symbols[0] if available_symbols else ""
 
 
 def _localize_reason(reason: str) -> str:

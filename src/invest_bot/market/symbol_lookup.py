@@ -16,6 +16,12 @@ class ResolvedSymbol:
     symbol_name: str
 
 
+@dataclass(frozen=True, slots=True)
+class SymbolEntry:
+    symbol: str
+    symbol_name: str
+
+
 class SymbolLookup:
     """Resolve a dashboard input value to a domestic stock symbol code."""
 
@@ -73,6 +79,16 @@ class SymbolLookup:
                 resolved.append(item)
                 seen.add(item.symbol)
         return resolved
+
+    def list_entries(self, refresh_master: bool = False) -> list[SymbolEntry]:
+        entries = self._load_entries(refresh_master=refresh_master, auto_update_if_missing=not refresh_master)
+        unique_entries: dict[str, SymbolEntry] = {}
+        for entry in entries:
+            symbol = self._normalize_symbol_code(entry.get("symbol", ""))
+            symbol_name = str(entry.get("symbol_name", "")).strip()
+            if symbol and symbol_name and symbol not in unique_entries:
+                unique_entries[symbol] = SymbolEntry(symbol=symbol, symbol_name=symbol_name)
+        return sorted(unique_entries.values(), key=lambda item: (self._normalize(item.symbol_name), item.symbol))
 
     def _find_by_name(self, raw: str, refresh_master: bool) -> dict[str, str] | None:
         entries = self._load_entries(refresh_master=refresh_master, auto_update_if_missing=not refresh_master)
