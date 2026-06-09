@@ -112,6 +112,9 @@ invest_bot/
 
 실제 설정 파일은 `.gitignore`에 포함되어 있습니다.
 
+KIS API 키/시크릿은 `config/kis_credentials.yaml` 한 곳에서만 관리합니다.
+`.env`나 `config/app.yaml`의 KIS 관련 값은 읽지 않습니다.
+
 ## 설치
 
 ```powershell

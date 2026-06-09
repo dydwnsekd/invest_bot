@@ -122,7 +122,12 @@ class MarketDataCollector:
     def collect_symbol_bundle(self, symbol: str, start_date: date, end_date: date) -> BatchCollectionResult:
         try:
             daily_summary, daily_prices = self.collect_daily_prices(symbol, start_date, end_date)
-            stock_info = self.collect_stock_info(symbol)
+            stock_info_error = ""
+            try:
+                stock_info = self.collect_stock_info(symbol)
+            except Exception as error:  # noqa: BLE001
+                stock_info = self._fallback_stock_info(symbol, error)
+                stock_info_error = str(error)
             investor_daily, investor_summary = self.collect_investor_daily(symbol, end_date)
 
             saved_daily_summary, saved_daily_prices = self.save_daily_prices(
@@ -148,6 +153,7 @@ class MarketDataCollector:
                     str(saved_investor_detail.path),
                     str(saved_investor_summary.path),
                 ],
+                error=stock_info_error,
             )
         except Exception as error:  # noqa: BLE001
             return BatchCollectionResult(
@@ -164,3 +170,16 @@ class MarketDataCollector:
 
     def collect_symbols_batch(self, symbols: list[str], start_date: date, end_date: date) -> list[BatchCollectionResult]:
         return [self.collect_symbol_bundle(symbol=symbol, start_date=start_date, end_date=end_date) for symbol in symbols]
+
+    @staticmethod
+    def _fallback_stock_info(symbol: str, error: Exception) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "pdno": symbol,
+                    "prdt_abrv_name": symbol,
+                    "prdt_type_cd": "",
+                    "collection_warning": str(error),
+                }
+            ]
+        )

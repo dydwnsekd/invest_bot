@@ -31,7 +31,7 @@ class KISClient:
             return self._token
 
         if not self.settings.kis_app_key or not self.settings.kis_app_secret:
-            raise ValueError("KIS credentials are missing. Set the appropriate app key and secret in the environment.")
+            raise ValueError("KIS credentials are missing. Set the appropriate app key and secret in config/kis_credentials.yaml.")
 
         response = self.session.post(
             f"{self.settings.kis_base_url}/oauth2/tokenP",

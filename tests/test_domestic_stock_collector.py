@@ -176,3 +176,39 @@ def test_collect_market_data_for_symbols_summarizes_batch_results():
     assert summary["days"] == 15
     assert summary["success_count"] == 1
     assert summary["failed_count"] == 1
+
+
+def test_collect_symbol_bundle_falls_back_when_stock_info_endpoint_fails(monkeypatch):
+    collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(make_test_dir("market_data_stock_info_fallback")))
+
+    monkeypatch.setattr(
+        collector,
+        "collect_daily_prices",
+        lambda symbol, start_date, end_date: (
+            pd.DataFrame([{"symbol": symbol}]),
+            pd.DataFrame([{"stck_bsop_date": "20260328", "symbol": symbol}]),
+        ),
+    )
+    monkeypatch.setattr(
+        collector,
+        "collect_stock_info",
+        lambda symbol: (_ for _ in ()).throw(RuntimeError("stock info endpoint failed")),
+    )
+    monkeypatch.setattr(
+        collector,
+        "collect_investor_daily",
+        lambda symbol, target_date: (
+            pd.DataFrame([{"frgn_ntby_qty": "100", "symbol": symbol}]),
+            pd.DataFrame([{"stck_bsop_date": "20260329", "symbol": symbol}]),
+        ),
+    )
+
+    result = collector.collect_symbol_bundle(
+        symbol="005930",
+        start_date=date(2026, 3, 1),
+        end_date=date(2026, 3, 29),
+    )
+
+    assert result.status == "success"
+    assert result.stock_info_rows == 1
+    assert "stock info endpoint failed" in result.error

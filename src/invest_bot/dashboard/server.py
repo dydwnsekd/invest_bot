@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import os
 from urllib.parse import parse_qs, quote, urlparse
 
 from invest_bot.dashboard.service import DashboardDataService
@@ -64,11 +65,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         try:
             resolved_symbols = self._resolve_symbol_inputs(symbols_text)
             result = collect_market_data_for_symbols(symbols=resolved_symbols, days=days)
-            message = (
-                f"데이터 수집을 완료했습니다. 종목 {result['symbol_count']}개 중 "
-                f"{result['success_count']}개 성공, {result['failed_count']}개 실패입니다."
-            )
-            message_type = "success" if result["failed_count"] == 0 else "info"
+            message, message_type = build_collect_feedback(result)
         except Exception as error:  # noqa: BLE001
             message = f"데이터 수집 중 오류가 발생했습니다: {error}"
             message_type = "error"
@@ -142,7 +139,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
         try:
             resolved_symbols = self._resolve_symbol_inputs(symbols_text)
             collect_result = collect_market_data_for_symbols(symbols=resolved_symbols, days=days)
-            pipeline_symbols = collect_result["symbols"]
+            pipeline_symbols = successful_symbols_from_collect_result(collect_result)
+            if not pipeline_symbols:
+                message, _message_type = build_collect_feedback(collect_result)
+                self._redirect_with_message(
+                    message=f"전체 파이프라인을 시작하지 못했습니다. 데이터 수집 단계에서 성공한 종목이 없습니다. {message}",
+                    message_type="error",
+                )
+                return
             analyzed = [generate_indicators_for_symbol(symbol) for symbol in pipeline_symbols]
             signaled = [generate_golden_cross_signals_for_symbol(symbol) for symbol in pipeline_symbols]
             reported = [generate_market_report_for_symbol(symbol) for symbol in pipeline_symbols]
@@ -150,6 +154,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 f"전체 파이프라인을 완료했습니다. 수집 {collect_result['success_count']}/{collect_result['symbol_count']} 성공, "
                 f"지표 계산 {len(analyzed)}건, 신호 생성 {len(signaled)}건, 리포트 생성 {len(reported)}건입니다."
             )
+            failure_summary = summarize_collect_failures(collect_result)
+            if failure_summary:
+                message = f"{message} 수집 실패: {failure_summary}"
             message_type = "success" if collect_result["failed_count"] == 0 else "info"
         except FileNotFoundError as error:
             message = str(error)
@@ -182,7 +189,61 @@ class DashboardHandler(BaseHTTPRequestHandler):
         return
 
 
+def resolve_dashboard_bind(host: str = "127.0.0.1", port: int = 8000) -> tuple[str, int]:
+    resolved_host = os.getenv("INVEST_BOT_DASHBOARD_HOST", host).strip() or host
+    raw_port = os.getenv("INVEST_BOT_DASHBOARD_PORT", str(port)).strip()
+    try:
+        resolved_port = int(raw_port)
+    except ValueError:
+        resolved_port = port
+    return resolved_host, resolved_port
+
+
+def successful_symbols_from_collect_result(result: dict[str, object]) -> list[str]:
+    symbols: list[str] = []
+    for entry in result.get("results", []):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("status") != "success":
+            continue
+        symbol = str(entry.get("symbol", "")).strip()
+        if symbol and symbol not in symbols:
+            symbols.append(symbol)
+    return symbols
+
+
+def summarize_collect_failures(result: dict[str, object], *, limit: int = 3) -> str:
+    failures: list[str] = []
+    for entry in result.get("results", []):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("status") != "failed":
+            continue
+        symbol = str(entry.get("symbol", "")).strip() or "unknown"
+        error = str(entry.get("error", "")).strip() or "원인 미상"
+        failures.append(f"{symbol}({error})")
+        if len(failures) >= limit:
+            break
+    return ", ".join(failures)
+
+
+def build_collect_feedback(result: dict[str, object]) -> tuple[str, str]:
+    message = (
+        f"데이터 수집을 완료했습니다. 종목 {result['symbol_count']}개 중 "
+        f"{result['success_count']}개 성공, {result['failed_count']}개 실패입니다."
+    )
+    failure_summary = summarize_collect_failures(result)
+    if failure_summary:
+        message = f"{message} 실패: {failure_summary}"
+    if result["failed_count"] == 0:
+        return message, "success"
+    if result["success_count"] == 0:
+        return message, "error"
+    return message, "info"
+
+
 def run_dashboard(host: str = "127.0.0.1", port: int = 8000) -> None:
+    host, port = resolve_dashboard_bind(host=host, port=port)
     server = ThreadingHTTPServer((host, port), DashboardHandler)
     print(f"dashboard running at http://{host}:{port}")
     server.serve_forever()

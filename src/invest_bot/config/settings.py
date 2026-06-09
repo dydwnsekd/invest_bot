@@ -53,6 +53,8 @@ class AppSettings:
             loaded = yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}
             raw_data = {str(key): value for key, value in loaded.items()}
 
+        credentials_data: dict[str, object] = {}
+
         if credentials_path is None and path is None:
             credentials_file = CONFIG_DIR / "kis_credentials.yaml"
         elif credentials_path is not None:
@@ -62,7 +64,7 @@ class AppSettings:
 
         if credentials_file is not None and credentials_file.exists():
             loaded_credentials = yaml.safe_load(credentials_file.read_text(encoding="utf-8")) or {}
-            raw_data.update({str(key): value for key, value in loaded_credentials.items()})
+            credentials_data = {str(key): value for key, value in loaded_credentials.items()}
 
         def configured_value(env_name: str, yaml_key: str, default: str) -> str:
             value = os.getenv(env_name)
@@ -80,6 +82,10 @@ class AppSettings:
                 return configured
             return str(configured).strip().lower() in {"1", "true", "yes", "on"}
 
+        def credential_value(yaml_key: str) -> str:
+            configured = credentials_data.get(yaml_key, "")
+            return str(configured).strip()
+
         mode = configured_value("INVEST_BOT_TRADING_MODE", "trading_mode", TradingMode.MOCK.value).lower()
         return cls(
             app_name=configured_value("INVEST_BOT_APP_NAME", "app_name", "invest_bot"),
@@ -87,10 +93,10 @@ class AppSettings:
             trading_mode=TradingMode(mode),
             environment=configured_value("INVEST_BOT_ENVIRONMENT", "environment", "local"),
             log_level=configured_value("INVEST_BOT_LOG_LEVEL", "log_level", "INFO").upper(),
-            kis_live_app_key=configured_value("INVEST_BOT_KIS_APP_KEY", "kis_app_key", ""),
-            kis_live_app_secret=configured_value("INVEST_BOT_KIS_APP_SECRET", "kis_app_secret", ""),
-            kis_mock_app_key=configured_value("INVEST_BOT_KIS_MOCK_APP_KEY", "kis_mock_app_key", ""),
-            kis_mock_app_secret=configured_value("INVEST_BOT_KIS_MOCK_APP_SECRET", "kis_mock_app_secret", ""),
+            kis_live_app_key=credential_value("kis_app_key"),
+            kis_live_app_secret=credential_value("kis_app_secret"),
+            kis_mock_app_key=credential_value("kis_mock_app_key"),
+            kis_mock_app_secret=credential_value("kis_mock_app_secret"),
             db_host=configured_value("INVEST_BOT_DB_HOST", "db_host", "localhost"),
             db_port=int(configured_value("INVEST_BOT_DB_PORT", "db_port", "5432")),
             db_name=configured_value("INVEST_BOT_DB_NAME", "db_name", "invest_bot"),
