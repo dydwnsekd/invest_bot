@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
+from invest_bot.dashboard.streamlit_charts import render_chart_selector
 from invest_bot.dashboard.streamlit_formatters import (
     format_frame_for_display,
     format_number,
@@ -235,10 +236,12 @@ def render_market_report_card(
 
         indicator_frame = load_indicator_frame_for_symbol(preview.symbol)
         if indicator_frame is not None:
-            chart_frame = indicator_frame.copy()
-            chart_frame["date"] = pd.to_datetime(chart_frame["date"], errors="coerce")
-            chart_frame = chart_frame.dropna(subset=["date"]).set_index("date")[["close", "ma_5", "ma_20"]].tail(60)
-            st.line_chart(chart_frame, height=280, width="stretch")
+            render_chart_selector(
+                indicator_frame,
+                dataset_name="daily_prices_indicators",
+                key_prefix=f"report_{preview.symbol}_{preview.path.name}",
+                height=280,
+            )
 
         if st.toggle("리포트 상세 보기", key=f"toggle_report_detail_{preview.symbol}_{preview.path.name}"):
             st.dataframe(format_frame_for_display(frame, service), width="stretch", hide_index=True)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import streamlit as st
 
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
+from invest_bot.dashboard.streamlit_charts import render_chart_selector
 from invest_bot.dashboard.streamlit_formatters import format_frame_for_display, format_symbol_display
 
 
@@ -43,6 +44,14 @@ def render_dataset_preview(preview: DatasetPreview, service: DashboardDataServic
         meta_left, meta_right = st.columns(2)
         meta_left.metric("행 수", preview.row_count)
         meta_right.metric("컬럼 수", len(preview.columns))
+
+        if st.toggle("차트 보기", key=f"toggle_chart_{preview.name}_{preview.symbol}_{preview.path.name}"):
+            render_chart_selector(
+                frame,
+                dataset_name=preview.name,
+                key_prefix=f"{preview.name}_{preview.symbol}_{preview.path.name}",
+                height=260,
+            )
 
         if st.toggle("데이터 설명 보기", key=f"toggle_summary_{preview.name}_{preview.symbol}_{preview.path.name}"):
             st.markdown(f"- **무엇인가요?** {preview.summary}")

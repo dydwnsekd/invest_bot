@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.dashboard.streamlit_charts import available_chart_presets, default_chart_preset, prepare_time_series_frame
 from invest_bot.dashboard.streamlit_actions import require_selected_items, require_single_selected_item
 from invest_bot.dashboard.streamlit_formatters import (
     default_selected_symbols as _default_selected_symbols,
@@ -127,3 +128,54 @@ def test_report_filter_and_sort_behaviour_is_preserved() -> None:
 
     sorted_entries = sort_report_entries(entries, "매수 관점 우선")
     assert [entry["symbol"] for entry in sorted_entries] == ["005930", "000660"]
+
+
+def test_prepare_time_series_frame_normalizes_supported_date_columns() -> None:
+    frame = pd.DataFrame(
+        [
+            {"stck_bsop_date": "20260328", "frgn_ntby_qty": 100},
+            {"stck_bsop_date": "20260329", "frgn_ntby_qty": 150},
+        ]
+    )
+
+    normalized = prepare_time_series_frame(frame)
+
+    assert list(normalized.columns) == ["stck_bsop_date", "frgn_ntby_qty", "date"]
+    assert normalized["date"].dt.strftime("%Y-%m-%d").tolist() == ["2026-03-28", "2026-03-29"]
+
+
+def test_available_chart_presets_detects_stock_price_charts() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "date": "2026-03-28",
+                "open": 70000,
+                "high": 71000,
+                "low": 69500,
+                "close": 70800,
+                "volume": 1000000,
+                "ma_5": 70200,
+                "ma_20": 69000,
+                "rsi_14": 61.5,
+            }
+        ]
+    )
+
+    presets = available_chart_presets("daily_prices_indicators", frame)
+
+    assert [preset.key for preset in presets] == ["close_ma", "candlestick", "volume", "rsi", "close_only"]
+    assert default_chart_preset("daily_prices_indicators", presets) == "close_ma"
+
+
+def test_available_chart_presets_detects_investor_flow_chart() -> None:
+    frame = pd.DataFrame(
+        [
+            {"stck_bsop_date": "20260328", "frgn_ntby_qty": 100, "orgn_ntby_qty": -50, "prsn_ntby_qty": 20},
+            {"stck_bsop_date": "20260329", "frgn_ntby_qty": 120, "orgn_ntby_qty": -30, "prsn_ntby_qty": 10},
+        ]
+    )
+
+    presets = available_chart_presets("investor_daily", frame)
+
+    assert [preset.key for preset in presets] == ["flow"]
+    assert default_chart_preset("investor_daily", presets) == "flow"
