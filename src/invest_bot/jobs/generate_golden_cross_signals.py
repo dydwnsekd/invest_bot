@@ -4,8 +4,10 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from invest_bot.config.settings import AppSettings
+from invest_bot.db.frame_storage import DbFrameStorage
 from invest_bot.market.repositories import DatasetStorage
-from invest_bot.market.storage import CsvStorage, SavedDataset
+from invest_bot.market.storage import SavedDataset
 from invest_bot.strategy import GoldenCrossStrategy
 
 
@@ -18,13 +20,12 @@ class GoldenCrossSignalRequest:
 class GoldenCrossSignalGenerator:
     """Generate golden-cross signals from saved indicator CSV files."""
 
-    def __init__(self, processed_storage: DatasetStorage | None = None) -> None:
-        self.processed_storage = processed_storage or CsvStorage("data/processed/domestic_stock")
+    def __init__(self, processed_storage: DatasetStorage | None = None, settings: AppSettings | None = None) -> None:
+        self.processed_storage = processed_storage or DbFrameStorage.from_settings(settings)
         self.strategy = GoldenCrossStrategy()
 
     def load_indicator_frame(self, request: GoldenCrossSignalRequest) -> pd.DataFrame:
-        file_path = self.processed_storage.root_dir / "daily_prices_indicators" / request.source_filename
-        frame = pd.read_csv(file_path)
+        frame = self.processed_storage.load("daily_prices_indicators", request.source_filename)
         if "date" in frame.columns:
             frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
         return frame.sort_values("date").reset_index(drop=True) if "date" in frame.columns else frame

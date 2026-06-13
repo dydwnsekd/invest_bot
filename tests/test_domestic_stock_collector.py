@@ -212,3 +212,9 @@ def test_collect_symbol_bundle_falls_back_when_stock_info_endpoint_fails(monkeyp
     assert result.status == "success"
     assert result.stock_info_rows == 1
     assert "stock info endpoint failed" in result.error
+
+
+def test_market_data_collector_does_not_build_db_writer_when_db_write_is_disabled():
+    collector = MarketDataCollector(settings=AppSettings())
+
+    assert collector.db_writer is None

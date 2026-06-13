@@ -52,6 +52,17 @@ class MarketReportRecord:
     created_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class DatasetFrameRecord:
+    dataset: str
+    filename: str
+    frame_json: str
+    row_count: int
+    created_at: datetime
+    symbol: str = ""
+    as_of_date: date | None = None
+
+
 @runtime_checkable
 class StockRepository(Protocol):
     def upsert(self, record: StockRecord) -> None: ...
@@ -89,3 +100,14 @@ class MarketReportRepository(Protocol):
     def save(self, record: MarketReportRecord) -> None: ...
 
     def latest_for_symbol(self, symbol: str) -> MarketReportRecord | None: ...
+
+
+@runtime_checkable
+class DatasetFrameRepository(Protocol):
+    def save(self, record: DatasetFrameRecord) -> None: ...
+
+    def load(self, dataset: str, filename: str) -> DatasetFrameRecord | None: ...
+
+    def latest_for_symbol(self, dataset: str, symbol: str) -> DatasetFrameRecord | None: ...
+
+    def list_latest(self, datasets: Sequence[str]) -> Sequence[DatasetFrameRecord]: ...

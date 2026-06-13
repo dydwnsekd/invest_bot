@@ -17,12 +17,29 @@ from tests.helpers import make_test_dir
 class InMemoryStorage:
     root_dir: Path
     saved: list[SavedDataset]
+    frames: dict[tuple[str, str], pd.DataFrame] | None = None
+
+    def __post_init__(self) -> None:
+        if self.frames is None:
+            self.frames = {}
 
     def save(self, dataset: str, filename: str, frame: pd.DataFrame) -> SavedDataset:
         path = self.root_dir / dataset / filename
         result = SavedDataset(dataset=dataset, path=path, rows=len(frame))
         self.saved.append(result)
+        self.frames[(dataset, filename)] = frame.copy()
         return result
+
+    def load(self, dataset: str, filename: str) -> pd.DataFrame:
+        return self.frames[(dataset, filename)].copy()
+
+    def latest_filename(self, dataset: str, symbol: str) -> str | None:
+        matches = [
+            filename
+            for stored_dataset, filename in self.frames
+            if stored_dataset == dataset and (not symbol or filename.startswith(symbol))
+        ]
+        return matches[-1] if matches else None
 
 
 class InMemoryStockMasterRepository:

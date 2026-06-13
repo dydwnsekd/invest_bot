@@ -5,8 +5,10 @@ from dataclasses import dataclass
 import pandas as pd
 from pandas.errors import EmptyDataError
 
+from invest_bot.config.settings import AppSettings
+from invest_bot.db.frame_storage import DbFrameStorage
 from invest_bot.market.repositories import DatasetStorage
-from invest_bot.market.storage import CsvStorage, SavedDataset
+from invest_bot.market.storage import SavedDataset
 
 
 @dataclass(slots=True)
@@ -25,9 +27,10 @@ class MarketReportGenerator:
         self,
         raw_storage: DatasetStorage | None = None,
         processed_storage: DatasetStorage | None = None,
+        settings: AppSettings | None = None,
     ) -> None:
-        self.raw_storage = raw_storage or CsvStorage("data/raw/domestic_stock")
-        self.processed_storage = processed_storage or CsvStorage("data/processed/domestic_stock")
+        self.raw_storage = raw_storage or DbFrameStorage.from_settings(settings)
+        self.processed_storage = processed_storage or DbFrameStorage.from_settings(settings)
 
     def load_indicator_frame(self, request: MarketReportRequest) -> pd.DataFrame:
         return self._load_processed_csv("daily_prices_indicators", request.indicator_filename, parse_date=True)
@@ -126,8 +129,8 @@ class MarketReportGenerator:
 
     def _load_processed_csv(self, dataset: str, filename: str, parse_date: bool = False) -> pd.DataFrame:
         try:
-            frame = pd.read_csv(self.processed_storage.root_dir / dataset / filename)
-        except EmptyDataError:
+            frame = self.processed_storage.load(dataset, filename)
+        except (EmptyDataError, FileNotFoundError):
             return pd.DataFrame()
         if parse_date and "date" in frame.columns:
             frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
@@ -136,8 +139,8 @@ class MarketReportGenerator:
 
     def _load_raw_csv(self, dataset: str, filename: str) -> pd.DataFrame:
         try:
-            return pd.read_csv(self.raw_storage.root_dir / dataset / filename)
-        except EmptyDataError:
+            return self.raw_storage.load(dataset, filename)
+        except (EmptyDataError, FileNotFoundError):
             return pd.DataFrame()
 
     @staticmethod

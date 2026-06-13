@@ -7,6 +7,7 @@ import pandas as pd
 
 from invest_bot.clients.kis_client import KISClient
 from invest_bot.config.settings import AppSettings
+from invest_bot.db.frame_storage import DbFrameStorage
 from invest_bot.db.write_path import SqlAlchemyMarketDataWriter
 from invest_bot.market.domestic_stock import (
     DailyPriceRequest,
@@ -15,7 +16,7 @@ from invest_bot.market.domestic_stock import (
     StockInfoRequest,
 )
 from invest_bot.market.repositories import DatasetStorage, MarketDataWriter
-from invest_bot.market.storage import CsvStorage, SavedDataset
+from invest_bot.market.storage import SavedDataset
 
 
 @dataclass(slots=True)
@@ -49,7 +50,7 @@ class MarketDataCollector:
     ) -> None:
         self.settings = settings
         self.collector = DomesticStockDataCollector(KISClient(settings=settings))
-        self.storage = storage or CsvStorage()
+        self.storage = storage or DbFrameStorage.from_settings(settings)
         self.db_writer = db_writer or self._build_default_db_writer()
 
     def _build_default_db_writer(self) -> MarketDataWriter | None:

@@ -15,6 +15,7 @@ from invest_bot.dashboard.streamlit_formatters import (
 
 def render_overview_tab(
     snapshot,
+    service: DashboardDataService,
     test_report: TestReportPreview | None,
     schedule_status,
     *,
@@ -50,10 +51,10 @@ def render_overview_tab(
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-        render_latest_signal_summary(signal_previews, service=DashboardDataService(), read_preview_frame=read_preview_frame)
+        render_latest_signal_summary(signal_previews, service=service, read_preview_frame=read_preview_frame)
 
     with right:
-        render_latest_report_summary(report_previews, service=DashboardDataService(), read_preview_frame=read_preview_frame)
+        render_latest_report_summary(report_previews, service=service, read_preview_frame=read_preview_frame)
         if schedule_status is not None:
             st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
             render_schedule_status_summary(schedule_status)
@@ -72,7 +73,7 @@ def render_latest_signal_summary(
             return
 
         latest = signal_previews[0]
-        frame = read_preview_frame(latest.path)
+        frame = read_preview_frame(latest)
         if frame.empty:
             st.caption("신호 데이터가 비어 있습니다.")
             return
@@ -98,7 +99,7 @@ def render_latest_report_summary(
             return
 
         latest = report_previews[0]
-        frame = read_preview_frame(latest.path)
+        frame = read_preview_frame(latest)
         if frame.empty:
             st.caption("리포트 데이터가 비어 있습니다.")
             return

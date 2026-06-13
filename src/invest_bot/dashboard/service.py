@@ -6,6 +6,9 @@ from xml.etree import ElementTree
 
 import pandas as pd
 
+from invest_bot.config.settings import AppSettings
+from invest_bot.db.frame_storage import DbFrameStorage
+
 
 @dataclass(frozen=True, slots=True)
 class ColumnMeta:
@@ -65,6 +68,15 @@ class TestReportPreview:
 
 class DashboardDataService:
     """Load dashboard data for the Streamlit UI."""
+
+    RAW_DATASETS = ("daily_prices", "daily_prices_summary", "stock_info", "investor_daily", "investor_daily_summary")
+    PROCESSED_DATASETS = (
+        "daily_prices_indicators",
+        "golden_cross_signals",
+        "market_reports",
+        "backtest_trades",
+        "backtest_summaries",
+    )
 
     DATASET_GUIDES = {
         "daily_prices": DatasetGuide(
@@ -214,19 +226,46 @@ class DashboardDataService:
 
     def __init__(
         self,
-        raw_root: str | Path = "data/raw/domestic_stock",
-        processed_root: str | Path = "data/processed/domestic_stock",
+        raw_root: str | Path | None = None,
+        processed_root: str | Path | None = None,
         test_report_path: str | Path = "data/processed/test_reports/pytest_results.xml",
+        dataset_storage=None,
+        settings: AppSettings | None = None,
     ) -> None:
-        self.raw_root = Path(raw_root)
-        self.processed_root = Path(processed_root)
+        self.dataset_storage = dataset_storage
+        self._default_db_storage = self.dataset_storage is None and raw_root is None and processed_root is None
+        self._settings = settings
+        self.raw_root = Path(raw_root) if raw_root is not None else Path("data/raw/domestic_stock")
+        self.processed_root = Path(processed_root) if processed_root is not None else Path("data/processed/domestic_stock")
         self.test_report_path = Path(test_report_path)
 
     def build_snapshot(self) -> DashboardSnapshot:
+        if self.get_dataset_storage() is not None:
+            return DashboardSnapshot(
+                raw_previews=self._collect_db_previews(self.RAW_DATASETS),
+                processed_previews=self._collect_db_previews(self.PROCESSED_DATASETS),
+            )
         return DashboardSnapshot(
             raw_previews=self._collect_previews(self.raw_root),
             processed_previews=self._collect_previews(self.processed_root),
         )
+
+    def load_preview_frame(self, preview: DatasetPreview) -> pd.DataFrame:
+        storage = self.get_dataset_storage()
+        if storage is None:
+            try:
+                return pd.read_csv(preview.path)
+            except pd.errors.EmptyDataError:
+                return pd.DataFrame()
+        try:
+            return storage.load(preview.name, preview.path.name)
+        except FileNotFoundError:
+            return pd.DataFrame()
+
+    def get_dataset_storage(self):
+        if self.dataset_storage is None and self._default_db_storage:
+            self.dataset_storage = DbFrameStorage.from_settings(self._settings)
+        return self.dataset_storage
 
     def load_test_report(self) -> TestReportPreview | None:
         if not self.test_report_path.exists():
@@ -336,6 +375,54 @@ class DashboardDataService:
 
         return previews
 
+    def _collect_db_previews(self, datasets: tuple[str, ...]) -> list[DatasetPreview]:
+        previews: list[DatasetPreview] = []
+        storage = self.get_dataset_storage()
+        if storage is None:
+            return previews
+
+        symbol_name_map = self._load_symbol_name_map()
+        for dataset in datasets:
+            latest_records = self._list_latest_records(dataset)
+            for filename in latest_records:
+                frame = storage.load(dataset, filename)
+                symbol = self._extract_symbol(Path(filename))
+                symbol_name = symbol_name_map.get(symbol, "")
+                enriched = self._enrich_frame(frame, symbol=symbol, symbol_name=symbol_name)
+                guide = self.DATASET_GUIDES.get(
+                    dataset,
+                    DatasetGuide(
+                        title=dataset,
+                        summary="아직 이 데이터셋 설명이 준비되지 않았습니다.",
+                        purpose="데이터 구조를 먼저 확인해 주세요.",
+                        first_look="종목, 날짜, 핵심 지표 컬럼을 먼저 보세요.",
+                        recommended_columns=tuple(enriched.columns[: min(6, len(enriched.columns))]),
+                    ),
+                )
+                recommended = [column for column in guide.recommended_columns if column in enriched.columns]
+                if not recommended:
+                    recommended = list(enriched.columns[: min(6, len(enriched.columns))])
+                if "symbol_name" in enriched.columns and "symbol_name" not in recommended:
+                    recommended.insert(0, "symbol_name")
+                if "symbol" in enriched.columns and "symbol" not in recommended:
+                    recommended.insert(1 if "symbol_name" in recommended else 0, "symbol")
+                previews.append(
+                    DatasetPreview(
+                        name=dataset,
+                        display_name=guide.title,
+                        path=storage.root_dir / dataset / filename,
+                        row_count=len(enriched),
+                        columns=list(enriched.columns),
+                        summary=guide.summary,
+                        purpose=guide.purpose,
+                        first_look=guide.first_look,
+                        symbol=symbol,
+                        symbol_name=symbol_name,
+                        recommended_columns=recommended,
+                    )
+                )
+        return previews
+
     @staticmethod
     def _extract_symbol(file_path: Path) -> str:
         stem = file_path.stem
@@ -343,6 +430,21 @@ class DashboardDataService:
         return DashboardDataService._normalize_symbol(symbol)
 
     def _load_symbol_name_map(self) -> dict[str, str]:
+        storage = self.get_dataset_storage()
+        if storage is not None:
+            mapping: dict[str, str] = {}
+            previews = self._list_latest_records("stock_info")
+            for item in previews:
+                frame = storage.load("stock_info", item)
+                if frame.empty:
+                    continue
+                code = str(frame.iloc[0].get("pdno", "")).strip() or Path(item).stem
+                code = self._normalize_symbol(code)
+                name = str(frame.iloc[0].get("prdt_abrv_name", "")).strip()
+                if code and name:
+                    mapping[code] = name
+            return mapping
+
         stock_info_dir = self.raw_root / "stock_info"
         if not stock_info_dir.exists():
             return {}
@@ -361,6 +463,13 @@ class DashboardDataService:
             if code and name:
                 mapping[code] = name
         return mapping
+
+    def _list_latest_records(self, dataset: str) -> list[str]:
+        storage = self.get_dataset_storage()
+        if storage is None:
+            return []
+        entries = storage.repository.list_latest([dataset])
+        return [entry.filename for entry in entries if entry.dataset == dataset]
 
     @staticmethod
     def _normalize_symbol(value: object) -> str:

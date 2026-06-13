@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-
 from invest_bot.jobs.generate_golden_cross_signals import (
     GoldenCrossSignalGenerator,
     GoldenCrossSignalRequest,
@@ -15,37 +13,21 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _find_latest_file(directory: Path, pattern: str) -> Path:
-    if not directory.exists():
-        raise FileNotFoundError(
-            f"Required directory does not exist: '{directory}'. Run daily analysis first."
-        )
-    matches = sorted(directory.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
-    if not matches:
-        available = ", ".join(path.name for path in sorted(directory.glob("*.csv"))[:10]) or "no csv files found"
-        raise FileNotFoundError(
-            f"No files matched pattern '{pattern}' in '{directory}'. "
-            f"Available files: {available}. Run daily analysis first."
-        )
-    return matches[0]
-
-
 def generate_golden_cross_signals_for_symbol(
     symbol: str,
     generator: GoldenCrossSignalGenerator | None = None,
 ) -> dict[str, str | int]:
     signal_generator = generator or GoldenCrossSignalGenerator()
-    source_file = _find_latest_file(
-        signal_generator.processed_storage.root_dir / "daily_prices_indicators",
-        f"{symbol}_*.csv",
-    )
-    request = GoldenCrossSignalRequest(symbol=symbol, source_filename=source_file.name)
+    source_filename = signal_generator.processed_storage.latest_filename("daily_prices_indicators", symbol)
+    if source_filename is None:
+        raise FileNotFoundError(f"No daily_prices_indicators dataset found for symbol '{symbol}'. Run daily analysis first.")
+    request = GoldenCrossSignalRequest(symbol=symbol, source_filename=source_filename)
     indicator_frame = signal_generator.load_indicator_frame(request)
     signal_frame = signal_generator.generate_signals(indicator_frame)
     saved = signal_generator.save_signals(request.source_filename, signal_frame)
     return {
         "symbol": symbol,
-        "source_file": source_file.name,
+        "source_file": source_filename,
         "indicator_rows": len(indicator_frame),
         "signal_rows": len(signal_frame),
         "saved_path": str(saved.path),

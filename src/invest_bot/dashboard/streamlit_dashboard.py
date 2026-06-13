@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import partial
+
 import streamlit as st
 
 from invest_bot.dashboard.service import DashboardDataService
@@ -39,6 +41,8 @@ def main() -> None:
     service = DashboardDataService()
     symbol_lookup = SymbolLookup()
     schedule_status = _load_optional_schedule_status()
+    read_preview_frame = partial(_read_preview_frame, service)
+    load_indicator_frame_for_symbol = partial(_load_indicator_frame_for_symbol, service)
 
     snapshot = service.build_snapshot()
     test_report = service.load_test_report()
@@ -56,17 +60,17 @@ def main() -> None:
 
     tab = st.session_state.selected_tab
     if tab == "상태판":
-        _render_overview_tab(snapshot, test_report, schedule_status, read_preview_frame=_read_preview_frame)
+        _render_overview_tab(snapshot, service, test_report, schedule_status, read_preview_frame=read_preview_frame)
     elif tab == "작업 실행":
         _render_actions_tab(symbol_lookup, schedule_status, render_schedule_status_panel=_render_schedule_status_panel)
     elif tab == "리포트 해석":
         _render_reports_tab(
             snapshot,
             service,
-            read_preview_frame=_read_preview_frame,
-            load_indicator_frame_for_symbol=_load_indicator_frame_for_symbol,
+            read_preview_frame=read_preview_frame,
+            load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
         )
     elif tab == "데이터 탐색":
-        _render_data_tab(snapshot, service, read_preview_frame=_read_preview_frame)
+        _render_data_tab(snapshot, service, read_preview_frame=read_preview_frame)
     else:
         _render_test_tab(test_report)

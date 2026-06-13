@@ -3,3 +3,14 @@ market: domestic_stock
 trading_mode: mock
 environment: local
 log_level: INFO
+database_url: ""
+kis_live_app_key: ""
+kis_live_app_secret: ""
+kis_mock_app_key: ""
+kis_mock_app_secret: ""
+db_host: localhost
+db_port: 5432
+db_name: invest_bot
+db_user: invest_bot
+db_password: invest_bot
+enable_db_write: true

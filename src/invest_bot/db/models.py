@@ -79,3 +79,22 @@ class InvestorDaily(Base):
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
 
     symbol_ref: Mapped[Symbol] = relationship(back_populates="investor_daily_rows")
+
+
+class DatasetFrame(Base):
+    __tablename__ = "dataset_frames"
+    __table_args__ = (UniqueConstraint("dataset", "filename", name="uq_dataset_frames_dataset_filename"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    symbol: Mapped[str | None] = mapped_column(ForeignKey("symbols.symbol", ondelete="SET NULL"), index=True)
+    as_of_date: Mapped[date | None] = mapped_column(Date, index=True)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    frame_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False
+    )
+
+    symbol_ref: Mapped[Symbol | None] = relationship()

@@ -14,7 +14,7 @@ from invest_bot.db.repositories import (
 from invest_bot.db.write_path import SqlAlchemyMarketDataWriter
 from invest_bot.market.collector import MarketDataCollector
 from invest_bot.market.storage import CsvStorage
-from tests.helpers import make_test_dir
+from tests.helpers import init_test_db, make_test_dir
 
 
 def make_db_url(test_dir) -> str:
@@ -23,7 +23,9 @@ def make_db_url(test_dir) -> str:
 
 def test_market_data_collector_dual_writes_csv_and_db():
     test_dir = make_test_dir("db_write_dual_write")
-    writer = SqlAlchemyMarketDataWriter(make_db_url(test_dir))
+    database_url = make_db_url(test_dir)
+    init_test_db(database_url)
+    writer = SqlAlchemyMarketDataWriter(database_url)
     collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(test_dir / "raw"), db_writer=writer)
 
     collector.save_stock_info("5930", pd.DataFrame([{"pdno": "005930", "prdt_abrv_name": "삼성전자", "prdt_type_cd": "KOSPI"}]))
@@ -56,7 +58,7 @@ def test_market_data_collector_dual_writes_csv_and_db():
     assert (test_dir / "raw" / "daily_prices" / "5930_20260301_20260302.csv").exists()
     assert (test_dir / "raw" / "investor_daily_summary" / "5930_20260302.csv").exists()
 
-    session_factory = build_session_factory(build_engine(make_db_url(test_dir)))
+    session_factory = build_session_factory(build_engine(database_url))
     stock_repo = SqlAlchemyStockRepository(session_factory)
     daily_repo = SqlAlchemyDailyPriceRepository(session_factory)
     investor_repo = SqlAlchemyInvestorDailyRepository(session_factory)
@@ -81,7 +83,9 @@ def test_market_data_collector_dual_writes_csv_and_db():
 
 def test_db_writer_reuses_same_trade_date_without_duplicates():
     test_dir = make_test_dir("db_write_dedup")
-    writer = SqlAlchemyMarketDataWriter(make_db_url(test_dir))
+    database_url = make_db_url(test_dir)
+    init_test_db(database_url)
+    writer = SqlAlchemyMarketDataWriter(database_url)
 
     writer.save_daily_prices(
         "005930",
@@ -110,7 +114,7 @@ def test_db_writer_reuses_same_trade_date_without_duplicates():
         pd.DataFrame([{"stck_bsop_date": "20260302", "frgn_ntby_qty": "120"}]),
     )
 
-    session_factory = build_session_factory(build_engine(make_db_url(test_dir)))
+    session_factory = build_session_factory(build_engine(database_url))
     daily_repo = SqlAlchemyDailyPriceRepository(session_factory)
     investor_repo = SqlAlchemyInvestorDailyRepository(session_factory)
 

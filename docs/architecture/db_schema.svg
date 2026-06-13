@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="820" viewBox="0 0 1320 820">
+  <style>
+    .title { font: 700 28px sans-serif; fill: #172033; }
+    .box { fill: #f8fbff; stroke: #34507a; stroke-width: 2; rx: 14; ry: 14; }
+    .head { fill: #dcecff; }
+    .name { font: 700 20px sans-serif; fill: #172033; }
+    .text { font: 15px monospace; fill: #22324d; }
+    .note { font: 14px sans-serif; fill: #42536f; }
+    .line { stroke: #34507a; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+    .line-soft { stroke: #5a7299; stroke-width: 2.5; fill: none; marker-end: url(#arrow-soft); }
+    .label { font: 13px sans-serif; fill: #34507a; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34507a"/>
+    </marker>
+    <marker id="arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a7299"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="46" class="title">invest_bot DB-first schema</text>
+  <text x="40" y="74" class="note">Raw collection, processed analytics, and dashboard previews all terminate in DB tables.</text>
+
+  <g transform="translate(60 130)">
+    <rect width="280" height="160" class="box"/>
+    <rect width="280" height="42" class="box head"/>
+    <text x="18" y="28" class="name">symbols</text>
+    <text x="18" y="68" class="text">PK symbol</text>
+    <text x="18" y="92" class="text">symbol_name</text>
+    <text x="18" y="116" class="text">market</text>
+    <text x="18" y="140" class="text">is_active, created_at, updated_at</text>
+  </g>
+
+  <g transform="translate(440 120)">
+    <rect width="320" height="190" class="box"/>
+    <rect width="320" height="42" class="box head"/>
+    <text x="18" y="28" class="name">daily_prices</text>
+    <text x="18" y="68" class="text">PK id</text>
+    <text x="18" y="92" class="text">FK symbol -&gt; symbols.symbol</text>
+    <text x="18" y="116" class="text">trade_date</text>
+    <text x="18" y="140" class="text">open/high/low/close_price</text>
+    <text x="18" y="164" class="text">volume, turnover, source_filename</text>
+  </g>
+
+  <g transform="translate(820 120)">
+    <rect width="320" height="190" class="box"/>
+    <rect width="320" height="42" class="box head"/>
+    <text x="18" y="28" class="name">investor_daily</text>
+    <text x="18" y="68" class="text">PK id</text>
+    <text x="18" y="92" class="text">FK symbol -&gt; symbols.symbol</text>
+    <text x="18" y="116" class="text">trade_date</text>
+    <text x="18" y="140" class="text">foreign/institutional/personal_net_qty</text>
+    <text x="18" y="164" class="text">raw_payload, source_filename</text>
+  </g>
+
+  <g transform="translate(170 450)">
+    <rect width="320" height="190" class="box"/>
+    <rect width="320" height="42" class="box head"/>
+    <text x="18" y="28" class="name">stock_info_snapshots</text>
+    <text x="18" y="68" class="text">PK id</text>
+    <text x="18" y="92" class="text">FK symbol -&gt; symbols.symbol</text>
+    <text x="18" y="116" class="text">captured_at</text>
+    <text x="18" y="140" class="text">product_name, market_code</text>
+    <text x="18" y="164" class="text">raw_payload, source_filename</text>
+  </g>
+
+  <g transform="translate(610 430)">
+    <rect width="420" height="220" class="box"/>
+    <rect width="420" height="42" class="box head"/>
+    <text x="18" y="28" class="name">dataset_frames</text>
+    <text x="18" y="68" class="text">PK id</text>
+    <text x="18" y="92" class="text">FK symbol -&gt; symbols.symbol (nullable)</text>
+    <text x="18" y="116" class="text">dataset, filename, as_of_date</text>
+    <text x="18" y="140" class="text">row_count</text>
+    <text x="18" y="164" class="text">frame_json</text>
+    <text x="18" y="188" class="text">created_at, updated_at</text>
+  </g>
+
+  <path d="M 340 210 L 400 210 L 400 180 L 440 180" class="line"/>
+  <text x="362" y="175" class="label">1:N</text>
+
+  <path d="M 340 232 L 380 232 L 380 96 L 980 96 L 980 120" class="line"/>
+  <text x="666" y="88" class="label">1:N</text>
+
+  <path d="M 200 290 L 120 290 L 120 525 L 170 525" class="line-soft"/>
+  <text x="86" y="410" class="label">snapshot</text>
+
+  <path d="M 310 290 L 310 365 L 820 365 L 820 430" class="line-soft"/>
+  <text x="530" y="355" class="label">dataset frame</text>
+
+  <text x="70" y="720" class="note">`dataset_frames` stores raw snapshots plus processed outputs such as indicators, signals, market reports, and backtests.</text>
+  <text x="70" y="748" class="note">Runtime services read prepared schema only. Schema creation and upgrades are handled by `scripts/init_db.py` and Alembic migrations.</text>
+  <text x="70" y="776" class="note">Docker Compose mounts PostgreSQL data to `INVEST_BOT_DB_DATA_DIR` so re-running compose preserves prior collection and analysis results.</text>
+</svg>

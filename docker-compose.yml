@@ -9,7 +9,7 @@ services:
     ports:
       - "${INVEST_BOT_DB_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ${INVEST_BOT_DB_DATA_DIR:-./.docker/postgres}:/var/lib/postgresql/data
     healthcheck:
       test:
         - CMD-SHELL
@@ -33,8 +33,8 @@ services:
     environment:
       INVEST_BOT_APP_ROLE: migrate
       PYTHONPATH: /app/src
-      DATABASE_URL: postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}
-    command: ["python", "-m", "invest_bot.db.migrate_runtime"]
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}}
+    command: ["python", "scripts/init_db.py"]
     restart: "no"
 
   scheduler:
@@ -52,7 +52,7 @@ services:
     environment:
       INVEST_BOT_APP_ROLE: scheduler
       PYTHONPATH: /app/src
-      DATABASE_URL: postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}}
     command: ["python", "scripts/run_scheduled_collection.py"]
     restart: unless-stopped
 
@@ -71,7 +71,7 @@ services:
     environment:
       INVEST_BOT_APP_ROLE: web
       PYTHONPATH: /app/src
-      DATABASE_URL: postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}}
       INVEST_BOT_DASHBOARD_HOST: 0.0.0.0
       INVEST_BOT_DASHBOARD_PORT: ${INVEST_BOT_DASHBOARD_PORT:-8000}
     ports:
@@ -95,10 +95,7 @@ services:
     environment:
       INVEST_BOT_APP_ROLE: collector
       PYTHONPATH: /app/src
-      DATABASE_URL: postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${INVEST_BOT_DB_USER:-invest_bot}:${INVEST_BOT_DB_PASSWORD:-invest_bot}@db:5432/${INVEST_BOT_DB_NAME:-invest_bot}}
       INVEST_BOT_ENABLE_DB_WRITE: "true"
     command: ["python", "scripts/run_collection.py", "005930"]
     restart: "no"
-
-volumes:
-  postgres_data:

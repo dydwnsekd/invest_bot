@@ -121,7 +121,7 @@ def build_report_entries(
 ) -> list[dict[str, object]]:
     entries: list[dict[str, object]] = []
     for preview in previews:
-        frame = read_preview_frame(preview.path)
+        frame = read_preview_frame(preview)
         if frame.empty:
             continue
         row = frame.iloc[-1]
@@ -192,7 +192,7 @@ def render_market_report_card(
     read_preview_frame: Callable[[object], pd.DataFrame],
     load_indicator_frame_for_symbol: Callable[[str], pd.DataFrame | None],
 ) -> None:
-    frame = frame if frame is not None else read_preview_frame(preview.path)
+    frame = frame if frame is not None else read_preview_frame(preview)
     if frame.empty:
         return
     row = frame.iloc[-1]
@@ -253,7 +253,7 @@ def render_signal_card(
     *,
     read_preview_frame: Callable[[object], pd.DataFrame],
 ) -> None:
-    frame = read_preview_frame(preview.path)
+    frame = read_preview_frame(preview)
     if frame.empty:
         return
     row = frame.iloc[-1]

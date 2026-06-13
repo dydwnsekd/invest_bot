@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from invest_bot.db.contracts import DailyPriceRecord, InvestorDailyRecord, StockInfoSnapshotRecord, StockRecord
-from invest_bot.db.engine import build_engine, build_session_factory, ensure_schema
+from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.repositories import (
     SqlAlchemyDailyPriceRepository,
     SqlAlchemyInvestorDailyRepository,
@@ -20,7 +20,6 @@ from invest_bot.db.repositories import (
 class SqlAlchemyMarketDataWriter:
     def __init__(self, database_url: str, *, default_market: str = "domestic_stock") -> None:
         self.engine = build_engine(database_url)
-        ensure_schema(self.engine)
         self.session_factory = build_session_factory(self.engine)
         self.default_market = default_market
         self.stock_repository = SqlAlchemyStockRepository(self.session_factory)

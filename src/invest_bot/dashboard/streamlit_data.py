@@ -24,7 +24,7 @@ def render_data_tab(snapshot, service: DashboardDataService, *, read_preview_fra
 
 
 def render_dataset_preview(preview: DatasetPreview, service: DashboardDataService, *, read_preview_frame) -> None:
-    frame = read_preview_frame(preview.path)
+    frame = read_preview_frame(preview)
     default_columns = [column for column in preview.recommended_columns if column in frame.columns]
     if "symbol_name" in frame.columns and "symbol_name" not in default_columns:
         default_columns.insert(0, "symbol_name")

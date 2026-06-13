@@ -12,7 +12,6 @@
 - [x] `.venv` 생성 및 기본 실행 확인
 - [x] 파일 기반 설정 구조 도입
 - [x] `config/app.yaml.example` 작성
-- [x] `config/kis_credentials.yaml.example` 작성
 - [x] 비밀 파일 `gitignore` 처리
 
 ## 남은 항목
@@ -29,4 +28,3 @@
 - [requirements-dev.txt](/C:/Users/user/PycharmProjects/invest_bot/requirements-dev.txt)
 - [pytest.ini](/C:/Users/user/PycharmProjects/invest_bot/pytest.ini)
 - [app.yaml.example](/C:/Users/user/PycharmProjects/invest_bot/config/app.yaml.example)
-- [kis_credentials.yaml.example](/C:/Users/user/PycharmProjects/invest_bot/config/kis_credentials.yaml.example)

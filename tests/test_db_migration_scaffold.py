@@ -1,21 +1,35 @@
+from invest_bot.config.settings import AppSettings
+from tests.helpers import make_test_dir
+
 from invest_bot.db import Base, build_database_url
 from invest_bot.db.migration import should_stamp_existing_schema
 
 
-def test_build_database_url_prefers_explicit_database_url(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://demo:secret@db:5432/demo")
-    assert build_database_url() == "postgresql+psycopg://demo:secret@db:5432/demo"
+def test_build_database_url_prefers_direct_database_url_from_app_yaml():
+    test_dir = make_test_dir("migration_direct_url")
+    config_path = test_dir / "app.yaml"
+    config_path.write_text("database_url: postgresql+psycopg://demo:secret@db:5432/demo\n", encoding="utf-8")
+
+    assert build_database_url(AppSettings.from_file(config_path)) == "postgresql+psycopg://demo:secret@db:5432/demo"
 
 
-def test_build_database_url_builds_from_invest_bot_env(monkeypatch):
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.setenv("INVEST_BOT_DB_HOST", "db")
-    monkeypatch.setenv("INVEST_BOT_DB_PORT", "5433")
-    monkeypatch.setenv("INVEST_BOT_DB_NAME", "sample")
-    monkeypatch.setenv("INVEST_BOT_DB_USER", "user+name")
-    monkeypatch.setenv("INVEST_BOT_DB_PASSWORD", "pass word")
+def test_build_database_url_builds_from_app_yaml_fields():
+    test_dir = make_test_dir("migration_db_fields")
+    config_path = test_dir / "app.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "db_host: db",
+                "db_port: 5433",
+                "db_name: sample",
+                "db_user: user+name",
+                "db_password: pass word",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
-    assert build_database_url() == "postgresql+psycopg://user%2Bname:pass+word@db:5433/sample"
+    assert build_database_url(AppSettings.from_file(config_path)) == "postgresql+psycopg://user%2Bname:pass+word@db:5433/sample"
 
 
 def test_initial_db_metadata_exposes_expected_tables():
@@ -23,7 +37,7 @@ def test_initial_db_metadata_exposes_expected_tables():
 
 
 def test_should_stamp_existing_schema_when_bootstrap_tables_exist_without_version_table():
-    existing_tables = {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily"}
+    existing_tables = {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily", "dataset_frames"}
     assert should_stamp_existing_schema(existing_tables, has_version_table=False) is True
 
 

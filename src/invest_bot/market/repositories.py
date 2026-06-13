@@ -15,6 +15,12 @@ class DatasetStorage(Protocol):
     def save(self, dataset: str, filename: str, frame: pd.DataFrame) -> SavedDataset:
         ...
 
+    def load(self, dataset: str, filename: str) -> pd.DataFrame:
+        ...
+
+    def latest_filename(self, dataset: str, symbol: str) -> str | None:
+        ...
+
 
 class MarketDataWriter(Protocol):
     def save_daily_prices(

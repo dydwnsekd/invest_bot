@@ -29,6 +29,10 @@
 - Keep mock trading and live trading execution paths separate.
 - Prefer project-specific wrappers over direct reuse of reference scripts.
 - Keep secrets outside the repository.
+- Treat the database as the default persistence authority for collected and processed datasets.
+- Keep schema creation and upgrades in migrations or explicit init scripts; runtime constructors must not call `create_all()`.
+- Keep DB snapshot persistence (`dataset_frames`) and normalized table writes as separate responsibilities with explicit flags and failure boundaries.
+- When a UI or service accepts injected storage or roots, helper functions must preserve that caller context instead of reopening default runtime state.
 
 ## Safety rules
 

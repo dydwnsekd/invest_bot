@@ -1,19 +1,22 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from io import StringIO
 from typing import Sequence
 
+import pandas as pd
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from invest_bot.db.contracts import (
     DailyPriceRecord,
+    DatasetFrameRecord,
     InvestorDailyRecord,
     StockInfoSnapshotRecord,
     StockRecord,
 )
-from invest_bot.db.models import DailyPrice, InvestorDaily, StockInfoSnapshot, Symbol
+from invest_bot.db.models import DatasetFrame, DailyPrice, InvestorDaily, StockInfoSnapshot, Symbol
 
 
 class SqlAlchemyStockRepository:
@@ -178,6 +181,99 @@ class SqlAlchemyInvestorDailyRepository:
             return session.scalar(select(func.max(InvestorDaily.trade_date)).where(InvestorDaily.symbol == normalized))
 
 
+class SqlAlchemyDatasetFrameRepository:
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self.session_factory = session_factory
+
+    def save(self, record: DatasetFrameRecord) -> None:
+        normalized = normalize_symbol(record.symbol) if record.symbol else None
+        with self.session_factory() as session:
+            if normalized:
+                ensure_symbol(session, normalized)
+            existing = session.scalar(
+                select(DatasetFrame).where(
+                    DatasetFrame.dataset == record.dataset,
+                    DatasetFrame.filename == record.filename,
+                )
+            )
+            if existing is None:
+                existing = DatasetFrame(dataset=record.dataset, filename=record.filename)
+                session.add(existing)
+            existing.symbol = normalized
+            existing.as_of_date = record.as_of_date
+            existing.row_count = record.row_count
+            existing.frame_json = record.frame_json
+            existing.created_at = record.created_at
+            existing.updated_at = datetime.now(UTC)
+            session.commit()
+
+    def load(self, dataset: str, filename: str) -> DatasetFrameRecord | None:
+        with self.session_factory() as session:
+            row = session.scalar(
+                select(DatasetFrame).where(DatasetFrame.dataset == dataset, DatasetFrame.filename == filename)
+            )
+            if row is None:
+                return None
+            return DatasetFrameRecord(
+                dataset=row.dataset,
+                filename=row.filename,
+                frame_json=row.frame_json,
+                row_count=row.row_count,
+                created_at=row.created_at,
+                symbol=row.symbol or "",
+                as_of_date=row.as_of_date,
+            )
+
+    def latest_for_symbol(self, dataset: str, symbol: str) -> DatasetFrameRecord | None:
+        normalized = normalize_symbol(symbol)
+        with self.session_factory() as session:
+            row = session.scalar(
+                select(DatasetFrame)
+                .where(DatasetFrame.dataset == dataset, DatasetFrame.symbol == normalized)
+                .order_by(DatasetFrame.as_of_date.desc(), DatasetFrame.created_at.desc(), DatasetFrame.id.desc())
+                .limit(1)
+            )
+            if row is None:
+                return None
+            return DatasetFrameRecord(
+                dataset=row.dataset,
+                filename=row.filename,
+                frame_json=row.frame_json,
+                row_count=row.row_count,
+                created_at=row.created_at,
+                symbol=row.symbol or "",
+                as_of_date=row.as_of_date,
+            )
+
+    def list_latest(self, datasets: Sequence[str]) -> Sequence[DatasetFrameRecord]:
+        records: list[DatasetFrameRecord] = []
+        with self.session_factory() as session:
+            for dataset in datasets:
+                rows = session.scalars(
+                    select(DatasetFrame)
+                    .where(DatasetFrame.dataset == dataset)
+                    .order_by(DatasetFrame.as_of_date.desc(), DatasetFrame.created_at.desc(), DatasetFrame.id.desc())
+                ).all()
+                seen_symbols: set[str] = set()
+                for row in rows:
+                    key = row.symbol or row.filename
+                    if key in seen_symbols:
+                        continue
+                    seen_symbols.add(key)
+                    records.append(
+                        DatasetFrameRecord(
+                            dataset=row.dataset,
+                            filename=row.filename,
+                            frame_json=row.frame_json,
+                            row_count=row.row_count,
+                            created_at=row.created_at,
+                            symbol=row.symbol or "",
+                            as_of_date=row.as_of_date,
+                        )
+                    )
+        return records
+
+
 def ensure_symbol(session: Session, symbol: str, *, symbol_name: str | None = None, market: str = "unknown") -> None:
     SqlAlchemyStockRepository._upsert_with_session(
         session,
@@ -202,3 +298,13 @@ def to_float(value: Decimal | None) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def frame_to_json(frame: pd.DataFrame) -> str:
+    return frame.to_json(orient="table", date_format="iso", force_ascii=False)
+
+
+def frame_from_json(payload: str) -> pd.DataFrame:
+    if not payload.strip():
+        return pd.DataFrame()
+    return pd.read_json(StringIO(payload), orient="table")

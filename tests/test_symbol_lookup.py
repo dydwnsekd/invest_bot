@@ -121,3 +121,25 @@ def test_symbol_lookup_lists_deduplicated_entries_for_picker():
         ("000660", "SK하이닉스"),
         ("005930", "삼성전자"),
     ]
+
+
+def test_symbol_lookup_falls_back_to_master_entries_when_db_snapshot_load_fails():
+    test_dir = make_test_dir("symbol_lookup_db_fallback")
+    repo = StubStockMasterRepository(test_dir / "stock_master.csv")
+    repo.write_entries([{"symbol": "005930", "symbol_name": "삼성전자", "market": "KOSPI"}])
+    lookup = SymbolLookup(master_repository=repo)
+
+    class FailingStorage:
+        class Repository:
+            @staticmethod
+            def list_latest(_datasets):
+                raise RuntimeError("db unavailable")
+
+        repository = Repository()
+
+    lookup.dataset_storage = FailingStorage()
+
+    resolved = lookup.resolve("삼성전자")
+
+    assert resolved.symbol == "005930"
+    assert resolved.symbol_name == "삼성전자"

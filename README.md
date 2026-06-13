@@ -62,7 +62,7 @@
 ### DB 마이그레이션 초안
 
 - Postgres 기반 docker-compose 초안 포함
-- `.env` / 환경변수 기반 DB 설정 로드 지원
+- `config/app.yaml` 기반 DB 설정 로드 지원
 - 저장소(Repository) 계약과 ERD/마이그레이션 계획 문서화 완료
 - 실제 Alembic/SQLAlchemy 마이그레이션은 아직 미구현이며, 현재 `migrate` 컨테이너는 준비 상태 점검만 수행
 
@@ -78,7 +78,6 @@ invest_bot/
     strategies/
   config/
     app.yaml.example
-    kis_credentials.yaml.example
     collection_schedule.yaml.example
   scripts/
     run_collection.py
@@ -106,13 +105,12 @@ invest_bot/
 실제 실행 전 아래 예시 파일을 복사해서 사용합니다.
 
 - [`config/app.yaml.example`](/C:/Users/user/PycharmProjects/invest_bot/config/app.yaml.example) -> `config/app.yaml`
-- [`config/kis_credentials.yaml.example`](/C:/Users/user/PycharmProjects/invest_bot/config/kis_credentials.yaml.example) -> `config/kis_credentials.yaml`
 - [`config/collection_schedule.yaml.example`](/C:/Users/user/PycharmProjects/invest_bot/config/collection_schedule.yaml.example) -> `config/collection_schedule.yaml`
 
 실제 설정 파일은 `.gitignore`에 포함되어 있습니다.
 
-KIS API 키/시크릿은 `config/kis_credentials.yaml` 한 곳에서만 관리합니다.
-`.env`나 `config/app.yaml`의 KIS 관련 값은 읽지 않습니다.
+DB 접근 정보와 KIS API 키/시크릿은 `config/app.yaml` 한 곳에서 관리합니다.
+`config/kis_credentials.yaml`은 더 이상 읽지 않습니다.
 
 ## 설치
 

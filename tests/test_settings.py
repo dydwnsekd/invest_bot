@@ -3,34 +3,12 @@ from tests.helpers import make_test_dir
 
 
 def _clear_settings_env(monkeypatch) -> None:
-    for key in [
-        "DATABASE_URL",
-        "INVEST_BOT_APP_NAME",
-        "INVEST_BOT_MARKET",
-        "INVEST_BOT_TRADING_MODE",
-        "INVEST_BOT_ENVIRONMENT",
-        "INVEST_BOT_LOG_LEVEL",
-        "INVEST_BOT_DB_HOST",
-        "INVEST_BOT_DB_PORT",
-        "INVEST_BOT_DB_NAME",
-        "INVEST_BOT_DB_USER",
-        "INVEST_BOT_DB_PASSWORD",
-        "INVEST_BOT_ENABLE_DB_WRITE",
-        "INVEST_BOT_KIS_APP_KEY",
-        "INVEST_BOT_KIS_APP_SECRET",
-        "INVEST_BOT_KIS_MOCK_APP_KEY",
-        "INVEST_BOT_KIS_MOCK_APP_SECRET",
-    ]:
+    for key in ["DATABASE_URL", "INVEST_BOT_DB_HOST", "INVEST_BOT_DB_PORT", "INVEST_BOT_DB_NAME", "INVEST_BOT_DB_USER", "INVEST_BOT_DB_PASSWORD"]:
         monkeypatch.delenv(key, raising=False)
-
-
-def _disable_project_dotenv(monkeypatch) -> None:
-    monkeypatch.setattr("invest_bot.config.settings.load_dotenv", lambda *args, **kwargs: None)
 
 
 def test_app_settings_defaults_to_mock_mode(monkeypatch):
     _clear_settings_env(monkeypatch)
-    _disable_project_dotenv(monkeypatch)
     test_dir = make_test_dir("settings_defaults")
     settings = AppSettings.from_file(test_dir / "missing.yaml")
 
@@ -42,10 +20,8 @@ def test_app_settings_defaults_to_mock_mode(monkeypatch):
 
 def test_app_settings_loads_file_values(monkeypatch):
     _clear_settings_env(monkeypatch)
-    _disable_project_dotenv(monkeypatch)
     test_dir = make_test_dir("settings_load")
     config_path = test_dir / "app.yaml"
-    credentials_path = test_dir / "kis_credentials.yaml"
     config_path.write_text(
         "\n".join(
             [
@@ -54,6 +30,10 @@ def test_app_settings_loads_file_values(monkeypatch):
                 "trading_mode: live",
                 "environment: test",
                 "log_level: debug",
+                "kis_live_app_key: live-key",
+                "kis_live_app_secret: live-secret",
+                "kis_mock_app_key: mock-key",
+                "kis_mock_app_secret: mock-secret",
                 "db_host: db",
                 "db_port: 5433",
                 "db_name: custom_db",
@@ -64,19 +44,8 @@ def test_app_settings_loads_file_values(monkeypatch):
         ),
         encoding="utf-8",
     )
-    credentials_path.write_text(
-        "\n".join(
-            [
-                "kis_app_key: live-key",
-                "kis_app_secret: live-secret",
-                "kis_mock_app_key: mock-key",
-                "kis_mock_app_secret: mock-secret",
-            ]
-        ),
-        encoding="utf-8",
-    )
 
-    settings = AppSettings.from_file(config_path, credentials_path)
+    settings = AppSettings.from_file(config_path)
 
     assert settings.app_name == "custom_bot"
     assert settings.kis_app_key == "live-key"
@@ -85,18 +54,25 @@ def test_app_settings_loads_file_values(monkeypatch):
     assert settings.enable_db_write is True
 
 
-def test_app_settings_reads_database_env_contract(monkeypatch):
+def test_app_settings_builds_database_url_from_file_values(monkeypatch):
     _clear_settings_env(monkeypatch)
-    _disable_project_dotenv(monkeypatch)
-    monkeypatch.setenv("INVEST_BOT_DB_HOST", "db")
-    monkeypatch.setenv("INVEST_BOT_DB_PORT", "15432")
-    monkeypatch.setenv("INVEST_BOT_DB_NAME", "invest_bot_dev")
-    monkeypatch.setenv("INVEST_BOT_DB_USER", "tester")
-    monkeypatch.setenv("INVEST_BOT_DB_PASSWORD", "secret")
-    monkeypatch.setenv("INVEST_BOT_ENABLE_DB_WRITE", "true")
+    test_dir = make_test_dir("settings_db_file")
+    config_path = test_dir / "app.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "db_host: db",
+                "db_port: 15432",
+                "db_name: invest_bot_dev",
+                "db_user: tester",
+                "db_password: secret",
+                "enable_db_write: true",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
-    test_dir = make_test_dir("settings_db_env")
-    settings = AppSettings.from_file(test_dir / "missing.yaml")
+    settings = AppSettings.from_file(config_path)
 
     assert settings.db_host == "db"
     assert settings.db_port == 15432
@@ -107,31 +83,26 @@ def test_app_settings_reads_database_env_contract(monkeypatch):
     assert settings.database_url == "postgresql+psycopg://tester:secret@db:15432/invest_bot_dev"
 
 
-def test_app_settings_prefers_explicit_database_url(monkeypatch):
+def test_app_settings_prefers_database_url_from_file(monkeypatch):
     _clear_settings_env(monkeypatch)
-    _disable_project_dotenv(monkeypatch)
-    monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///tmp/invest_bot.db")
+    test_dir = make_test_dir("settings_direct_url")
+    config_path = test_dir / "app.yaml"
+    config_path.write_text("database_url: sqlite+pysqlite:///tmp/invest_bot.db\n", encoding="utf-8")
 
-    settings = AppSettings()
+    settings = AppSettings.from_file(config_path)
 
     assert settings.database_url == "sqlite+pysqlite:///tmp/invest_bot.db"
 
 
-def test_app_settings_ignores_kis_env_vars_and_reads_credentials_file(monkeypatch):
+def test_app_settings_reads_kis_credentials_from_app_yaml(monkeypatch):
     _clear_settings_env(monkeypatch)
-    _disable_project_dotenv(monkeypatch)
-    monkeypatch.setenv("INVEST_BOT_KIS_APP_KEY", "env-live-key")
-    monkeypatch.setenv("INVEST_BOT_KIS_APP_SECRET", "env-live-secret")
-    monkeypatch.setenv("INVEST_BOT_KIS_MOCK_APP_KEY", "env-mock-key")
-    monkeypatch.setenv("INVEST_BOT_KIS_MOCK_APP_SECRET", "env-mock-secret")
-
-    test_dir = make_test_dir("settings_credentials_only")
-    credentials_path = test_dir / "kis_credentials.yaml"
-    credentials_path.write_text(
+    test_dir = make_test_dir("settings_credentials_in_app")
+    config_path = test_dir / "app.yaml"
+    config_path.write_text(
         "\n".join(
             [
-                "kis_app_key: file-live-key",
-                "kis_app_secret: file-live-secret",
+                "kis_live_app_key: file-live-key",
+                "kis_live_app_secret: file-live-secret",
                 "kis_mock_app_key: file-mock-key",
                 "kis_mock_app_secret: file-mock-secret",
             ]
@@ -139,7 +110,7 @@ def test_app_settings_ignores_kis_env_vars_and_reads_credentials_file(monkeypatc
         encoding="utf-8",
     )
 
-    settings = AppSettings.from_file(test_dir / "missing.yaml", credentials_path)
+    settings = AppSettings.from_file(config_path)
 
     assert settings.kis_live_app_key == "file-live-key"
     assert settings.kis_live_app_secret == "file-live-secret"

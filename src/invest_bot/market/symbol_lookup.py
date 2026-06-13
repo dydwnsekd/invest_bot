@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from invest_bot.config.settings import AppSettings
+from invest_bot.db.frame_storage import DbFrameStorage
 from invest_bot.market.repositories import StockMasterRepositoryProtocol
 from invest_bot.market.stock_master import StockMasterRepository
 
@@ -27,16 +29,28 @@ class SymbolLookup:
 
     def __init__(
         self,
-        stock_info_dir: str | Path = "data/raw/domestic_stock/stock_info",
+        stock_info_dir: str | Path | None = None,
         master_repository: StockMasterRepositoryProtocol | None = None,
+        settings: AppSettings | None = None,
     ) -> None:
-        stock_dir = Path(stock_info_dir)
-        if stock_dir.is_absolute():
-            self.stock_info_dir = stock_dir
+        self.dataset_storage = None
+        self._default_db_storage = stock_info_dir is None
+        self._settings = settings
+        stock_dir = Path(stock_info_dir) if stock_info_dir is not None else Path("data/raw/domestic_stock/stock_info")
+        if stock_info_dir is not None:
+            if stock_dir.is_absolute():
+                self.stock_info_dir = stock_dir
+            else:
+                project_root = Path(__file__).resolve().parents[3]
+                self.stock_info_dir = project_root / stock_dir
         else:
-            project_root = Path(__file__).resolve().parents[3]
-            self.stock_info_dir = project_root / stock_dir
+            self.stock_info_dir = stock_dir
         self.master_repository = master_repository or StockMasterRepository()
+
+    def _get_dataset_storage(self) -> DbFrameStorage | None:
+        if self.dataset_storage is None and self._default_db_storage:
+            self.dataset_storage = DbFrameStorage.from_settings(self._settings)
+        return self.dataset_storage
 
     def resolve(self, value: str) -> ResolvedSymbol:
         raw = value.strip()
@@ -134,6 +148,25 @@ class SymbolLookup:
         return list(merged.values())
 
     def _load_stock_info_entries(self) -> list[dict[str, str]]:
+        storage = self._get_dataset_storage()
+        if storage is not None:
+            try:
+                entries: list[dict[str, str]] = []
+                for item in storage.repository.list_latest(["stock_info"]):
+                    frame = storage.load("stock_info", item.filename)
+                    if frame.empty:
+                        continue
+                    symbol_value = frame.iloc[0].get("pdno", "")
+                    symbol = self._normalize_symbol_code(symbol_value) or self._normalize_symbol_code(
+                        Path(item.filename).stem
+                    )
+                    symbol_name = str(frame.iloc[0].get("prdt_abrv_name", "")).strip()
+                    if symbol and symbol_name:
+                        entries.append({"symbol": symbol, "symbol_name": symbol_name})
+                return entries
+            except Exception:
+                return []
+
         if not self.stock_info_dir.exists():
             return []
 

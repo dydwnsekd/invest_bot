@@ -30,3 +30,17 @@ class CsvStorage:
         file_path = dataset_dir / filename
         frame.to_csv(file_path, index=False, encoding="utf-8-sig")
         return SavedDataset(dataset=dataset, path=file_path, rows=len(frame))
+
+    def load(self, dataset: str, filename: str) -> pd.DataFrame:
+        return pd.read_csv(self.root_dir / dataset / filename)
+
+    def latest_filename(self, dataset: str, symbol: str) -> str | None:
+        dataset_dir = self.root_dir / dataset
+        if not dataset_dir.exists():
+            return None
+        matches = sorted(dataset_dir.glob(f"{symbol}_*.csv"), key=lambda path: path.stat().st_mtime, reverse=True)
+        if not matches and dataset == "stock_info":
+            exact_file = dataset_dir / f"{symbol}.csv"
+            if exact_file.exists():
+                return exact_file.name
+        return matches[0].name if matches else None

@@ -4,8 +4,10 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from invest_bot.config.settings import AppSettings
+from invest_bot.db.frame_storage import DbFrameStorage
 from invest_bot.market.repositories import DatasetStorage
-from invest_bot.market.storage import CsvStorage, SavedDataset
+from invest_bot.market.storage import SavedDataset
 
 
 @dataclass(slots=True)
@@ -21,14 +23,13 @@ class DailyPriceAnalyzer:
         self,
         raw_storage: DatasetStorage | None = None,
         processed_storage: DatasetStorage | None = None,
+        settings: AppSettings | None = None,
     ) -> None:
-        self.raw_storage = raw_storage or CsvStorage("data/raw/domestic_stock")
-        self.processed_storage = processed_storage or CsvStorage("data/processed/domestic_stock")
+        self.raw_storage = raw_storage or DbFrameStorage.from_settings(settings)
+        self.processed_storage = processed_storage or DbFrameStorage.from_settings(settings)
 
     def load_daily_prices(self, request: IndicatorRequest) -> pd.DataFrame:
-        file_path = self.raw_storage.root_dir / "daily_prices" / request.source_filename
-        frame = pd.read_csv(file_path)
-        return self._normalize_daily_prices(frame)
+        return self._normalize_daily_prices(self.raw_storage.load("daily_prices", request.source_filename))
 
     def calculate_indicators(self, frame: pd.DataFrame) -> pd.DataFrame:
         if frame.empty:

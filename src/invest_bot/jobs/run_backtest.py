@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-
 from invest_bot.jobs.generate_backtest import BacktestRequest, GoldenCrossBacktestGenerator
 
 
@@ -12,32 +10,15 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _find_latest_file(directory: Path, pattern: str, preparation_hint: str) -> Path:
-    if not directory.exists():
-        raise FileNotFoundError(
-            f"Required directory does not exist: '{directory}'. {preparation_hint}"
-        )
-    matches = sorted(directory.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
-    if not matches:
-        available = ", ".join(path.name for path in sorted(directory.glob("*.csv"))[:10]) or "no csv files found"
-        raise FileNotFoundError(
-            f"No files matched pattern '{pattern}' in '{directory}'. "
-            f"Available files: {available}. {preparation_hint}"
-        )
-    return matches[0]
-
-
 def run_backtest_for_symbol(
     symbol: str,
     generator: GoldenCrossBacktestGenerator | None = None,
 ) -> dict[str, str | int | float]:
     backtest_generator = generator or GoldenCrossBacktestGenerator()
-    source_file = _find_latest_file(
-        backtest_generator.processed_storage.root_dir / "golden_cross_signals",
-        f"{symbol}_*.csv",
-        "Run signal generation first.",
-    )
-    request = BacktestRequest(symbol=symbol, source_filename=source_file.name)
+    source_filename = backtest_generator.processed_storage.latest_filename("golden_cross_signals", symbol)
+    if source_filename is None:
+        raise FileNotFoundError(f"No golden_cross_signals dataset found for symbol '{symbol}'. Run signal generation first.")
+    request = BacktestRequest(symbol=symbol, source_filename=source_filename)
     signal_frame = backtest_generator.load_signal_frame(request)
     result = backtest_generator.run_backtest(symbol, signal_frame)
     trades_saved = backtest_generator.save_trades(request.source_filename, result.trades)
@@ -45,7 +26,7 @@ def run_backtest_for_symbol(
     summary_row = result.summary.iloc[0].to_dict()
     return {
         "symbol": symbol,
-        "source_file": source_file.name,
+        "source_file": source_filename,
         "signal_rows": len(signal_frame),
         "trade_count": int(summary_row["trade_count"]),
         "total_return_pct": float(summary_row["total_return_pct"]),
