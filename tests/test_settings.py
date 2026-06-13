@@ -35,6 +35,7 @@ def test_app_settings_loads_file_values(monkeypatch):
                 "kis_mock_app_key: mock-key",
                 "kis_mock_app_secret: mock-secret",
                 "db_host: db",
+                "db_host_docker: db-internal",
                 "db_port: 5433",
                 "db_name: custom_db",
                 "db_user: db_user",
@@ -62,6 +63,7 @@ def test_app_settings_builds_database_url_from_file_values(monkeypatch):
         "\n".join(
             [
                 "db_host: db",
+                "db_host_docker: db-internal",
                 "db_port: 15432",
                 "db_name: invest_bot_dev",
                 "db_user: tester",
@@ -81,6 +83,30 @@ def test_app_settings_builds_database_url_from_file_values(monkeypatch):
     assert settings.db_password == "secret"
     assert settings.enable_db_write is True
     assert settings.database_url == "postgresql+psycopg://tester:secret@db:15432/invest_bot_dev"
+
+
+def test_app_settings_uses_docker_host_override_inside_compose_runtime(monkeypatch):
+    _clear_settings_env(monkeypatch)
+    monkeypatch.setenv("INVEST_BOT_APP_ROLE", "web")
+    test_dir = make_test_dir("settings_db_docker_override")
+    config_path = test_dir / "app.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "db_host: localhost",
+                "db_host_docker: db",
+                "db_port: 5432",
+                "db_name: invest_bot",
+                "db_user: invest_bot",
+                "db_password: invest_bot",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = AppSettings.from_file(config_path)
+
+    assert settings.database_url == "postgresql+psycopg://invest_bot:invest_bot@db:5432/invest_bot"
 
 
 def test_app_settings_prefers_database_url_from_file(monkeypatch):

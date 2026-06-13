@@ -75,6 +75,7 @@ DB endpoint는 `config/app.yaml`에서 관리한다.
 - `database_url`가 비어 있지 않으면 그 값을 그대로 사용
 - `database_url`가 비어 있으면 `db_host`, `db_port`, `db_name`, `db_user`, `db_password`를 조합
 - Docker Compose를 쓸 때도 앱 컨테이너는 동일한 `config/app.yaml`을 읽는다
+- `db_host_docker`가 비어 있지 않고 `INVEST_BOT_APP_ROLE`이 `migrate`, `scheduler`, `web`, `collector` 중 하나이면 컨테이너 내부에서는 `db_host_docker`를 우선 사용한다
 
 ## Initialization
 

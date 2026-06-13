@@ -28,6 +28,7 @@ def test_app_yaml_example_exposes_db_and_kis_settings():
         "kis_mock_app_key:",
         "kis_mock_app_secret:",
         "db_host:",
+        "db_host_docker:",
         "db_port:",
         "db_name:",
         "db_user:",
@@ -45,7 +46,7 @@ def test_docker_compose_defines_db_migration_startup_flow():
     assert services["db"]["volumes"] == ["${INVEST_BOT_DB_DATA_DIR:-./.docker/postgres}:/var/lib/postgresql/data"]
     assert services["migrate"]["command"] == ["python", "scripts/init_db.py"]
     assert services["migrate"]["depends_on"]["db"]["condition"] == "service_healthy"
-    assert services["migrate"]["environment"]["DATABASE_URL"].startswith("${DATABASE_URL:-postgresql+psycopg://")
+    assert services["migrate"]["environment"]["INVEST_BOT_APP_ROLE"] == "migrate"
 
     for service_name in ["scheduler", "web", "collector"]:
         depends_on = services[service_name]["depends_on"]

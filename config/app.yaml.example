@@ -9,6 +9,7 @@ kis_live_app_secret: ""
 kis_mock_app_key: ""
 kis_mock_app_secret: ""
 db_host: localhost
+db_host_docker: db
 db_port: 5432
 db_name: invest_bot
 db_user: invest_bot

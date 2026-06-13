@@ -151,20 +151,20 @@ erDiagram
 `docker-compose.yml`은 이번 단계에서 다음 원칙으로 정리했다.
 
 - `db` service는 기본으로 유지한다.
-- `migrate` service는 현재 Alembic 전 단계의 **SQLAlchemy schema bootstrap**을 담당한다.
+- `migrate` service는 `scripts/init_db.py`를 통해 **Alembic migration 실행**을 담당한다.
 - `web`/`scheduler`/`collector`는 `migrate` 성공을 선행 조건으로 둔다.
-- `env_file`은 repo에 실제 존재하는 `.env.example`을 사용해 초안 실행 가능성을 높인다.
+- 앱 DB endpoint와 KIS credentials는 `config/app.yaml`에서 관리하고, `.env`는 Compose 런타임 변수에만 사용한다.
 
 예상 실행 흐름:
 
 ```bash
-docker compose up db migrate web
+docker compose up -d db migrate web
 ```
 
 향후 migration stack이 추가되면:
 
 ```bash
-docker compose up db web scheduler
+docker compose up -d db migrate web scheduler
 ```
 
 ## Implementation plan

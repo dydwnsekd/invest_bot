@@ -5,7 +5,7 @@
 현재는 실거래 자동화보다 아래 흐름을 안정적으로 만드는 데 초점을 두고 있습니다.
 
 1. 데이터 수집
-2. CSV 저장
+2. DB snapshot 저장
 3. 지표 계산
 4. 전략 신호 생성
 5. 시장 리포트 생성
@@ -24,7 +24,7 @@
 
 ### 분석
 
-- 일봉 CSV 로드 및 컬럼 정규화
+- DB snapshot 또는 파일 fallback 기반 일봉 로드 및 컬럼 정규화
 - 이동평균 계산
   - `ma_5`
   - `ma_20`
@@ -59,12 +59,13 @@
 - `pytest` 기반 테스트
 - 수집, 분석, 전략, 리포트, 대시보드, 스케줄링, 백테스트 테스트 포함
 
-### DB 마이그레이션 초안
+### DB 저장 및 마이그레이션
 
-- Postgres 기반 docker-compose 초안 포함
+- Postgres 기반 `docker-compose` 실행 경로 포함
 - `config/app.yaml` 기반 DB 설정 로드 지원
-- 저장소(Repository) 계약과 ERD/마이그레이션 계획 문서화 완료
-- 실제 Alembic/SQLAlchemy 마이그레이션은 아직 미구현이며, 현재 `migrate` 컨테이너는 준비 상태 점검만 수행
+- Alembic migration과 `scripts/init_db.py` 기반 초기화 경로 구현
+- raw/processed snapshot의 기본 저장 경로는 `dataset_frames`
+- 정규화 테이블 write는 `enable_db_write` 설정으로 제어
 
 ## 프로젝트 구조
 
@@ -110,6 +111,7 @@ invest_bot/
 실제 설정 파일은 `.gitignore`에 포함되어 있습니다.
 
 DB 접근 정보와 KIS API 키/시크릿은 `config/app.yaml` 한 곳에서 관리합니다.
+기본 예시값은 로컬 실행 시 `db_host: localhost`, Docker Compose 내부 실행 시 `db_host_docker: db`를 자동 사용하도록 맞춰져 있습니다.
 `config/kis_credentials.yaml`은 더 이상 읽지 않습니다.
 
 ## 설치
@@ -126,6 +128,11 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 대시보드를 포함한 기본 서비스는 `docker-compose.yml` 기준으로 아래 순서로 실행합니다.
 
+현재 기본 설정(`config/app.yaml.example`)은 같은 파일로 두 실행 경로를 모두 지원합니다.
+
+- 호스트 Python 실행: `db_host: localhost`
+- Docker Compose 내부 실행: `db_host_docker: db`
+
 전체 이미지 빌드:
 
 ```bash
@@ -139,6 +146,12 @@ docker compose build
 
 ```bash
 docker compose up -d
+```
+
+대시보드만 빠르게 띄우려면:
+
+```bash
+docker compose up -d db migrate web
 ```
 
 실행 상태 확인:
@@ -202,6 +215,8 @@ python scripts/run_tests.py
 ```powershell
 python scripts/run_collection.py 005930
 ```
+
+기본 저장은 DB snapshot이다. 로컬 파일 기반 산출물이 함께 필요한 경우에는 별도 storage 설정이나 export 경로를 사용한다.
 
 ### 3. 다중 종목 배치 수집
 
@@ -319,13 +334,13 @@ data/processed/test_reports/
 
 ## DB 마이그레이션 준비 문서
 
-현재 저장소의 실행 경로는 아직 CSV 기반입니다. 다만 Postgres 전환을 위한 설계 초안은 아래 문서로 정리되어 있습니다.
+현재 저장소의 기본 실행 경로는 DB-first 기준이며, 관련 설계/운영 문서는 아래에 정리되어 있습니다.
 
 - [`docs/operations/db_migration_plan.md`](docs/operations/db_migration_plan.md)
 
 이 문서에는 다음 내용이 포함됩니다.
 
-- 현재 CSV 저장 구조 기준 1차 ERD
+- 현재 DB snapshot + 정규화 테이블 기준 ERD
 - `docker-compose.yml` 초안 검토 결과
 - Repository 인터페이스 경계 제안
 - DB 마이그레이션 구현 순서와 위험요인
@@ -357,7 +372,7 @@ data/processed/test_reports/
 ## 현재 진행 상태
 
 - [x] KIS 연동 기반 수집 구조
-- [x] CSV 저장 구조
+- [x] DB snapshot 저장 구조
 - [x] 기본 지표 계산
 - [x] 골든크로스 전략 구현
 - [x] 골든크로스 신호 생성

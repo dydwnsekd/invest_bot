@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -32,6 +33,7 @@ class AppSettings:
     kis_mock_app_secret: str = ""
     database_url_value: str = ""
     db_host: str = "localhost"
+    db_host_docker: str = ""
     db_port: int = 5432
     db_name: str = "invest_bot"
     db_user: str = "invest_bot"
@@ -72,6 +74,7 @@ class AppSettings:
             kis_mock_app_secret=configured_value("kis_mock_app_secret", ""),
             database_url_value=configured_value("database_url", "").strip(),
             db_host=configured_value("db_host", "localhost"),
+            db_host_docker=configured_value("db_host_docker", "").strip(),
             db_port=int(configured_value("db_port", "5432")),
             db_name=configured_value("db_name", "invest_bot"),
             db_user=configured_value("db_user", "invest_bot"),
@@ -102,7 +105,19 @@ class AppSettings:
         if self.database_url_value:
             return self.database_url_value
 
+        host = self.db_host
+        if self._use_docker_network_host():
+            host = self.db_host_docker
+
         user = quote_plus(self.db_user)
         password = quote_plus(self.db_password)
         name = quote_plus(self.db_name)
-        return f"postgresql+psycopg://{user}:{password}@{self.db_host}:{self.db_port}/{name}"
+        return f"postgresql+psycopg://{user}:{password}@{host}:{self.db_port}/{name}"
+
+    def _use_docker_network_host(self) -> bool:
+        return bool(self.db_host_docker) and os.getenv("INVEST_BOT_APP_ROLE", "").strip() in {
+            "migrate",
+            "scheduler",
+            "web",
+            "collector",
+        }
