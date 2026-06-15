@@ -212,9 +212,6 @@ __marimo__/
 
 # Local pytest temp artifacts
 pytest-cache-files-*/
-data/raw/domestic_stock/
-data/processed/domestic_stock/
-data/processed/test_reports/
-data/reference/stock_master.csv
+data/
 /.docker/
 /.idea/
