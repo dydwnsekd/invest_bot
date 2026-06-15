@@ -47,12 +47,14 @@ def test_docker_compose_defines_db_migration_startup_flow():
     assert services["migrate"]["command"] == ["python", "scripts/init_db.py"]
     assert services["migrate"]["depends_on"]["db"]["condition"] == "service_healthy"
     assert services["migrate"]["environment"]["INVEST_BOT_APP_ROLE"] == "migrate"
+    assert services["migrate"]["volumes"] == ["./config:/app/config:ro"]
 
     for service_name in ["scheduler", "web", "collector"]:
         depends_on = services[service_name]["depends_on"]
         assert depends_on["db"]["condition"] == "service_healthy"
         assert depends_on["migrate"]["condition"] == "service_completed_successfully"
         assert services[service_name]["env_file"] == [".env"]
+        assert services[service_name]["volumes"] == ["./config:/app/config:ro"]
 
 
 def test_db_migration_docs_exist_with_required_sections():
@@ -91,3 +93,10 @@ def test_db_migration_docs_exist_with_required_sections():
 
     assert (ROOT / "docs/architecture/db_schema.svg").exists()
     assert (ROOT / "scripts/init_db.py").exists()
+
+
+def test_dockerignore_excludes_runtime_secret_files():
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+
+    for path in [".env", "config/app.yaml"]:
+        assert path in dockerignore

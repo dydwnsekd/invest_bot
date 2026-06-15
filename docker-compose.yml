@@ -33,6 +33,8 @@ services:
     environment:
       INVEST_BOT_APP_ROLE: migrate
       PYTHONPATH: /app/src
+    volumes:
+      - ./config:/app/config:ro
     command: ["python", "scripts/init_db.py"]
     restart: "no"
 
@@ -51,6 +53,8 @@ services:
     environment:
       INVEST_BOT_APP_ROLE: scheduler
       PYTHONPATH: /app/src
+    volumes:
+      - ./config:/app/config:ro
     command: ["python", "scripts/run_scheduled_collection.py"]
     restart: unless-stopped
 
@@ -73,6 +77,8 @@ services:
       INVEST_BOT_DASHBOARD_PORT: ${INVEST_BOT_DASHBOARD_PORT:-8000}
     ports:
       - "${INVEST_BOT_DASHBOARD_PORT:-8000}:8000"
+    volumes:
+      - ./config:/app/config:ro
     command: ["python", "scripts/run_streamlit_dashboard.py"]
     restart: unless-stopped
 
@@ -92,5 +98,7 @@ services:
     environment:
       INVEST_BOT_APP_ROLE: collector
       PYTHONPATH: /app/src
+    volumes:
+      - ./config:/app/config:ro
     command: ["python", "scripts/run_collection.py", "005930"]
     restart: "no"

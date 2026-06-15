@@ -109,6 +109,29 @@ def test_app_settings_uses_docker_host_override_inside_compose_runtime(monkeypat
     assert settings.database_url == "postgresql+psycopg://invest_bot:invest_bot@db:5432/invest_bot"
 
 
+def test_app_settings_defaults_to_compose_db_host_when_override_missing(monkeypatch):
+    _clear_settings_env(monkeypatch)
+    monkeypatch.setenv("INVEST_BOT_APP_ROLE", "web")
+    test_dir = make_test_dir("settings_db_docker_default")
+    config_path = test_dir / "app.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "db_host: localhost",
+                "db_port: 5432",
+                "db_name: invest_bot",
+                "db_user: invest_bot",
+                "db_password: invest_bot",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = AppSettings.from_file(config_path)
+
+    assert settings.database_url == "postgresql+psycopg://invest_bot:invest_bot@db:5432/invest_bot"
+
+
 def test_app_settings_prefers_database_url_from_file(monkeypatch):
     _clear_settings_env(monkeypatch)
     test_dir = make_test_dir("settings_direct_url")

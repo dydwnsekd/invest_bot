@@ -111,6 +111,7 @@ invest_bot/
 실제 설정 파일은 `.gitignore`에 포함되어 있습니다.
 
 DB 접근 정보와 KIS API 키/시크릿은 `config/app.yaml` 한 곳에서 관리합니다.
+Docker Compose는 로컬 `config/` 디렉터리를 컨테이너에 read-only로 마운트하며, 이미지 빌드 레이어에는 실제 `config/app.yaml`을 포함하지 않습니다.
 기본 예시값은 로컬 실행 시 `db_host: localhost`, Docker Compose 내부 실행 시 `db_host_docker: db`를 자동 사용하도록 맞춰져 있습니다.
 `config/kis_credentials.yaml`은 더 이상 읽지 않습니다.
 
@@ -128,7 +129,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 대시보드를 포함한 기본 서비스는 `docker-compose.yml` 기준으로 아래 순서로 실행합니다.
 
-현재 기본 설정(`config/app.yaml.example`)은 같은 파일로 두 실행 경로를 모두 지원합니다.
+현재 기본 설정(`config/app.yaml.example`)은 같은 파일로 두 실행 경로를 모두 지원합니다. Compose 실행 전에는 로컬 `config/app.yaml`을 준비해 두고, Compose가 이를 런타임에 마운트해 사용합니다.
 
 - 호스트 Python 실행: `db_host: localhost`
 - Docker Compose 내부 실행: `db_host_docker: db`
@@ -216,7 +217,7 @@ python scripts/run_tests.py
 python scripts/run_collection.py 005930
 ```
 
-기본 저장은 DB snapshot이다. 로컬 파일 기반 산출물이 함께 필요한 경우에는 별도 storage 설정이나 export 경로를 사용한다.
+기본 저장은 DB snapshot이다. 로컬 파일 기반 산출물이 함께 필요하면 코드에서 다른 storage 구현을 주입하거나 별도 export 스크립트를 사용한다.
 
 ### 3. 다중 종목 배치 수집
 

@@ -2,7 +2,7 @@ from invest_bot.config.settings import AppSettings
 from tests.helpers import make_test_dir
 
 from invest_bot.db import Base, build_database_url
-from invest_bot.db.migration import should_stamp_existing_schema
+from invest_bot.db.migration import INITIAL_SCHEMA_REVISION, resolve_existing_schema_revision, should_stamp_existing_schema
 
 
 def test_build_database_url_prefers_direct_database_url_from_app_yaml():
@@ -36,13 +36,27 @@ def test_initial_db_metadata_exposes_expected_tables():
     assert {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily"}.issubset(Base.metadata.tables)
 
 
-def test_should_stamp_existing_schema_when_bootstrap_tables_exist_without_version_table():
+def test_resolve_existing_schema_revision_returns_head_for_current_schema_without_version_table():
     existing_tables = {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily", "dataset_frames"}
+
+    assert resolve_existing_schema_revision(existing_tables, has_version_table=False) == "head"
+    assert should_stamp_existing_schema(existing_tables, has_version_table=False) is True
+
+
+def test_resolve_existing_schema_revision_returns_initial_revision_for_legacy_schema_without_version_table():
+    existing_tables = {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily"}
+
+    assert resolve_existing_schema_revision(existing_tables, has_version_table=False) == INITIAL_SCHEMA_REVISION
     assert should_stamp_existing_schema(existing_tables, has_version_table=False) is True
 
 
 def test_should_not_stamp_when_alembic_version_exists_or_schema_is_incomplete():
+    assert resolve_existing_schema_revision({"symbols", "daily_prices"}, has_version_table=False) is None
     assert should_stamp_existing_schema({"symbols", "daily_prices"}, has_version_table=False) is False
+    assert resolve_existing_schema_revision(
+        {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily", "alembic_version"},
+        has_version_table=True,
+    ) is None
     assert should_stamp_existing_schema(
         {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily", "alembic_version"},
         has_version_table=True,

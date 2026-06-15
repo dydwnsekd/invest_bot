@@ -105,17 +105,20 @@ class AppSettings:
         if self.database_url_value:
             return self.database_url_value
 
-        host = self.db_host
-        if self._use_docker_network_host():
-            host = self.db_host_docker
+        host = self._resolve_database_host()
 
         user = quote_plus(self.db_user)
         password = quote_plus(self.db_password)
         name = quote_plus(self.db_name)
         return f"postgresql+psycopg://{user}:{password}@{host}:{self.db_port}/{name}"
 
+    def _resolve_database_host(self) -> str:
+        if self._use_docker_network_host():
+            return self.db_host_docker or "db"
+        return self.db_host
+
     def _use_docker_network_host(self) -> bool:
-        return bool(self.db_host_docker) and os.getenv("INVEST_BOT_APP_ROLE", "").strip() in {
+        return os.getenv("INVEST_BOT_APP_ROLE", "").strip() in {
             "migrate",
             "scheduler",
             "web",

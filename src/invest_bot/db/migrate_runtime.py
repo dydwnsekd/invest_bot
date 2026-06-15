@@ -6,7 +6,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
-from invest_bot.db.migration import MANAGED_TABLES, build_database_url, should_stamp_existing_schema
+from invest_bot.db.migration import build_database_url, resolve_existing_schema_revision
 
 
 def build_alembic_config() -> Config:
@@ -29,12 +29,13 @@ def migrate() -> None:
         engine.dispose()
 
     config = build_alembic_config()
-    if should_stamp_existing_schema(existing_tables, has_version_table=has_version_table):
+    revision = resolve_existing_schema_revision(existing_tables, has_version_table=has_version_table)
+    if revision is not None:
         print(
             "Existing bootstrap schema detected without alembic_version; "
-            f"stamping head for tables: {', '.join(sorted(MANAGED_TABLES))}"
+            f"stamping {revision} for tables: {', '.join(sorted(existing_tables))}"
         )
-        command.stamp(config, "head")
+        command.stamp(config, revision)
 
     command.upgrade(config, "head")
 

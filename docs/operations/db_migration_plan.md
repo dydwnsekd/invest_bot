@@ -153,7 +153,7 @@ erDiagram
 - `db` service는 기본으로 유지한다.
 - `migrate` service는 `scripts/init_db.py`를 통해 **Alembic migration 실행**을 담당한다.
 - `web`/`scheduler`/`collector`는 `migrate` 성공을 선행 조건으로 둔다.
-- 앱 DB endpoint와 KIS credentials는 `config/app.yaml`에서 관리하고, `.env`는 Compose 런타임 변수에만 사용한다.
+- 앱 DB endpoint와 KIS credentials는 호스트의 `config/app.yaml`에서 관리하고, Compose는 해당 디렉터리를 read-only 마운트한다. `.env`는 Compose 런타임 변수에만 사용하고 이미지 레이어에는 포함하지 않는다.
 
 예상 실행 흐름:
 
