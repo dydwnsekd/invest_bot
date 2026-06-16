@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .base import Signal, Strategy, StrategyResult
+from .base import Signal, Strategy, StrategyResult, missing_indicators_result, to_float
 
 
 class GoldenCrossStrategy(Strategy):
@@ -20,34 +20,31 @@ class GoldenCrossStrategy(Strategy):
         curr_short = market_snapshot.get(self.short_column)
         curr_long = market_snapshot.get(self.long_column)
 
-        missing = [
-            key
-            for key, value in {
-                f"prev_{self.short_column}": prev_short,
-                f"prev_{self.long_column}": prev_long,
-                self.short_column: curr_short,
-                self.long_column: curr_long,
-            }.items()
-            if value is None
-        ]
-        if missing:
-            return StrategyResult(Signal.HOLD, f"Missing indicators: {', '.join(missing)}")
-
-        indicators = {
-            f"prev_{self.short_column}": float(prev_short),
-            f"prev_{self.long_column}": float(prev_long),
-            self.short_column: float(curr_short),
-            self.long_column: float(curr_long),
+        numeric_values = {
+            f"prev_{self.short_column}": to_float(prev_short),
+            f"prev_{self.long_column}": to_float(prev_long),
+            self.short_column: to_float(curr_short),
+            self.long_column: to_float(curr_long),
         }
+        missing = [key for key, value in numeric_values.items() if value is None]
+        if missing:
+            return missing_indicators_result(*missing)
 
-        if prev_short < prev_long and curr_short > curr_long:
+        indicators = numeric_values
+
+        prev_short_value = indicators[f"prev_{self.short_column}"]
+        prev_long_value = indicators[f"prev_{self.long_column}"]
+        curr_short_value = indicators[self.short_column]
+        curr_long_value = indicators[self.long_column]
+
+        if prev_short_value < prev_long_value and curr_short_value > curr_long_value:
             return StrategyResult(
                 Signal.BUY,
                 f"{self.short_column} crossed above {self.long_column}.",
                 indicators,
             )
 
-        if prev_short > prev_long and curr_short < curr_long:
+        if prev_short_value > prev_long_value and curr_short_value < curr_long_value:
             return StrategyResult(
                 Signal.SELL,
                 f"{self.short_column} crossed below {self.long_column}.",
@@ -68,15 +65,9 @@ class GoldenCrossStrategy(Strategy):
         latest = sorted_frame.tail(2)
 
         market_snapshot = {
-            f"prev_{self.short_column}": self._to_number(latest.iloc[0].get(self.short_column)),
-            f"prev_{self.long_column}": self._to_number(latest.iloc[0].get(self.long_column)),
-            self.short_column: self._to_number(latest.iloc[1].get(self.short_column)),
-            self.long_column: self._to_number(latest.iloc[1].get(self.long_column)),
+            f"prev_{self.short_column}": to_float(latest.iloc[0].get(self.short_column)),
+            f"prev_{self.long_column}": to_float(latest.iloc[0].get(self.long_column)),
+            self.short_column: to_float(latest.iloc[1].get(self.short_column)),
+            self.long_column: to_float(latest.iloc[1].get(self.long_column)),
         }
         return self.evaluate(market_snapshot)
-
-    @staticmethod
-    def _to_number(value: object) -> float | None:
-        if value is None or pd.isna(value):
-            return None
-        return float(value)
