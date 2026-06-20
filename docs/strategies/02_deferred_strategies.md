@@ -1,74 +1,79 @@
-# Deferred Strategies
+# Deferred And Follow-up Strategy Notes
 
 ## 목적
 
-이번 phase 1에서는 전략 계층에 `RSI`, `Trend Filter`, `Mean Reversion`만 구현하고, 아래 전략들은 후속 작업 대상으로 남긴다.  
-이 문서는 다음 구현 단계가 다시 시작될 때 필요한 최소 맥락을 남긴다.
+이 문서는 phase 1 이후 후속 전략 작업의 상태를 기록한다.
+
+- 2026-06-18 기준 구현 완료:
+  - `DisparityStrategy`
+  - `MomentumStrategy`
+  - `InvestorFlowCustomStrategy`
+- 아직 후속 과제로 남는 항목:
+  - investor-flow signal job 연결
+  - 전략 실행/백테스트 일반화
+  - investor-flow 확장 필드(`foreign_net_3d`, `institutional_net_3d`, streak 류)
 
 ## 1. Disparity
 
-### 왜 이번에 보류했나
+### 현재 상태
 
-- 평균회귀 전략과 가까운 성격이어서 phase 1에서 전략 수를 늘리기보다 핵심 3개 전략에 집중하는 것이 우선이었다.
-- 현재 phase 1 non-goal은 전략 계층 확장에 한정되어 있어, 유사 전략을 더 추가하면 테스트/설명 범위가 불필요하게 커진다.
+- 전략 클래스 구현 완료
+- snapshot-only `evaluate(...)` 계약 유지
+- 핵심 입력:
+  - `close`
+  - `ma_20`
+- 핵심 파생값:
+  - `disparity_pct = (close / ma_20) * 100`
 
-### 필요한 데이터 / 입력값
+### 남은 후속 작업
 
-- `close`
-- 기준 이동평균 컬럼
-  - 예: `ma_20`
-- 필요 시 이격률 계산용 threshold
-
-### 다음 구현 단계 힌트
-
-- `MeanReversionStrategy`와 비교해 **절대 비율 기반** 판단을 별도 전략으로 분리할지 먼저 결정한다.
-- 구현을 재개할 때는 다음 shape에서 시작하면 된다:
-  - 이격률 계산
-  - buy/sell threshold 정의
-  - `reason`에 현재 가격, 기준선, 이격률 포함
+- Mean Reversion과 비교한 실전 성능 확인
+- 대시보드/리포트에서 `disparity_pct` 표시 여부 결정
+- 백테스트 결과 비교 리포트에 포함
 
 ## 2. Momentum
 
-### 왜 이번에 보류했나
+### 현재 상태
 
-- 문서상 구현 가치가 높지만, 이번 phase 1은 기존 `Strategy` 계약 안에서 이미 합의된 3개 전략을 먼저 고정하는 것이 우선이었다.
-- 모멘텀은 lookback 기간과 수익률 기준이 추가로 필요해 기본값 결정 범위가 더 넓다.
+- 전략 클래스 구현 완료
+- `momentum_20` producer를 indicator pipeline에 추가 완료
+- `momentum_20` 의미는 **20거래일 percentage return**으로 고정
 
-### 필요한 데이터 / 입력값
+### 남은 후속 작업
 
-- 현재가 또는 종가 series
-- 비교 기준 시점 종가
-- lookback 기간
-- buy/sell threshold
-
-### 다음 구현 단계 힌트
-
-- 기존 `sample.py`의 `ThresholdMomentumStrategy`는 smoke-test용이므로, 실제 후속 구현에서는 이를 reference로만 보고 별도 정식 전략 클래스를 만든다.
-- 재개 시 우선 결정할 것:
-  - lookback 기간
-  - 수익률 계산식
-  - neutral band 존재 여부
+- momentum 신호를 실제 signal generation/backtest 흐름에 연결
+- threshold (`+10 / -10`) 조정 필요성 검토
+- neutral band 유지 여부를 실험 기반으로 재검토
 
 ## 3. Investor-flow custom
 
-### 왜 이번에 보류했나
+### 현재 상태
 
-- 현재 프로젝트의 차별화 포인트가 될 수 있지만, phase 1에서는 가격/지표 기반 전략 3개를 먼저 안정화하는 것이 더 작고 안전한 범위였다.
-- 수급 전략은 어떤 투자주체(외국인/기관/개인)를 어떤 기간으로 볼지에 대한 도메인 결정이 더 많이 필요하다.
+- 단일 하우스 룰 전략 클래스 구현 완료
+- 현재 rule:
+  - 외국인 순매수 > 0
+  - 기관 순매수 > 0
+  - `close > ma_20` → buy
+  - 반대 방향이면 sell
+- runtime assembly는 아직 deferred
 
-### 필요한 데이터 / 입력값
+### 명시적 후속 경계
 
-- 투자자 수급 일별 데이터
-- 전략에 사용할 투자주체별 순매수/순매도 컬럼
-- 필요 시 가격/지표 보조 입력
-  - 예: `close`, `ma_20`, `rsi_14`
-- lookback 기간 및 연속성 조건
+다음 구현 단계에서 아래 로컬 helper를 signal job 안에 추가한다.
 
-### 다음 구현 단계 힌트
+- future job file:
+  - `src/invest_bot/jobs/generate_investor_flow_signals.py`
+- helper responsibility:
+  - indicator row 로드
+  - 같은 symbol/date의 `investor_daily` row 로드
+  - 하나의 `market_snapshot` dict로 조립
 
-- 후속 planning에서 아래 둘 중 하나를 먼저 고정한다:
-  1. **단일 하우스 룰 전략**
-     - 예: 외국인 순매수 연속 + `close > ma_20`
-  2. **구성 가능한 커스텀 전략**
-     - 투자주체 / 기간 / 보조지표를 조합 가능한 형태
-- 재개 시 첫 구현은 단일 하우스 룰 전략으로 시작하는 편이 범위 통제가 쉽다.
+### 남은 후속 작업
+
+- investor-flow signal job 연결
+- rolling flow field 도입 검토
+  - `foreign_net_3d`
+  - `institutional_net_3d`
+  - `foreign_streak`
+  - `institutional_streak`
+- 단일 하우스 룰을 유지할지, 구성형 전략으로 확장할지 결정

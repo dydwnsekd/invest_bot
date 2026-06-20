@@ -22,7 +22,10 @@
 
 ## 남은 항목
 
-- [ ] RSI 기반 보조 전략 구현
+- [x] RSI 기반 보조 전략 구현
+- [x] Disparity 전략 구현
+- [x] Momentum 전략 구현
+- [x] Investor-flow custom 전략 구현
 - [ ] 전략 조합 구조 설계
 - [ ] 성능 지표 확장
   - MDD

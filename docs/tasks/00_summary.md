@@ -37,6 +37,7 @@
 - [x] 저장된 일봉 snapshot 로더 구현
 - [x] 이동평균 계산 구현
 - [x] RSI 계산 구현
+- [x] 모멘텀 지표(`momentum_20`) 계산 구현
 - [x] 분석 결과 DB snapshot 저장 구현
 - [x] 지표 가이드 문서 추가
 - [ ] 추가 지표 확장
@@ -68,6 +69,12 @@
 - [x] 전략 인터페이스 기본 골격 구현
 - [x] 샘플 전략 구현
 - [x] 골든크로스 전략 구현
+- [x] RSI 전략 구현
+- [x] Trend Filter 전략 구현
+- [x] Mean Reversion 전략 구현
+- [x] Disparity 전략 구현
+- [x] Investor-flow custom 전략 구현
+- [x] Momentum 전략 구현
 - [x] 골든크로스 신호 생성 구현
 - [x] 골든크로스 백테스트 초안 구현
 - [ ] 전략별 성능 비교
