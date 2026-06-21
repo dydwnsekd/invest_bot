@@ -16,6 +16,8 @@ def test_app_settings_defaults_to_mock_mode(monkeypatch):
     assert settings.trading_mode is TradingMode.MOCK
     assert settings.database_url == "postgresql+psycopg://invest_bot:invest_bot@localhost:5432/invest_bot"
     assert settings.enable_db_write is False
+    assert settings.stock_master_update_on_startup is True
+    assert settings.stock_master_refresh_interval_minutes == 1440
 
 
 def test_app_settings_loads_file_values(monkeypatch):
@@ -41,6 +43,8 @@ def test_app_settings_loads_file_values(monkeypatch):
                 "db_user: db_user",
                 "db_password: db_password",
                 "enable_db_write: true",
+                "stock_master_update_on_startup: false",
+                "stock_master_refresh_interval_minutes: 60",
             ]
         ),
         encoding="utf-8",
@@ -53,6 +57,8 @@ def test_app_settings_loads_file_values(monkeypatch):
     assert settings.kis_app_secret == "live-secret"
     assert settings.trading_mode is TradingMode.LIVE
     assert settings.enable_db_write is True
+    assert settings.stock_master_update_on_startup is False
+    assert settings.stock_master_refresh_interval_minutes == 60
 
 
 def test_app_settings_builds_database_url_from_file_values(monkeypatch):

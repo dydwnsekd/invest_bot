@@ -43,6 +43,7 @@ class DailyPriceAnalyzer:
         result["ma_20"] = result["close"].rolling(window=20, min_periods=20).mean()
         result["ma_60"] = result["close"].rolling(window=60, min_periods=60).mean()
         result["volume_ma_5"] = result["volume"].rolling(window=5, min_periods=5).mean()
+        result["momentum_20"] = result["close"].pct_change(periods=20) * 100
         result["rsi_14"] = self._calculate_rsi(result["close"], period=14)
         return result
 

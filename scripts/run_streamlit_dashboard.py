@@ -42,6 +42,13 @@ def main() -> None:
     if str(SRC_PATH) not in sys.path:
         sys.path.insert(0, str(SRC_PATH))
 
+    from invest_bot.config.settings import AppSettings
+    from invest_bot.market.master_sync import sync_stock_master
+
+    settings = AppSettings.from_file()
+    if settings.stock_master_update_on_startup:
+        sync_stock_master(force_refresh=True, settings=settings)
+
     host, port = resolve_dashboard_bind()
     sys.argv = build_streamlit_argv(host, port)
     raise SystemExit(stcli.main())

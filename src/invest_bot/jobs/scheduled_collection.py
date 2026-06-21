@@ -11,6 +11,7 @@ from typing import Callable
 import yaml
 
 from invest_bot.config.settings import CONFIG_DIR
+from invest_bot.market.master_sync import sync_stock_master
 from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
 
 
@@ -74,10 +75,13 @@ class CollectionScheduleStatus:
 class ScheduledCollectionRunner:
     schedule: CollectionScheduleConfig
     collector_fn: Callable[[list[str], int], dict[str, object]] = collect_market_data_for_symbols
+    before_run_fn: Callable[[], object] | None = None
     sleep_fn: Callable[[float], None] = time.sleep
     now_fn: Callable[[], datetime] = datetime.now
 
     def run_once(self) -> dict[str, object]:
+        if self.before_run_fn is not None:
+            self.before_run_fn()
         started_at = self.now_fn()
         self._append_log(
             {
@@ -202,7 +206,7 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     schedule = CollectionScheduleConfig.from_file(args.config_path)
-    runner = ScheduledCollectionRunner(schedule=schedule)
+    runner = ScheduledCollectionRunner(schedule=schedule, before_run_fn=sync_stock_master)
 
     if args.once:
         print(runner.run_once())

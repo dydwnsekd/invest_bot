@@ -72,6 +72,28 @@ def test_scheduled_collection_runner_runs_once_and_writes_logs():
     assert json.loads(lines[1])["event"] == "collection_finished"
 
 
+def test_scheduled_collection_runner_calls_before_run_hook():
+    test_dir = make_test_dir("scheduled_collection_before_run")
+    config = CollectionScheduleConfig(
+        symbols=["005930"],
+        days=20,
+        interval_minutes=30,
+        log_path=test_dir / "collection.log",
+    )
+    before_run_calls: list[str] = []
+
+    runner = ScheduledCollectionRunner(
+        schedule=config,
+        collector_fn=lambda symbols, days: {"symbols": symbols, "success_count": 1, "failed_count": 0},
+        before_run_fn=lambda: before_run_calls.append("sync"),
+        now_fn=lambda: datetime(2026, 5, 31, 15, 30, 0),
+    )
+
+    runner.run_once()
+
+    assert before_run_calls == ["sync"]
+
+
 def test_scheduled_collection_runner_repeats_with_interval_and_max_runs():
     test_dir = make_test_dir("scheduled_collection_loop")
     config = CollectionScheduleConfig(

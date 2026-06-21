@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.market.analysis import DailyPriceAnalyzer, IndicatorRequest
@@ -36,6 +37,7 @@ def test_daily_price_analyzer_normalizes_and_saves_indicators():
             {"stck_bsop_date": "20260318", "stck_clpr": "87000", "acml_vol": "2700"},
             {"stck_bsop_date": "20260319", "stck_clpr": "88000", "acml_vol": "2800"},
             {"stck_bsop_date": "20260320", "stck_clpr": "89000", "acml_vol": "2900"},
+            {"stck_bsop_date": "20260321", "stck_clpr": "90000", "acml_vol": "3000"},
         ]
     )
     raw_storage.save("daily_prices", "005930_20260301_20260329.csv", raw_frame)
@@ -51,8 +53,10 @@ def test_daily_price_analyzer_normalizes_and_saves_indicators():
     assert "ma_5" in indicators.columns
     assert "ma_20" in indicators.columns
     assert "volume_ma_5" in indicators.columns
+    assert "momentum_20" in indicators.columns
     assert "rsi_14" in indicators.columns
     assert indicators.iloc[4]["ma_5"] == 72000
+    assert indicators.iloc[-1]["momentum_20"] == pytest.approx(28.57142857142857)
     assert saved.path.exists()
 
 

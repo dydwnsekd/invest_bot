@@ -39,6 +39,8 @@ class AppSettings:
     db_user: str = "invest_bot"
     db_password: str = "invest_bot"
     enable_db_write: bool = False
+    stock_master_update_on_startup: bool = True
+    stock_master_refresh_interval_minutes: int = 1440
 
     @classmethod
     def from_file(
@@ -80,6 +82,8 @@ class AppSettings:
             db_user=configured_value("db_user", "invest_bot"),
             db_password=configured_value("db_password", "invest_bot"),
             enable_db_write=configured_bool("enable_db_write", False),
+            stock_master_update_on_startup=configured_bool("stock_master_update_on_startup", True),
+            stock_master_refresh_interval_minutes=max(int(configured_value("stock_master_refresh_interval_minutes", "1440")), 1),
         )
 
     @property
