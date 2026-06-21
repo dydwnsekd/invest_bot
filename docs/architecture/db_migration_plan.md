@@ -2,55 +2,72 @@
 
 ## Objective
 
-Replace the current file-oriented persistence path with a PostgreSQL-backed data model that preserves existing collection, lookup, analysis, and dashboard behaviors.
+Align the DB/runtime implementation with the ownership rules below:
 
-## Scope
+- `symbols` is the canonical stock reference table.
+- only stock master sync updates `symbols`.
+- user lookup/search/select must be read-only.
+- `daily_prices` and `investor_daily` are collected fact tables.
+- `dataset_frames` is an artifact/snapshot store, not a reference table.
+- `stock_info_snapshots` is a deprecated candidate, not a canonical source.
 
-- PostgreSQL service lifecycle in `docker-compose.yml`
-- SQLAlchemy schema bootstrap followed by Alembic-based schema migrations
-- Repository interfaces for symbols, prices, stock info snapshots, and analysis runs
-- Compatibility path from CSV-backed repositories to DB-backed repositories
+## Current policy
 
-## Phases
+| Area | Canonical table / source | User-triggered mutation allowed? |
+| --- | --- | --- |
+| Symbol code/name lookup | `symbols` + stock master file | No |
+| Daily OHLCV facts | `daily_prices` | Yes, via collection jobs |
+| Investor flow facts | `investor_daily` | Yes, via collection jobs |
+| Raw/processed previews and outputs | `dataset_frames` | Yes, execution output only |
+| Raw stock info history | `stock_info_snapshots` | No; removal candidate |
 
-1. **Schema bootstrap**
-   - add SQLAlchemy engine/session bootstrap and current table metadata registration
-   - add Alembic configuration and initial revision for `symbols`, `daily_prices`, `stock_info_snapshots`, and `analysis_runs`
-   - add local DB settings parsing and connection bootstrap
-2. **Repository adapters**
-   - formalize repository protocols
-   - implement PostgreSQL repositories alongside current CSV adapters
-   - preserve constructor injection for existing consumers
-3. **Consumer migration**
-   - move collection jobs to DB writes
-   - move lookup and dashboard reads to repository interfaces
-   - keep CSV fallback only where explicitly needed during rollout
-4. **Operational verification**
-   - run migrations from a clean Postgres container
-   - verify scheduler/web start only after migration success
-   - verify lookup and collection regression coverage against repository contracts
+## Implementation phases
+
+### 1. Canonical lookup enforcement
+
+- dashboard symbol picker reads from `symbols` / stock master only
+- `SymbolLookup` no longer resolves names from `stock_info`
+- fallback `stock_info` values like `prdt_abrv_name == pdno` must not become lookup source
+
+### 2. Write-boundary cleanup
+
+- user lookup/search/select remains read-only
+- `save_stock_info` fallback rows do not overwrite DB/file artifacts
+- `stock_info` raw responses are not allowed to redefine canonical symbol names
+
+### 3. Snapshot responsibility reduction
+
+- `dataset_frames.stock_info` is treated as optional raw artifact only
+- report/dashboard naming logic must not depend on `dataset_frames.stock_info`
+- `symbols` remains the only canonical symbol-name source in product logic
+
+### 4. Schema simplification follow-up
+
+- review and remove remaining runtime dependency on `stock_info_snapshots`
+- once unused, add migration to drop `stock_info_snapshots`
+- keep `dataset_frames` focused on preview/report/analysis artifacts
 
 ## Deliverables
 
-- ERD document for table shape and relationships
-- repository interface contract document
-- docker-compose draft wired for db -> migrate -> app startup ordering
-- automated tests that lock the compose contract and required migration docs
+- ownership-aligned ERD
+- repository responsibility document
+- migration/operations notes reflecting canonical source boundaries
+- regression tests that prove fallback stock info cannot pollute symbol lookup/display
 
 ## Risks
 
-- `migrate` currently uses `create_all()` bootstrap, so schema drift cannot yet be tracked by revision history
-- shared runtime files such as `docker-compose.yml`, `Dockerfile`, and `settings.py` are high-collision surfaces
-- DB migration can break current CSV-relative path assumptions if adapter boundaries are not preserved
+- legacy code paths may still assume `stock_info` is the fastest place to read a symbol name
+- environments that skip stock master sync can still behave inconsistently until startup sync is guaranteed
+- historical docs may describe old bootstrap behavior and need explicit archival labeling
 
 ## Verification checklist
 
-- parse `docker-compose.yml` successfully
-- confirm `.env.example` includes DB runtime variables
-- confirm migration docs exist and include ERD, repository, and phased plan sections
-- run targeted repository/config tests plus full pytest suite after changes
+- symbol picker / resolver uses `symbols` or stock master, not `stock_info`
+- fallback stock info with `prdt_abrv_name == pdno` does not affect dashboard/report names
+- collection still writes `daily_prices` and `investor_daily`
+- docs consistently distinguish canonical tables from artifacts
 
 ## Handoff notes
 
-- The next implementation lane should replace bootstrap-only `migrate` behavior with Alembic revision execution.
-- Existing `StockMasterRepository` and `CsvStorage` remain the compatibility baseline for parity tests.
+- next schema-cleanup lane should decide when `stock_info_snapshots` can be dropped physically
+- longer term, replace bootstrap-only migration flow with tracked Alembic revisions

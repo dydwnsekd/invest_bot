@@ -1,58 +1,25 @@
-# invest_bot DB ERD Draft
+# invest_bot DB ERD operational summary
 
-This ERD finalizes the first-pass relational target for the current CSV datasets so the team can implement the migration behind stable repository contracts.
+이 문서는 운영 관점에서 보는 간단한 ERD 요약이다. 세부 컬럼 정의와 write boundary는 [`../architecture/db_schema.md`](../architecture/db_schema.md)를 기준으로 본다.
 
 ```mermaid
 erDiagram
-    stocks ||--o{ daily_prices : has
-    stocks ||--o{ investor_daily_flows : has
-    stocks ||--o{ market_reports : has
-
-    stocks {
-        string symbol PK
-        string symbol_name
-        string market
-        datetime updated_at
-    }
-
-    daily_prices {
-        string symbol FK
-        date trade_date PK
-        float open_price
-        float high_price
-        float low_price
-        float close_price
-        float volume
-        datetime collected_at
-    }
-
-    investor_daily_flows {
-        string symbol FK
-        date trade_date PK
-        string investor_type PK
-        float net_volume
-        float net_amount
-        datetime collected_at
-    }
-
-    market_reports {
-        string symbol FK
-        date trade_date PK
-        string summary
-        datetime created_at
-    }
+    symbols ||--o{ daily_prices : identifies
+    symbols ||--o{ investor_daily : identifies
+    symbols ||--o{ dataset_frames : tags
+    symbols ||--o{ stock_info_snapshots : legacy
 ```
 
-## Source mapping
+## Operational interpretation
 
-- `stocks` ← `data/reference/stock_master.csv` plus `data/raw/domestic_stock/stock_info/*.csv`
-- `daily_prices` ← `data/raw/domestic_stock/daily_prices/*.csv`
-- `investor_daily_flows` ← `data/raw/domestic_stock/investor_daily/*.csv`
-- `market_reports` ← `data/processed/domestic_stock/market_reports/*.md|*.txt`
+- `symbols`는 사용자 lookup의 canonical reference다.
+- `daily_prices`, `investor_daily`는 수집 결과 fact table이다.
+- `dataset_frames`는 preview/artifact/snapshot 저장소다.
+- `stock_info_snapshots`는 deprecated candidate다.
 
-## Explicitly deferred
+## Write boundary
 
-- dashboard cache tables
-- indicator/output tables for every derived artifact
-- execution/order/trade ledgers
-- real Alembic revision history and ORM models
+- 사용자 조회: write 없음
+- 수집 실행: `daily_prices`, `investor_daily`, raw snapshot dataset만 write 가능
+- 분석/리포트 실행: processed `dataset_frames`만 write 가능
+- canonical reference(`symbols`): 종목 마스터 sync만 write 가능

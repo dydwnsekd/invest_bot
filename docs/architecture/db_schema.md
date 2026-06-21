@@ -1,66 +1,220 @@
-# invest_bot DB-first schema
+# invest_bot DB schema and ownership
 
 ## Purpose
 
-이 문서는 현재 `invest_bot`의 DB 중심 저장 구조를 설명한다. 애플리케이션과 migration은 `config/app.yaml`의 DB 설정을 기준으로 동작하며, 로컬 Docker Compose는 기본 PostgreSQL endpoint와 data mount를 제공한다.
+이 문서는 현재 `invest_bot`의 DB 스키마와 **테이블 책임**, **사용자 액션에 의한 변경 허용 여부**, **컬럼 의미**, **기능별 source of truth**를 정리하는 canonical 문서다. 구현/리팩터링/마이그레이션 판단은 이 문서를 우선 기준으로 삼는다.
+
+## Global rules
+
+- 사용자 Web 조회(검색, 선택, 단건 확인, 미리보기)는 **read-only**다.
+- canonical 종목 reference는 `symbols`다.
+- `symbols`는 **종목 마스터 동기화**에서만 갱신한다.
+- 수집/분석/리포트 실행은 fact/artifact 테이블만 갱신할 수 있다.
+- raw API 응답이나 fallback 응답은 canonical 종목명 source가 아니다.
+
+## Table classes
+
+| Class | Tables | Meaning |
+| --- | --- | --- |
+| Canonical reference | `symbols` | 사용자 조회와 표시의 정답 데이터 |
+| Collected facts | `daily_prices`, `investor_daily` | 수집된 정규화 사실 데이터 |
+| Snapshots / artifacts | `dataset_frames` | raw snapshot 및 분석/리포트 산출물 저장소 |
+| Deprecated candidate | `stock_info_snapshots` | 현재 제품 기준 직접 가치가 낮고 제거 후보인 테이블 |
 
 ## Tables
 
 ### `symbols`
 
-- 종목 마스터 테이블
-- PK: `symbol`
-- 주요 컬럼: `symbol_name`, `market`, `is_active`, `created_at`, `updated_at`
+**Role**
+- 종목코드 ↔ 종목명 ↔ 시장의 canonical reference table
+- 사용자 종목 검색/선택/표시의 단일 source of truth
+- 다른 도메인 테이블의 FK 기준점
+
+**Can user actions mutate it?**
+- **No**
+- 사용자 조회, 화면 진입, 종목 검색, 미리보기, 리포트 열람으로 변경되면 안 된다.
+- 종목 마스터 sync 또는 관리자성 reference refresh 작업에서만 변경된다.
+
+**Columns**
+
+| Column | Meaning |
+| --- | --- |
+| `symbol` | canonical 종목코드. PK. zero-padded code 사용 |
+| `symbol_name` | canonical 종목명. UI 표시명/검색명 |
+| `market` | 시장 구분(KOSPI/KOSDAQ 등) |
+| `is_active` | 표시/사용 가능 여부 |
+| `created_at` | row 최초 생성 시각 |
+| `updated_at` | reference metadata 마지막 갱신 시각 |
+
+**Source of truth / notes**
+- 종목명 lookup은 항상 `symbols.symbol_name` 기준으로 해석한다.
+- raw `stock_info` 응답이나 fallback 값으로 `symbol_name`를 덮어쓰면 안 된다.
 
 ### `daily_prices`
 
-- 일봉 가격 정규화 테이블
-- FK: `symbol -> symbols.symbol`
-- Unique: `(symbol, trade_date)`
-- 주요 컬럼: `open_price`, `high_price`, `low_price`, `close_price`, `volume`, `turnover`, `source_filename`, `collected_at`
+**Role**
+- 종목별 일봉 가격의 정규화 fact table
+- 지표 계산과 분석의 기본 입력 데이터
 
-### `stock_info_snapshots`
+**Can user actions mutate it?**
+- **Yes, but only execution actions**
+- `데이터 수집`, `전체 파이프라인`, scheduler/collector batch는 갱신 가능
+- 단순 조회/탐색으로는 변경되면 안 된다.
 
-- 종목 기본정보 스냅샷 테이블
-- FK: `symbol -> symbols.symbol`
-- Unique: `(symbol, captured_at)`
-- 주요 컬럼: `product_name`, `market_code`, `raw_payload`, `source_filename`
+**Columns**
+
+| Column | Meaning |
+| --- | --- |
+| `id` | surrogate PK |
+| `symbol` | `symbols.symbol` FK |
+| `trade_date` | 거래일 |
+| `open_price` | 시가 |
+| `high_price` | 고가 |
+| `low_price` | 저가 |
+| `close_price` | 종가 |
+| `volume` | 거래량 |
+| `turnover` | 거래대금/회전 관련 값 |
+| `source_filename` | 원본 파일/스냅샷 추적용 메타 |
+| `collected_at` | 실제 수집 시각 |
+
+**Source of truth / notes**
+- 가격 fact의 canonical store다.
+- preview/UI가 `dataset_frames.daily_prices`를 보여주더라도 정규화 truth는 `daily_prices`다.
 
 ### `investor_daily`
 
-- 투자자 수급 정규화 테이블
-- FK: `symbol -> symbols.symbol`
-- Unique: `(symbol, trade_date)`
-- 주요 컬럼: `foreign_net_qty`, `institutional_net_qty`, `personal_net_qty`, `raw_payload`, `source_filename`, `collected_at`
+**Role**
+- 종목별 투자자 수급 정규화 fact table
+
+**Can user actions mutate it?**
+- **Yes, but only execution actions**
+- 수집/배치 실행만 갱신 가능
+- 단순 조회/탐색으로는 변경되면 안 된다.
+
+**Columns**
+
+| Column | Meaning |
+| --- | --- |
+| `id` | surrogate PK |
+| `symbol` | `symbols.symbol` FK |
+| `trade_date` | 기준 거래일 |
+| `foreign_net_qty` | 외국인 순매수 수량 |
+| `institutional_net_qty` | 기관 순매수 수량 |
+| `personal_net_qty` | 개인 순매수 수량 |
+| `raw_payload` | 정규화 전 원본 수급 payload |
+| `source_filename` | 원본 파일/스냅샷 추적용 메타 |
+| `collected_at` | 실제 수집 시각 |
+
+**Source of truth / notes**
+- 수급 fact의 canonical store다.
 
 ### `dataset_frames`
 
-- 분석/리포트/백테스트 및 raw snapshot을 DataFrame 단위로 저장하는 범용 스냅샷 테이블
-- FK: `symbol -> symbols.symbol` (`NULL` 가능)
-- Unique: `(dataset, filename)`
-- 주요 컬럼: `dataset`, `filename`, `as_of_date`, `row_count`, `frame_json`, `created_at`, `updated_at`
-- 예시 dataset:
-  - `daily_prices`
-  - `daily_prices_summary`
-  - `stock_info`
-  - `investor_daily`
-  - `investor_daily_summary`
-  - `daily_prices_indicators`
-  - `golden_cross_signals`
-  - `market_reports`
-  - `backtest_trades`
-  - `backtest_summaries`
+**Role**
+- DataFrame 단위 snapshot/artifact 저장소
+- CSV 기반 raw/processed 산출물을 DB로 유지하는 범용 테이블
+- canonical reference나 canonical facts를 대체하지 않는다.
 
-## Read/write boundary
+**Can user actions mutate it?**
+- **Partial**
+- 조회는 read-only
+- 실행 액션은 dataset 종류에 따라 갱신 가능
 
-- 수집 단계:
-  - raw DataFrame snapshot은 기본적으로 `dataset_frames`에 저장
-  - 정규화 가능한 핵심 수집 데이터는 `enable_db_write=true`일 때만 `daily_prices`, `stock_info_snapshots`, `investor_daily`에도 함께 저장
-- 분석 단계:
-  - 지표, 시그널, 리포트, 백테스트 결과는 `dataset_frames`에 저장
-- 대시보드 단계:
-  - 최신 preview와 보고서는 `dataset_frames`를 기준으로 조회
-  - 종목명 매핑은 최신 `stock_info` snapshot을 우선 사용하되, DB 연결이나 snapshot 조회가 실패하면 종목 마스터/로컬 파일로 폴백한다
+**Columns**
+
+| Column | Meaning |
+| --- | --- |
+| `id` | surrogate PK |
+| `dataset` | dataset 종류 (`daily_prices`, `market_reports` 등) |
+| `filename` | dataset 내부 고유 snapshot key |
+| `symbol` | 관련 종목 (`symbols.symbol` FK, nullable) |
+| `as_of_date` | 데이터 기준일 |
+| `row_count` | frame row 수 |
+| `frame_json` | 전체 DataFrame payload |
+| `created_at` | snapshot 최초 저장 시각 |
+| `updated_at` | 같은 key 재저장 시 갱신 시각 |
+
+**Dataset-level policy**
+
+| Dataset group | Examples | Mutation policy | Notes |
+| --- | --- | --- | --- |
+| Raw collection snapshots | `daily_prices`, `daily_prices_summary`, `investor_daily`, `investor_daily_summary` | 수집/배치 실행만 갱신 가능 | 사실 데이터의 snapshot일 뿐 canonical fact는 아님 |
+| Derived artifacts | `daily_prices_indicators`, `golden_cross_signals`, `market_reports`, `backtest_trades`, `backtest_summaries` | 분석/리포트/백테스트 실행에서만 갱신 가능 | 실행 산출물 저장소 |
+| Raw stock info snapshot | `stock_info` | **사용자 조회로는 갱신 금지** | canonical 종목명 source가 아님 |
+
+**Source of truth / notes**
+- `dataset_frames.stock_info`는 사용자 종목 검색/선택 source로 사용하면 안 된다.
+- `dataset_frames`는 artifact store이며, reference table인 `symbols`와 역할을 분리한다.
+
+### `stock_info_snapshots`
+
+**Role**
+- stock_info 원본 응답 이력 저장용으로 설계된 테이블
+- 현재 제품 기능 기준 직접 사용처가 약하고 제거 후보로 본다.
+
+**Can user actions mutate it?**
+- **No**가 정책상 맞다.
+- 사용자 조회/탐색과 연결되면 안 된다.
+
+**Columns**
+
+| Column | Meaning |
+| --- | --- |
+| `id` | surrogate PK |
+| `symbol` | `symbols.symbol` FK |
+| `captured_at` | 응답 캡처 시각 |
+| `product_name` | 조회 당시 응답 종목명 |
+| `market_code` | 조회 당시 응답 시장코드 |
+| `raw_payload` | 원본 stock_info payload |
+| `source_filename` | 연계 source 추적 메타 |
+
+**Source of truth / notes**
+- canonical 종목명 source가 아니다.
+- 현재 정책 기준에서는 제거 대상 후보로 문서화한다.
+
+## User action boundary
+
+### Read-only user actions
+- 종목 검색
+- 종목 선택
+- 화면 진입
+- 미리보기/차트/리포트 열람
+- 단건 종목 정보 확인
+
+이때 변경되면 안 되는 테이블:
+- `symbols`
+- `daily_prices`
+- `investor_daily`
+- `dataset_frames`
+- `stock_info_snapshots`
+
+### Mutating execution actions
+- 데이터 수집
+- 전체 파이프라인 실행
+- 지표 계산
+- 신호 생성
+- 리포트 생성
+- 백테스트 실행
+
+이때 변경 가능한 테이블:
+- `daily_prices`
+- `investor_daily`
+- 관련 `dataset_frames` raw/processed dataset
+
+이때도 변경되면 안 되는 테이블:
+- `symbols`
+- `stock_info_snapshots`
+- 사용자 조회에서 생성된 `dataset_frames.stock_info`
+
+## Source of truth by feature
+
+| Feature | Source of truth |
+| --- | --- |
+| 종목 검색 / 종목 선택 / 표시명 | `symbols` |
+| 가격 fact | `daily_prices` |
+| 수급 fact | `investor_daily` |
+| 지표 / 신호 / 리포트 / 백테스트 결과 | `dataset_frames` processed datasets |
+| raw stock_info 응답 | canonical source 아님; 비저장 또는 분리된 raw snapshot 취급 |
 
 ## Runtime rules
 
