@@ -6,12 +6,11 @@ from typing import Any
 
 import pandas as pd
 
-from invest_bot.db.contracts import DailyPriceRecord, InvestorDailyRecord, StockInfoSnapshotRecord, StockRecord
+from invest_bot.db.contracts import DailyPriceRecord, InvestorDailyRecord, StockRecord
 from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.repositories import (
     SqlAlchemyDailyPriceRepository,
     SqlAlchemyInvestorDailyRepository,
-    SqlAlchemyStockInfoSnapshotRepository,
     SqlAlchemyStockRepository,
     normalize_symbol,
 )
@@ -24,7 +23,6 @@ class SqlAlchemyMarketDataWriter:
         self.default_market = default_market
         self.stock_repository = SqlAlchemyStockRepository(self.session_factory)
         self.daily_price_repository = SqlAlchemyDailyPriceRepository(self.session_factory)
-        self.stock_info_repository = SqlAlchemyStockInfoSnapshotRepository(self.session_factory)
         self.investor_daily_repository = SqlAlchemyInvestorDailyRepository(self.session_factory)
 
     def save_daily_prices(
@@ -53,23 +51,8 @@ class SqlAlchemyMarketDataWriter:
             self.daily_price_repository.replace_for_symbol(normalized, records)
 
     def save_stock_info(self, symbol: str, stock_info: pd.DataFrame) -> None:
-        normalized = normalize_symbol(symbol)
-        if stock_info.empty:
-            self.stock_repository.upsert(StockRecord(symbol=normalized, symbol_name=normalized, market=self.default_market))
-            return
-        first_row = stock_info.iloc[0].to_dict()
-        product_name = str(first_row.get("prdt_abrv_name") or first_row.get("symbol_name") or normalized).strip()
-        market_code = str(first_row.get("prdt_type_cd") or first_row.get("market_code") or self.default_market).strip()
-        self.stock_repository.upsert(StockRecord(symbol=normalized, symbol_name=product_name, market=market_code))
-        self.stock_info_repository.save(
-            StockInfoSnapshotRecord(
-                symbol=normalized,
-                product_name=product_name,
-                market_code=market_code,
-                raw_payload=frame_payload(stock_info),
-                captured_at=datetime.now(UTC),
-            )
-        )
+        _ = (symbol, stock_info)
+        return None
 
     def save_investor_daily(
         self, symbol: str, target_date: date, investor_daily: pd.DataFrame, investor_summary: pd.DataFrame

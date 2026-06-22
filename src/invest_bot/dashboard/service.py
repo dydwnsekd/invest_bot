@@ -7,7 +7,10 @@ from xml.etree import ElementTree
 import pandas as pd
 
 from invest_bot.config.settings import AppSettings
+from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.frame_storage import DbFrameStorage
+from invest_bot.db.repositories import SqlAlchemyStockRepository
+from invest_bot.market.stock_master import StockMasterRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -430,6 +433,48 @@ class DashboardDataService:
         return DashboardDataService._normalize_symbol(symbol)
 
     def _load_symbol_name_map(self) -> dict[str, str]:
+        mapping = self._load_symbol_name_map_from_db()
+        if mapping:
+            return mapping
+
+        mapping = self._load_symbol_name_map_from_master()
+        if mapping:
+            return mapping
+
+        return self._load_symbol_name_map_from_stock_info()
+
+    def _load_symbol_name_map_from_db(self) -> dict[str, str]:
+        storage = self.get_dataset_storage()
+        database_url = getattr(storage, "database_url", "").strip() if storage is not None else ""
+        if not database_url:
+            return {}
+        try:
+            engine = build_engine(database_url)
+            try:
+                session_factory = build_session_factory(engine)
+                repository = SqlAlchemyStockRepository(session_factory)
+                return {
+                    self._normalize_symbol(record.symbol): record.symbol_name.strip()
+                    for record in repository.list_all()
+                    if self._normalize_symbol(record.symbol) and record.symbol_name.strip()
+                }
+            finally:
+                engine.dispose()
+        except Exception:
+            return {}
+
+    def _load_symbol_name_map_from_master(self) -> dict[str, str]:
+        try:
+            repository = StockMasterRepository()
+            return {
+                self._normalize_symbol(entry.get("symbol", "")): str(entry.get("symbol_name", "")).strip()
+                for entry in repository.load_entries()
+                if self._normalize_symbol(entry.get("symbol", "")) and str(entry.get("symbol_name", "")).strip()
+            }
+        except Exception:
+            return {}
+
+    def _load_symbol_name_map_from_stock_info(self) -> dict[str, str]:
         storage = self.get_dataset_storage()
         if storage is not None:
             mapping: dict[str, str] = {}
@@ -441,7 +486,7 @@ class DashboardDataService:
                 code = str(frame.iloc[0].get("pdno", "")).strip() or Path(item).stem
                 code = self._normalize_symbol(code)
                 name = str(frame.iloc[0].get("prdt_abrv_name", "")).strip()
-                if code and name:
+                if code and self._is_meaningful_symbol_name(code, name):
                     mapping[code] = name
             return mapping
 
@@ -460,7 +505,7 @@ class DashboardDataService:
             code = str(frame.iloc[0].get("pdno", "")).strip() or csv_file.stem
             code = self._normalize_symbol(code)
             name = str(frame.iloc[0].get("prdt_abrv_name", "")).strip()
-            if code and name:
+            if code and self._is_meaningful_symbol_name(code, name):
                 mapping[code] = name
         return mapping
 
@@ -481,6 +526,11 @@ class DashboardDataService:
         if text.isdigit():
             return text.zfill(6)
         return text
+
+    @classmethod
+    def _is_meaningful_symbol_name(cls, symbol: str, name: str) -> bool:
+        cleaned = str(name).strip()
+        return bool(cleaned) and cls._normalize_symbol(cleaned) != cls._normalize_symbol(symbol)
 
     @staticmethod
     def _enrich_frame(frame: pd.DataFrame, symbol: str, symbol_name: str) -> pd.DataFrame:

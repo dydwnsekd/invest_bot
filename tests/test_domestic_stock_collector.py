@@ -80,7 +80,7 @@ def test_market_data_collector_saves_all_requested_csv_files():
         pd.DataFrame([{"symbol": "005930"}]),
         pd.DataFrame([{"stck_bsop_date": "20260328"}]),
     )
-    stock_info = collector.save_stock_info("005930", pd.DataFrame([{"pdno": "005930"}]))
+    stock_info = collector.save_stock_info("005930", pd.DataFrame([{"pdno": "005930", "prdt_abrv_name": "삼성전자"}]))
     investor_detail, investor_summary = collector.save_investor_daily(
         "005930",
         date(2026, 3, 29),
@@ -212,6 +212,7 @@ def test_collect_symbol_bundle_falls_back_when_stock_info_endpoint_fails(monkeyp
     assert result.status == "success"
     assert result.stock_info_rows == 1
     assert "stock info endpoint failed" in result.error
+    assert not any(path.endswith("/stock_info/005930.csv") for path in result.saved_files)
 
 
 def test_market_data_collector_does_not_build_db_writer_when_db_write_is_disabled():

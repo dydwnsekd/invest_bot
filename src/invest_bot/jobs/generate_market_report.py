@@ -6,8 +6,11 @@ import pandas as pd
 from pandas.errors import EmptyDataError
 
 from invest_bot.config.settings import AppSettings
+from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.frame_storage import DbFrameStorage
+from invest_bot.db.repositories import SqlAlchemyStockRepository
 from invest_bot.market.repositories import DatasetStorage
+from invest_bot.market.stock_master import StockMasterRepository
 from invest_bot.market.storage import SavedDataset
 
 
@@ -58,8 +61,10 @@ class MarketReportGenerator:
         latest_investor = self._latest_row(investor_frame)
         latest_stock_info = self._latest_row(stock_info_frame)
 
-        symbol_name = self._text_value(latest_stock_info.get("prdt_abrv_name")) or self._text_value(
-            latest_indicator.get("symbol_name")
+        symbol_name = self._resolve_symbol_name(
+            request.symbol,
+            self._text_value(latest_stock_info.get("prdt_abrv_name")),
+            self._text_value(latest_indicator.get("symbol_name")),
         )
         close = self._number_value(latest_indicator.get("close"))
         ma_5 = self._number_value(latest_indicator.get("ma_5"))
@@ -127,6 +132,42 @@ class MarketReportGenerator:
     def save_report(self, filename: str, frame: pd.DataFrame) -> SavedDataset:
         return self.processed_storage.save("market_reports", filename, frame)
 
+    def _resolve_symbol_name(self, symbol: str, *candidates: str) -> str:
+        canonical_name = self._load_symbol_name_from_db(symbol) or self._load_symbol_name_from_master(symbol)
+        if self._is_meaningful_symbol_name(symbol, canonical_name):
+            return canonical_name
+        for candidate in candidates:
+            if self._is_meaningful_symbol_name(symbol, candidate):
+                return candidate.strip()
+        return ""
+
+    def _load_symbol_name_from_db(self, symbol: str) -> str:
+        database_url = getattr(self.raw_storage, "database_url", "").strip()
+        if not database_url:
+            return ""
+        try:
+            engine = build_engine(database_url)
+            try:
+                repository = SqlAlchemyStockRepository(build_session_factory(engine))
+                record = repository.get_by_symbol(symbol)
+                return record.symbol_name.strip() if record is not None else ""
+            finally:
+                engine.dispose()
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _load_symbol_name_from_master(symbol: str) -> str:
+        try:
+            repository = StockMasterRepository()
+            normalized = MarketReportGenerator._normalize_symbol(symbol)
+            for entry in repository.load_entries():
+                if MarketReportGenerator._normalize_symbol(entry.get("symbol", "")) == normalized:
+                    return str(entry.get("symbol_name", "")).strip()
+        except Exception:
+            return ""
+        return ""
+
     def _load_processed_csv(self, dataset: str, filename: str, parse_date: bool = False) -> pd.DataFrame:
         try:
             frame = self.processed_storage.load(dataset, filename)
@@ -162,6 +203,18 @@ class MarketReportGenerator:
         if isinstance(value, pd.Timestamp):
             return value.strftime("%Y-%m-%d")
         return str(value)
+
+    @staticmethod
+    def _normalize_symbol(value: object) -> str:
+        text = str(value).strip()
+        if text.isdigit():
+            return text.zfill(6)
+        return text
+
+    @classmethod
+    def _is_meaningful_symbol_name(cls, symbol: str, name: str) -> bool:
+        cleaned = str(name).strip()
+        return bool(cleaned) and cls._normalize_symbol(cleaned) != cls._normalize_symbol(symbol)
 
     @staticmethod
     def _classify_trend(close: float | None, ma_5: float | None, ma_20: float | None, ma_60: float | None) -> str:

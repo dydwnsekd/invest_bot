@@ -3,8 +3,12 @@ from __future__ import annotations
 import pandas as pd
 
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.db.contracts import StockRecord
+from invest_bot.db.engine import build_engine, build_session_factory
+from invest_bot.db.frame_storage import DbFrameStorage
+from invest_bot.db.repositories import SqlAlchemyStockRepository
 from invest_bot.market.storage import CsvStorage
-from tests.helpers import make_test_dir
+from tests.helpers import init_test_db, make_test_dir
 
 
 def test_dashboard_service_builds_streamlit_snapshot_and_test_report() -> None:
@@ -93,3 +97,32 @@ def test_dashboard_service_builds_streamlit_snapshot_and_test_report() -> None:
     assert report.command == "python -m pytest tests/test_golden_cross_strategy.py"
     assert report.test_cases[1].name == "tests.test_golden_cross_strategy::test_sell_signal"
     assert report.test_cases[1].status == "failed"
+
+
+def test_dashboard_service_prefers_canonical_symbol_names_over_stock_info_snapshot() -> None:
+    test_dir = make_test_dir("dashboard_service_canonical_symbol_names")
+    database_url = f"sqlite+pysqlite:///{(test_dir / 'dashboard.db').as_posix()}"
+    init_test_db(database_url)
+    storage = DbFrameStorage(database_url)
+
+    session_factory = build_session_factory(build_engine(database_url))
+    stock_repo = SqlAlchemyStockRepository(session_factory)
+    stock_repo.upsert(StockRecord(symbol="000660", symbol_name="SK하이닉스", market="KOSPI"))
+
+    storage.save(
+        "stock_info",
+        "000660.csv",
+        pd.DataFrame([{"pdno": "000660", "prdt_abrv_name": "000660", "collection_warning": "fallback"}]),
+    )
+    storage.save(
+        "daily_prices",
+        "000660_20260301_20260329.csv",
+        pd.DataFrame([{"date": "20260329", "close": 200000, "volume": 1000}]),
+    )
+
+    service = DashboardDataService(dataset_storage=storage)
+    snapshot = service.build_snapshot()
+    daily_preview = next(preview for preview in snapshot.raw_previews if preview.name == "daily_prices")
+
+    assert daily_preview.symbol == "000660"
+    assert daily_preview.symbol_name == "SK하이닉스"

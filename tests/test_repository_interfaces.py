@@ -60,7 +60,7 @@ def test_market_data_collector_accepts_storage_protocol():
     storage = InMemoryStorage(root_dir=Path("memory://raw"), saved=[])
     collector = MarketDataCollector(settings=AppSettings(), storage=storage)
 
-    result = collector.save_stock_info("005930", pd.DataFrame([{"pdno": "005930"}]))
+    result = collector.save_stock_info("005930", pd.DataFrame([{"pdno": "005930", "prdt_abrv_name": "삼성전자"}]))
 
     assert result.dataset == "stock_info"
     assert result.rows == 1

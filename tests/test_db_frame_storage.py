@@ -4,8 +4,11 @@ import pandas as pd
 from sqlalchemy import inspect
 
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.db.contracts import StockRecord
+from invest_bot.db.engine import build_session_factory
 from invest_bot.db.engine import build_engine
 from invest_bot.db.frame_storage import DbFrameStorage
+from invest_bot.db.repositories import SqlAlchemyStockRepository
 from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.generate_backtest import BacktestRequest, GoldenCrossBacktestGenerator
 from invest_bot.jobs.generate_golden_cross_signals import GoldenCrossSignalGenerator
@@ -39,6 +42,8 @@ def test_db_backed_analysis_and_dashboard_flow() -> None:
     database_url = make_db_url(test_dir)
     init_test_db(database_url)
     storage = DbFrameStorage(database_url)
+    session_factory = build_session_factory(build_engine(database_url))
+    SqlAlchemyStockRepository(session_factory).upsert(StockRecord(symbol="005930", symbol_name="삼성전자", market="KOSPI"))
 
     storage.save(
         "daily_prices",
@@ -52,11 +57,6 @@ def test_db_backed_analysis_and_dashboard_flow() -> None:
                 {"stck_bsop_date": "20260305", "stck_clpr": "74000", "acml_vol": "1400"},
             ]
         ),
-    )
-    storage.save(
-        "stock_info",
-        "005930.csv",
-        pd.DataFrame([{"pdno": "005930", "prdt_abrv_name": "삼성전자"}]),
     )
     storage.save(
         "investor_daily",

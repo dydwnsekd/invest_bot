@@ -93,6 +93,12 @@ class MarketDataCollector:
         return summary_result, prices_result
 
     def save_stock_info(self, symbol: str, stock_info: pd.DataFrame) -> SavedDataset:
+        if not self._should_persist_stock_info(symbol, stock_info):
+            return SavedDataset(
+                dataset="stock_info",
+                path=self.storage.root_dir / "stock_info" / f"{symbol}.csv",
+                rows=len(stock_info),
+            )
         result = self.storage.save(
             dataset="stock_info",
             filename=f"{symbol}.csv",
@@ -130,14 +136,24 @@ class MarketDataCollector:
                 stock_info = self._fallback_stock_info(symbol, error)
                 stock_info_error = str(error)
             investor_daily, investor_summary = self.collect_investor_daily(symbol, end_date)
+            persist_stock_info = self._should_persist_stock_info(symbol, stock_info)
 
             saved_daily_summary, saved_daily_prices = self.save_daily_prices(
                 symbol, start_date, end_date, daily_summary, daily_prices
             )
-            saved_stock_info = self.save_stock_info(symbol, stock_info)
+            saved_stock_info = self.save_stock_info(symbol, stock_info) if persist_stock_info else None
             saved_investor_detail, saved_investor_summary = self.save_investor_daily(
                 symbol, end_date, investor_daily, investor_summary
             )
+
+            saved_files = [
+                str(saved_daily_summary.path),
+                str(saved_daily_prices.path),
+                str(saved_investor_detail.path),
+                str(saved_investor_summary.path),
+            ]
+            if saved_stock_info is not None:
+                saved_files.insert(2, str(saved_stock_info.path))
 
             return BatchCollectionResult(
                 symbol=symbol,
@@ -147,13 +163,7 @@ class MarketDataCollector:
                 stock_info_rows=len(stock_info),
                 investor_daily_rows=len(investor_daily),
                 investor_summary_rows=len(investor_summary),
-                saved_files=[
-                    str(saved_daily_summary.path),
-                    str(saved_daily_prices.path),
-                    str(saved_stock_info.path),
-                    str(saved_investor_detail.path),
-                    str(saved_investor_summary.path),
-                ],
+                saved_files=saved_files,
                 error=stock_info_error,
             )
         except Exception as error:  # noqa: BLE001
@@ -184,3 +194,16 @@ class MarketDataCollector:
                 }
             ]
         )
+
+    @staticmethod
+    def _should_persist_stock_info(symbol: str, stock_info: pd.DataFrame) -> bool:
+        if stock_info.empty:
+            return False
+        first_row = stock_info.iloc[0]
+        if str(first_row.get("collection_warning", "")).strip():
+            return False
+        symbol_name = str(first_row.get("prdt_abrv_name", "")).strip()
+        product_code = str(first_row.get("pdno", "")).strip() or symbol
+        normalized_symbol = str(product_code).strip().zfill(6) if str(product_code).strip().isdigit() else str(product_code).strip()
+        normalized_name = str(symbol_name).strip().zfill(6) if str(symbol_name).strip().isdigit() else str(symbol_name).strip()
+        return bool(symbol_name) and normalized_name != normalized_symbol

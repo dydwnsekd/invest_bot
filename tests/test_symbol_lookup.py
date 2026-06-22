@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import pandas as pd
 import pytest
 
-from invest_bot.market.storage import CsvStorage
 from invest_bot.market.stock_master import StockMasterRepository
 from invest_bot.market.symbol_lookup import SymbolLookup
 from tests.helpers import make_test_dir
@@ -78,11 +76,10 @@ def test_symbol_lookup_refreshes_master_when_name_is_missing():
     assert repo.refresh_calls == 1
 
 
-def test_symbol_lookup_can_fallback_to_stock_info_entries():
-    test_dir = make_test_dir("symbol_lookup_stock_info")
-    storage = CsvStorage(test_dir / "raw")
-    storage.save("stock_info", "005930.csv", pd.DataFrame([{"pdno": "005930", "prdt_abrv_name": "삼성전자"}]))
+def test_symbol_lookup_uses_master_entries_only_for_name_resolution():
+    test_dir = make_test_dir("symbol_lookup_master_only")
     repo = StubStockMasterRepository(test_dir / "stock_master.csv")
+    repo.write_entries([{"symbol": "005930", "symbol_name": "삼성전자", "market": "KOSPI"}])
     lookup = SymbolLookup(test_dir / "raw" / "stock_info", master_repository=repo)
 
     resolved = lookup.resolve("삼성전자")
@@ -103,9 +100,6 @@ def test_symbol_lookup_raises_for_unknown_name():
 
 def test_symbol_lookup_lists_deduplicated_entries_for_picker():
     test_dir = make_test_dir("symbol_lookup_list_entries")
-    storage = CsvStorage(test_dir / "raw")
-    storage.save("stock_info", "005930.csv", pd.DataFrame([{"pdno": "005930", "prdt_abrv_name": "삼성전자"}]))
-    storage.save("stock_info", "000660.csv", pd.DataFrame([{"pdno": "000660", "prdt_abrv_name": "SK하이닉스"}]))
     repo = StubStockMasterRepository(test_dir / "stock_master.csv")
     repo.write_entries(
         [
@@ -113,7 +107,7 @@ def test_symbol_lookup_lists_deduplicated_entries_for_picker():
             {"symbol": "000660", "symbol_name": "SK하이닉스", "market": "KOSPI"},
         ]
     )
-    lookup = SymbolLookup(test_dir / "raw" / "stock_info", master_repository=repo)
+    lookup = SymbolLookup(master_repository=repo)
 
     entries = lookup.list_entries()
 
@@ -128,16 +122,6 @@ def test_symbol_lookup_falls_back_to_master_entries_when_db_snapshot_load_fails(
     repo = StubStockMasterRepository(test_dir / "stock_master.csv")
     repo.write_entries([{"symbol": "005930", "symbol_name": "삼성전자", "market": "KOSPI"}])
     lookup = SymbolLookup(master_repository=repo)
-
-    class FailingStorage:
-        class Repository:
-            @staticmethod
-            def list_latest(_datasets):
-                raise RuntimeError("db unavailable")
-
-        repository = Repository()
-
-    lookup.dataset_storage = FailingStorage()
 
     resolved = lookup.resolve("삼성전자")
 
