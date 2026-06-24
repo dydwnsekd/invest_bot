@@ -17,6 +17,7 @@ from invest_bot.dashboard.streamlit_formatters import (
     state_label,
 )
 
+REPORT_SELECTION_KEY = "report_selected_entry_key"
 
 def render_reports_tab(
     snapshot,
@@ -27,91 +28,55 @@ def render_reports_tab(
 ) -> None:
     st.markdown('<h3 class="section-title">리포트 해석</h3>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-copy">종목별 현재 판단과 이유를 한국어 기준으로 먼저 읽고, 필요하면 상세 수치와 차트까지 이어서 확인할 수 있습니다.</div>',
+        '<div class="section-copy">보고 싶은 종목 리포트를 하나 선택해 핵심 판단과 차트를 집중해서 읽을 수 있도록 화면을 정리했습니다.</div>',
         unsafe_allow_html=True,
     )
 
     report_previews = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
-    signal_previews = [preview for preview in snapshot.processed_previews if preview.name == "golden_cross_signals"]
-
-    report_entries = build_report_entries(report_previews, service, read_preview_frame=read_preview_frame)
-    if not report_entries:
+    if not report_previews:
         st.info("표시할 시장 리포트가 아직 없습니다. 전체 파이프라인이나 리포트 생성을 먼저 실행해 주세요.")
         return
 
-    filter_left, filter_mid, filter_right = st.columns([1.4, 1, 1], gap="small")
-    query = filter_left.text_input(
-        "종목 검색",
+    query = st.text_input(
+        "리포트 검색",
         placeholder="종목코드 또는 종목명으로 찾기",
         key="report_query",
     ).strip().lower()
-    opinion_filter = filter_mid.selectbox(
-        "최종 의견",
-        ("전체", "매수 관점", "관망", "매도 관점", "관심 관찰", "정보 부족"),
-        key="report_opinion_filter",
+    visible_previews = query_report_previews(report_previews, query)
+    visible_entries = build_report_entries(visible_previews, service, read_preview_frame=read_preview_frame)
+
+    metric_columns = st.columns(3)
+    metric_columns[0].metric("전체 리포트", len(report_previews))
+    metric_columns[1].metric("현재 후보", len(visible_entries))
+    metric_columns[2].metric("매수 관점", sum(1 for item in visible_entries if item["final_opinion"] == "buy"))
+
+    if not visible_entries:
+        st.warning("현재 검색 조건에 맞는 리포트가 없습니다.")
+        return
+
+    selected_entry_key = resolve_selected_report_key(
+        visible_entries,
+        st.session_state.get(REPORT_SELECTION_KEY),
     )
-    sort_option = filter_right.selectbox(
-        "정렬",
-        ("최신 리포트 우선", "매수 관점 우선", "종목명순"),
-        key="report_sort",
+    selected_key = st.selectbox(
+        "리포트 선택",
+        options=[str(entry["entry_key"]) for entry in visible_entries],
+        index=selected_entry_key_index(visible_entries, selected_entry_key),
+        format_func=lambda entry_key: format_report_selection_option(visible_entries, entry_key),
+        key=REPORT_SELECTION_KEY,
     )
+    selected_entry = get_report_entry_by_key(visible_entries, selected_key)
 
-    trend_filter, signal_filter = st.columns(2, gap="small")
-    trend_value = trend_filter.selectbox(
-        "추세 상태",
-        ("전체", "상승 우세", "중립", "하락 우세", "정보 부족"),
-        key="report_trend_filter",
+    st.caption(
+        f"현재 조건에서 {len(visible_entries)}개의 리포트 중 선택한 1건만 본문에 표시합니다."
     )
-    signal_value = signal_filter.selectbox(
-        "골든크로스 신호",
-        ("전체", "매수 관점", "관망", "매도 관점", "정보 부족"),
-        key="report_signal_filter",
+    render_market_report_card(
+        selected_entry["preview"],
+        service,
+        frame=selected_entry["frame"],
+        read_preview_frame=read_preview_frame,
+        load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
     )
-
-    filtered_entries = filter_report_entries(
-        report_entries=report_entries,
-        query=query,
-        opinion_filter=opinion_filter,
-        trend_filter=trend_value,
-        signal_filter=signal_value,
-    )
-    sorted_entries = sort_report_entries(filtered_entries, sort_option)
-
-    metric_columns = st.columns(4)
-    metric_columns[0].metric("전체 리포트", len(sorted_entries))
-    metric_columns[1].metric("매수 관점", sum(1 for item in sorted_entries if item["final_opinion"] == "buy"))
-    metric_columns[2].metric("관망", sum(1 for item in sorted_entries if item["final_opinion"] == "hold"))
-    metric_columns[3].metric("매도 관점", sum(1 for item in sorted_entries if item["final_opinion"] == "sell"))
-
-    if not sorted_entries:
-        st.warning("현재 필터 조건에 맞는 리포트가 없습니다.")
-    else:
-        st.caption(f"현재 조건에서 {len(sorted_entries)}개의 리포트를 표시합니다.")
-        report_columns = st.columns(2, gap="large")
-        for index, entry in enumerate(sorted_entries):
-            with report_columns[index % 2]:
-                render_market_report_card(
-                    entry["preview"],
-                    service,
-                    frame=entry["frame"],
-                    read_preview_frame=read_preview_frame,
-                    load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
-                )
-
-    filtered_symbols = {entry["symbol"] for entry in sorted_entries}
-    visible_signal_previews = [
-        preview for preview in signal_previews if not filtered_symbols or preview.symbol in filtered_symbols
-    ]
-
-    if visible_signal_previews:
-        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-        st.markdown("#### 최신 골든크로스 신호")
-        st.caption("현재 리포트 필터에 맞는 종목의 최신 신호만 함께 보여줍니다.")
-        signal_columns = st.columns(2)
-        for index, preview in enumerate(visible_signal_previews[:6]):
-            with signal_columns[index % 2]:
-                render_signal_card(preview, service, read_preview_frame=read_preview_frame)
-
 
 def build_report_entries(
     previews: list[DatasetPreview],
@@ -125,8 +90,10 @@ def build_report_entries(
         if frame.empty:
             continue
         row = frame.iloc[-1]
+        entry_key = build_report_entry_key(preview)
         entries.append(
             {
+                "entry_key": entry_key,
                 "preview": preview,
                 "frame": frame,
                 "symbol": preview.symbol,
@@ -143,6 +110,85 @@ def build_report_entries(
         )
     return entries
 
+def build_report_entry_key(preview: DatasetPreview) -> str:
+    return f"{preview.symbol}:{preview.path.name}"
+
+def query_report_previews(previews: list[DatasetPreview], query: str) -> list[DatasetPreview]:
+    if not query:
+        return previews
+    return [
+        preview
+        for preview in previews
+        if query in str(preview.symbol).lower() or query in str(preview.symbol_name).lower()
+    ]
+
+
+def query_report_entries(report_entries: list[dict[str, object]], query: str) -> list[dict[str, object]]:
+    if not query:
+        return report_entries
+    return [
+        entry
+        for entry in report_entries
+        if query in str(entry["symbol"]).lower() or query in str(entry["symbol_name"]).lower()
+    ]
+
+def get_report_entry_by_key(
+    report_entries: list[dict[str, object]],
+    entry_key: str | None,
+) -> dict[str, object] | None:
+    if entry_key:
+        for entry in report_entries:
+            if str(entry["entry_key"]) == entry_key:
+                return entry
+    return None
+
+
+def resolve_selected_report_key(
+    report_entries: list[dict[str, object]],
+    selected_entry_key: str | None,
+) -> str | None:
+    selected_entry = get_report_entry_by_key(report_entries, selected_entry_key)
+    if selected_entry is not None:
+        return str(selected_entry["entry_key"])
+    if not report_entries:
+        return None
+    return str(report_entries[0]["entry_key"])
+
+
+def resolve_selected_report_entry(
+    report_entries: list[dict[str, object]],
+    selected_entry_key: str | None,
+) -> dict[str, object] | None:
+    resolved_key = resolve_selected_report_key(report_entries, selected_entry_key)
+    return get_report_entry_by_key(report_entries, resolved_key)
+
+
+def selected_entry_key_index(report_entries: list[dict[str, object]], selected_entry_key: str | None) -> int:
+    if not report_entries or selected_entry_key is None:
+        return 0
+    for index, entry in enumerate(report_entries):
+        if str(entry["entry_key"]) == selected_entry_key:
+            return index
+    return 0
+
+
+def selected_entry_index(report_entries: list[dict[str, object]], selected_entry: dict[str, object] | None) -> int:
+    if selected_entry is None:
+        return 0
+    return selected_entry_key_index(report_entries, str(selected_entry["entry_key"]))
+
+def format_report_selection_option(report_entries: list[dict[str, object]], entry_key: str) -> str:
+    for entry in report_entries:
+        if str(entry["entry_key"]) != entry_key:
+            continue
+        symbol_name = str(entry["symbol_name"] or "")
+        symbol = str(entry["symbol"])
+        opinion = str(entry["display_opinion"])
+        date = str(entry["date"])
+        if symbol_name:
+            return f"{symbol_name} ({symbol}) · {opinion} · {date}"
+        return f"{symbol} · {opinion} · {date}"
+    return entry_key
 
 def filter_report_entries(
     report_entries: list[dict[str, object]],
@@ -151,14 +197,7 @@ def filter_report_entries(
     trend_filter: str,
     signal_filter: str,
 ) -> list[dict[str, object]]:
-    filtered = report_entries
-    if query:
-        filtered = [
-            entry
-            for entry in filtered
-            if query in str(entry["symbol"]).lower()
-            or query in str(entry["symbol_name"]).lower()
-        ]
+    filtered = query_report_entries(report_entries, query)
     if opinion_filter != "전체":
         filtered = [entry for entry in filtered if entry["display_opinion"] == opinion_filter]
     if trend_filter != "전체":
@@ -166,7 +205,6 @@ def filter_report_entries(
     if signal_filter != "전체":
         filtered = [entry for entry in filtered if entry["display_signal"] == signal_filter]
     return filtered
-
 
 def sort_report_entries(report_entries: list[dict[str, object]], sort_option: str) -> list[dict[str, object]]:
     if sort_option == "종목명순":
@@ -182,7 +220,6 @@ def sort_report_entries(report_entries: list[dict[str, object]], sort_option: st
             ),
         )
     return sorted(report_entries, key=lambda entry: (str(entry["date"]), str(entry["symbol"])), reverse=True)
-
 
 def render_market_report_card(
     preview: DatasetPreview,
@@ -245,37 +282,3 @@ def render_market_report_card(
 
         if st.toggle("리포트 상세 보기", key=f"toggle_report_detail_{preview.symbol}_{preview.path.name}"):
             st.dataframe(format_frame_for_display(frame, service), width="stretch", hide_index=True)
-
-
-def render_signal_card(
-    preview: DatasetPreview,
-    service: DashboardDataService,
-    *,
-    read_preview_frame: Callable[[object], pd.DataFrame],
-) -> None:
-    frame = read_preview_frame(preview)
-    if frame.empty:
-        return
-    row = frame.iloc[-1]
-    signal = str(row.get("signal", "unknown"))
-    signal_label = state_label(service, signal)
-    symbol_label = format_symbol_display(preview.symbol, preview.symbol_name)
-    reason = localize_reason(str(row.get("signal_reason", "")))
-
-    st.markdown(
-        f"""
-        <div class="streamlit-card">
-          <div class="muted-label">{escape(symbol_label or "종목 정보 없음")}</div>
-          <h4 class="section-title" style="margin-top:0.35rem;">{escape(signal_label)}</h4>
-          <div class="section-copy">{escape(reason)}</div>
-          <div style="margin-top:0.7rem;">
-            <span class="badge badge-{escape(signal)}">{escape(signal_label)}</span>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    stat_columns = st.columns(2)
-    stat_columns[0].metric("5일선", format_number(row.get("signal_ma_5")))
-    stat_columns[1].metric("20일선", format_number(row.get("signal_ma_20")))

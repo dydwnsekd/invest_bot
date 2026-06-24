@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import pandas as pd
 import pytest
 
-from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
 from invest_bot.dashboard.streamlit_charts import available_chart_presets, default_chart_preset, prepare_time_series_frame
 from invest_bot.dashboard.streamlit_actions import require_selected_items, require_single_selected_item
 from invest_bot.dashboard.streamlit_formatters import (
@@ -16,7 +19,19 @@ from invest_bot.dashboard.streamlit_formatters import (
     localize_report_summary as _localize_report_summary,
     localize_report_summary_from_row as _localize_report_summary_from_row,
 )
-from invest_bot.dashboard.streamlit_reports import filter_report_entries, sort_report_entries
+import invest_bot.dashboard.streamlit_reports as streamlit_reports_module
+from invest_bot.dashboard.streamlit_reports import (
+    filter_report_entries,
+    format_report_selection_option,
+    get_report_entry_by_key,
+    query_report_entries,
+    query_report_previews,
+    resolve_selected_report_entry,
+    resolve_selected_report_key,
+    selected_entry_index,
+    selected_entry_key_index,
+    sort_report_entries,
+)
 from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolEntry
 
 
@@ -179,3 +194,261 @@ def test_available_chart_presets_detects_investor_flow_chart() -> None:
 
     assert [preset.key for preset in presets] == ["flow"]
     assert default_chart_preset("investor_daily", presets) == "flow"
+
+
+def test_query_report_entries_filters_by_symbol_or_name() -> None:
+    entries = [
+        {"entry_key": "005930:a.csv", "symbol": "005930", "symbol_name": "삼성전자"},
+        {"entry_key": "000660:b.csv", "symbol": "000660", "symbol_name": "SK하이닉스"},
+    ]
+
+    filtered = query_report_entries(entries, "삼성")
+    assert [entry["entry_key"] for entry in filtered] == ["005930:a.csv"]
+    assert query_report_entries(entries, "없는종목") == []
+    assert query_report_entries(entries, "") == entries
+
+
+def test_resolve_selected_report_entry_prefers_valid_selection_then_falls_back() -> None:
+    entries = [
+        {"entry_key": "005930:a.csv", "symbol": "005930", "symbol_name": "삼성전자"},
+        {"entry_key": "000660:b.csv", "symbol": "000660", "symbol_name": "SK하이닉스"},
+    ]
+
+    assert resolve_selected_report_entry(entries, "000660:b.csv") == entries[1]
+    assert resolve_selected_report_entry(entries, "missing") == entries[0]
+    assert resolve_selected_report_entry([], "missing") is None
+
+
+def test_selected_entry_index_matches_resolved_entry() -> None:
+    entries = [
+        {"entry_key": "005930:a.csv", "symbol": "005930", "symbol_name": "삼성전자"},
+        {"entry_key": "000660:b.csv", "symbol": "000660", "symbol_name": "SK하이닉스"},
+    ]
+
+    selected = resolve_selected_report_entry(entries, "000660:b.csv")
+    assert selected_entry_index(entries, selected) == 1
+    assert selected_entry_index(entries, None) == 0
+
+
+def test_format_report_selection_option_includes_name_symbol_opinion_and_date() -> None:
+    entries = [
+        {
+            "entry_key": "005930:a.csv",
+            "symbol": "005930",
+            "symbol_name": "삼성전자",
+            "display_opinion": "매수 관점",
+            "date": "2026-06-24",
+        }
+    ]
+
+    assert format_report_selection_option(entries, "005930:a.csv") == "삼성전자 (005930) · 매수 관점 · 2026-06-24"
+    assert format_report_selection_option(entries, "missing") == "missing"
+
+
+class _FakeMetricColumn:
+    def metric(self, *args, **kwargs) -> None:
+        return None
+
+
+class _FakeContext:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+
+class _FakeStreamlit:
+    def __init__(self, *, query: str = "", selected_value: str | None = None):
+        self.query = query
+        self.selected_value = selected_value
+        self.session_state: dict[str, object] = {}
+        self.warning_messages: list[str] = []
+        self.info_messages: list[str] = []
+
+    def markdown(self, *args, **kwargs) -> None:
+        return None
+
+    def text_input(self, *args, **kwargs) -> str:
+        return self.query
+
+    def columns(self, spec, **kwargs):
+        count = spec if isinstance(spec, int) else len(spec)
+        return [_FakeMetricColumn() for _ in range(count)]
+
+    def warning(self, message: str) -> None:
+        self.warning_messages.append(message)
+
+    def info(self, message: str) -> None:
+        self.info_messages.append(message)
+
+    def selectbox(self, label: str, options: list[str], index: int = 0, format_func=None, key: str | None = None):
+        value = self.selected_value if self.selected_value in options else options[index]
+        if key is not None:
+            self.session_state[key] = value
+        return value
+
+    def caption(self, *args, **kwargs) -> None:
+        return None
+
+    def container(self, **kwargs):
+        return _FakeContext()
+
+    def toggle(self, *args, **kwargs) -> bool:
+        return False
+
+    def dataframe(self, *args, **kwargs) -> None:
+        return None
+
+
+def _make_report_preview(symbol: str, symbol_name: str, filename: str) -> DatasetPreview:
+    return DatasetPreview(
+        name="market_reports",
+        display_name="시장 상황 요약 리포트",
+        path=Path(filename),
+        row_count=1,
+        columns=["date", "symbol_name", "final_opinion", "summary", "trend_state", "golden_cross_signal", "rsi_state", "investor_flow"],
+        summary="summary",
+        purpose="purpose",
+        first_look="first_look",
+        symbol=symbol,
+        symbol_name=symbol_name,
+        recommended_columns=["date", "symbol_name", "final_opinion"],
+    )
+
+
+def test_render_reports_tab_renders_only_one_selected_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
+
+    captured: list[str] = []
+
+    def fake_render_market_report_card(preview, service, **kwargs) -> None:
+        captured.append(preview.symbol)
+
+    monkeypatch.setattr(streamlit_reports_module, "render_market_report_card", fake_render_market_report_card)
+
+    previews = [
+        _make_report_preview("005930", "삼성전자", "005930_20260624.csv"),
+        _make_report_preview("000660", "SK하이닉스", "000660_20260624.csv"),
+    ]
+    frames = {
+        "005930": pd.DataFrame([{"date": "2026-06-24", "symbol_name": "삼성전자", "final_opinion": "buy", "summary": "a", "trend_state": "bullish", "golden_cross_signal": "buy", "rsi_state": "strong", "investor_flow": "supportive"}]),
+        "000660": pd.DataFrame([{"date": "2026-06-24", "symbol_name": "SK하이닉스", "final_opinion": "hold", "summary": "b", "trend_state": "neutral", "golden_cross_signal": "hold", "rsi_state": "neutral", "investor_flow": "mixed"}]),
+    }
+    snapshot = SimpleNamespace(processed_previews=previews)
+
+    streamlit_reports_module.render_reports_tab(
+        snapshot,
+        DashboardDataService(),
+        read_preview_frame=lambda preview: frames[preview.symbol],
+        load_indicator_frame_for_symbol=lambda symbol: frames[symbol],
+    )
+
+    assert captured == ["005930"]
+
+
+def test_render_reports_tab_shows_warning_and_skips_body_when_query_has_no_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(query="없는종목")
+    monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
+
+    captured: list[str] = []
+
+    def fake_render_market_report_card(preview, service, **kwargs) -> None:
+        captured.append(preview.symbol)
+
+    monkeypatch.setattr(streamlit_reports_module, "render_market_report_card", fake_render_market_report_card)
+
+    previews = [_make_report_preview("005930", "삼성전자", "005930_20260624.csv")]
+    frames = {
+        "005930": pd.DataFrame([{"date": "2026-06-24", "symbol_name": "삼성전자", "final_opinion": "buy", "summary": "a", "trend_state": "bullish", "golden_cross_signal": "buy", "rsi_state": "strong", "investor_flow": "supportive"}]),
+    }
+    snapshot = SimpleNamespace(processed_previews=previews)
+
+    streamlit_reports_module.render_reports_tab(
+        snapshot,
+        DashboardDataService(),
+        read_preview_frame=lambda preview: frames[preview.symbol],
+        load_indicator_frame_for_symbol=lambda symbol: frames[symbol],
+    )
+
+    assert captured == []
+    assert fake_st.warning_messages == ["현재 검색 조건에 맞는 리포트가 없습니다."]
+
+
+def test_render_market_report_card_keeps_chart_for_selected_symbol(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
+
+    chart_calls: list[tuple[str, str]] = []
+
+    def fake_render_chart_selector(frame, dataset_name: str, key_prefix: str, height: int) -> None:
+        chart_calls.append((dataset_name, key_prefix))
+
+    monkeypatch.setattr(streamlit_reports_module, "render_chart_selector", fake_render_chart_selector)
+
+    preview = _make_report_preview("005930", "삼성전자", "005930_20260624.csv")
+    frame = pd.DataFrame([{
+        "date": "2026-06-24",
+        "symbol_name": "삼성전자",
+        "final_opinion": "buy",
+        "summary": "a",
+        "trend_state": "bullish",
+        "golden_cross_signal": "buy",
+        "rsi_state": "strong",
+        "investor_flow": "supportive",
+        "close": 100,
+        "ma_5": 90,
+        "ma_20": 80,
+        "rsi_14": 60,
+        "golden_cross_reason": "ma_5 crossed above ma_20.",
+    }])
+    loaded_symbols: list[str] = []
+
+    def fake_load_indicator(symbol: str):
+        loaded_symbols.append(symbol)
+        return pd.DataFrame([{"date": "2026-06-24", "close": 100, "ma_5": 90, "ma_20": 80, "rsi_14": 60}])
+
+    streamlit_reports_module.render_market_report_card(
+        preview,
+        DashboardDataService(),
+        frame=frame,
+        read_preview_frame=lambda _: frame,
+        load_indicator_frame_for_symbol=fake_load_indicator,
+    )
+
+    assert loaded_symbols == ["005930"]
+    assert chart_calls == [("daily_prices_indicators", "report_005930_005930_20260624.csv")]
+
+
+def test_query_report_previews_filters_before_frame_loading() -> None:
+    previews = [
+        _make_report_preview("005930", "삼성전자", "005930_20260624.csv"),
+        _make_report_preview("000660", "SK하이닉스", "000660_20260624.csv"),
+    ]
+
+    filtered = query_report_previews(previews, "삼성")
+    assert [preview.symbol for preview in filtered] == ["005930"]
+    assert query_report_previews(previews, "없는종목") == []
+
+
+def test_resolve_selected_report_key_prefers_valid_key_then_falls_back() -> None:
+    entries = [
+        {"entry_key": "005930:a.csv", "symbol": "005930", "symbol_name": "삼성전자"},
+        {"entry_key": "000660:b.csv", "symbol": "000660", "symbol_name": "SK하이닉스"},
+    ]
+
+    assert resolve_selected_report_key(entries, "000660:b.csv") == "000660:b.csv"
+    assert resolve_selected_report_key(entries, "missing") == "005930:a.csv"
+    assert resolve_selected_report_key([], "missing") is None
+
+
+def test_get_report_entry_by_key_and_selected_entry_key_index_work_together() -> None:
+    entries = [
+        {"entry_key": "005930:a.csv", "symbol": "005930", "symbol_name": "삼성전자"},
+        {"entry_key": "000660:b.csv", "symbol": "000660", "symbol_name": "SK하이닉스"},
+    ]
+
+    assert get_report_entry_by_key(entries, "000660:b.csv") == entries[1]
+    assert selected_entry_key_index(entries, "000660:b.csv") == 1
+    assert selected_entry_key_index(entries, None) == 0
