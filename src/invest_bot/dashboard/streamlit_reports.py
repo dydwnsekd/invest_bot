@@ -190,6 +190,27 @@ def format_report_selection_option(report_entries: list[dict[str, object]], entr
         return f"{symbol} · {opinion} · {date}"
     return entry_key
 
+
+def build_strategy_summary_items(service: DashboardDataService, row: pd.Series) -> list[dict[str, str]]:
+    strategies = [
+        ("RSI", "rsi_strategy_signal", "rsi_strategy_reason"),
+        ("Trend Filter", "trend_filter_signal", "trend_filter_reason"),
+        ("Mean Reversion", "mean_reversion_signal", "mean_reversion_reason"),
+    ]
+    items: list[dict[str, str]] = []
+    for label, signal_key, reason_key in strategies:
+        signal = str(row.get(signal_key, "unknown"))
+        reason = str(row.get(reason_key, "")).strip()
+        items.append(
+            {
+                "label": label,
+                "signal": signal,
+                "signal_label": state_label(service, signal),
+                "reason": reason or "판단 근거가 아직 없습니다.",
+            }
+        )
+    return items
+
 def filter_report_entries(
     report_entries: list[dict[str, object]],
     query: str,
@@ -238,6 +259,7 @@ def render_market_report_card(
     symbol_label = format_symbol_display(preview.symbol, preview.symbol_name or str(row.get("symbol_name", "")))
     summary = localize_report_summary_from_row(service, row)
     reason = localize_reason(str(row.get("golden_cross_reason", "")))
+    strategy_items = build_strategy_summary_items(service, row)
 
     with st.container(border=True):
         st.markdown(
@@ -267,6 +289,13 @@ def render_market_report_card(
         detail_columns[1].metric("5일선", format_number(row.get("ma_5")))
         detail_columns[2].metric("20일선", format_number(row.get("ma_20")))
         detail_columns[3].metric("RSI 14", format_number(row.get("rsi_14")))
+
+        st.markdown("#### 전략별 판단")
+        for item in strategy_items:
+            st.markdown(
+                f"**{escape(item['label'])}** · {escape(item['signal_label'])}<br/>{escape(item['reason'])}",
+                unsafe_allow_html=True,
+            )
 
         if reason:
             st.caption(f"판단 근거: {reason}")

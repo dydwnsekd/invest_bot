@@ -28,6 +28,12 @@
 | `volume_ma_5` | 5일 평균 거래량 | `1230000` |
 | `golden_cross_signal` | 골든크로스 기준 신호 | `buy` |
 | `golden_cross_reason` | 골든크로스 판단 이유 | `ma_5 crossed above ma_20.` |
+| `rsi_strategy_signal` | RSI 전략의 직접 판단 | `hold` |
+| `rsi_strategy_reason` | RSI 전략 판단 이유 | `rsi_14 is 58.00, between buy threshold 30.00 and sell threshold 70.00.` |
+| `trend_filter_signal` | 추세 필터 전략의 직접 판단 | `buy` |
+| `trend_filter_reason` | 추세 필터 전략 판단 이유 | `close is 72000.00, above ma_60 68900.00 and above prev_close 71500.00.` |
+| `mean_reversion_signal` | 평균회귀 전략의 직접 판단 | `hold` |
+| `mean_reversion_reason` | 평균회귀 전략 판단 이유 | `close is 72000.00, at 1.0256 of ma_20 70200.00, inside the mean-reversion band.` |
 | `trend_state` | 추세 상태 | `bullish` |
 | `rsi_state` | RSI 해석 상태 | `strong` |
 | `volume_state` | 거래량 해석 상태 | `active` |
@@ -50,7 +56,43 @@
 | `sell` | 5일선이 20일선을 위에서 아래로 이탈한 매도 신호 |
 | `hold` | 뚜렷한 교차가 없어 관망하는 상태 |
 
-### 2. trend_state
+### 2. rsi_strategy_signal / rsi_strategy_reason
+
+RSI 전략이 `rsi_14` 기준으로 직접 내린 판단과 이유입니다.
+
+| 값 | 의미 |
+|---|---|
+| `buy` | RSI가 과매도 구간이라 반등 관점의 매수 신호 |
+| `sell` | RSI가 과열 구간이라 차익 실현/매도 관점 |
+| `hold` | 중간 구간이거나 필요한 값이 부족해 관망 |
+
+이유(`rsi_strategy_reason`)에는 현재 RSI 값과 기준 임계값 비교가 들어갑니다.
+
+### 3. trend_filter_signal / trend_filter_reason
+
+추세 필터 전략이 `close`, `ma_60`, `prev_close`를 비교해 내린 직접 판단입니다.
+
+| 값 | 의미 |
+|---|---|
+| `buy` | 종가가 장기 기준선과 직전 종가보다 모두 위 |
+| `sell` | 종가가 장기 기준선과 직전 종가보다 모두 아래 |
+| `hold` | 방향이 섞였거나 필요한 값이 부족함 |
+
+이유(`trend_filter_reason`)에는 `close`, `ma_60`, `prev_close` 비교 결과가 들어갑니다.
+
+### 4. mean_reversion_signal / mean_reversion_reason
+
+평균회귀 전략이 `close`와 `ma_20` 비율을 비교해 내린 직접 판단입니다.
+
+| 값 | 의미 |
+|---|---|
+| `buy` | 현재 가격이 기준선보다 충분히 낮아 평균회귀 매수 구간 |
+| `sell` | 현재 가격이 기준선보다 충분히 높아 평균회귀 매도 구간 |
+| `hold` | 밴드 안이거나 필요한 값이 부족함 |
+
+이유(`mean_reversion_reason`)에는 `close`, `ma_20`, 비율 또는 부족한 indicator가 들어갑니다.
+
+### 5. trend_state
 
 현재 가격과 이동평균 관계를 기준으로 해석한 추세 상태입니다.
 
@@ -61,7 +103,7 @@
 | `neutral` | 상승/하락 어느 쪽도 강하게 보기 어려운 상태 |
 | `unknown` | 필요한 값이 부족해 판단하지 못한 상태 |
 
-### 3. rsi_state
+### 6. rsi_state
 
 RSI를 해석한 결과입니다.
 
@@ -74,7 +116,7 @@ RSI를 해석한 결과입니다.
 | `neutral` | 중립 구간 |
 | `unknown` | RSI 값이 없어 판단 불가 |
 
-### 4. volume_state
+### 7. volume_state
 
 현재 거래량과 5일 평균 거래량을 비교한 상태입니다.
 
@@ -85,7 +127,7 @@ RSI를 해석한 결과입니다.
 | `quiet` | 평소보다 거래량이 적은 상태 |
 | `unknown` | 거래량 비교에 필요한 값이 부족한 상태 |
 
-### 5. investor_flow
+### 8. investor_flow
 
 외국인, 기관, 개인 순매수 상태를 요약한 값입니다.
 
@@ -96,7 +138,7 @@ RSI를 해석한 결과입니다.
 | `mixed` | 수급 방향이 섞여 있어 해석이 애매함 |
 | `unknown` | 수급 데이터가 없거나 비어 있음 |
 
-### 6. final_opinion
+### 9. final_opinion
 
 리포트가 여러 항목을 종합해 내린 최종 의견입니다.
 
@@ -106,6 +148,9 @@ RSI를 해석한 결과입니다.
 | `sell` | 비교적 매도 또는 회피 쪽으로 해석하기 쉬운 상태 |
 | `hold` | 아직 관망이 자연스러운 상태 |
 | `watch` | 당장 매수는 아니지만 계속 지켜볼 만한 상태 |
+
+> `final_opinion`은 여전히 상위 종합 의견입니다.  
+> `rsi_strategy_signal`, `trend_filter_signal`, `mean_reversion_signal`은 각 전략의 직접 판단이며 이를 대체하지 않습니다.
 
 ## 어떻게 해석하면 좋을까
 
@@ -163,6 +208,12 @@ Trend is bullish, golden cross signal is buy, RSI state is strong, volume is act
   "volume_ma_5": 1230000,
   "golden_cross_signal": "buy",
   "golden_cross_reason": "ma_5 crossed above ma_20.",
+  "rsi_strategy_signal": "hold",
+  "rsi_strategy_reason": "rsi_14 is 58.40, between buy threshold 30.00 and sell threshold 70.00.",
+  "trend_filter_signal": "buy",
+  "trend_filter_reason": "close is 72000.00, above ma_60 68900.00 and above prev_close 71500.00.",
+  "mean_reversion_signal": "hold",
+  "mean_reversion_reason": "close is 72000.00, at 1.0256 of ma_20 70200.00, inside the mean-reversion band.",
   "trend_state": "bullish",
   "rsi_state": "strong",
   "volume_state": "active",
@@ -174,6 +225,11 @@ Trend is bullish, golden cross signal is buy, RSI state is strong, volume is act
   "final_opinion": "buy"
 }
 ```
+
+필수 지표가 부족한 경우 새 전략 필드는 공통적으로 다음 형식을 사용합니다.
+
+- signal: `hold`
+- reason: `Missing indicators: ...`
 
 ## 관련 파일
 

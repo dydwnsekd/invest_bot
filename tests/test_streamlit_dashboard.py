@@ -21,6 +21,7 @@ from invest_bot.dashboard.streamlit_formatters import (
 )
 import invest_bot.dashboard.streamlit_reports as streamlit_reports_module
 from invest_bot.dashboard.streamlit_reports import (
+    build_strategy_summary_items,
     filter_report_entries,
     format_report_selection_option,
     get_report_entry_by_key,
@@ -243,6 +244,26 @@ def test_format_report_selection_option_includes_name_symbol_opinion_and_date() 
 
     assert format_report_selection_option(entries, "005930:a.csv") == "삼성전자 (005930) · 매수 관점 · 2026-06-24"
     assert format_report_selection_option(entries, "missing") == "missing"
+
+
+def test_build_strategy_summary_items_formats_three_strategy_rows() -> None:
+    service = DashboardDataService()
+    row = pd.Series(
+        {
+            "rsi_strategy_signal": "hold",
+            "rsi_strategy_reason": "rsi_14 is 58.00, between buy threshold 30.00 and sell threshold 70.00.",
+            "trend_filter_signal": "buy",
+            "trend_filter_reason": "close is 72000.00, above ma_60 68900.00 and above prev_close 71500.00.",
+            "mean_reversion_signal": "hold",
+            "mean_reversion_reason": "close is 72000.00, at 1.0256 of ma_20 70200.00, inside the mean-reversion band.",
+        }
+    )
+
+    items = build_strategy_summary_items(service, row)
+
+    assert [item["label"] for item in items] == ["RSI", "Trend Filter", "Mean Reversion"]
+    assert [item["signal_label"] for item in items] == ["관망", "매수 관점", "관망"]
+    assert items[1]["reason"].startswith("close is 72000.00")
 
 
 class _FakeMetricColumn:

@@ -12,6 +12,7 @@ from invest_bot.db.repositories import SqlAlchemyStockRepository
 from invest_bot.market.repositories import DatasetStorage
 from invest_bot.market.stock_master import StockMasterRepository
 from invest_bot.market.storage import SavedDataset
+from invest_bot.strategy import MeanReversionStrategy, RSIStrategy, TrendFilterStrategy
 
 
 @dataclass(slots=True)
@@ -60,6 +61,8 @@ class MarketReportGenerator:
         latest_signal = self._latest_row(signal_frame)
         latest_investor = self._latest_row(investor_frame)
         latest_stock_info = self._latest_row(stock_info_frame)
+        market_snapshot = self._build_market_snapshot(indicator_frame, latest_indicator)
+        strategy_outcomes = self._evaluate_strategy_outcomes(market_snapshot)
 
         symbol_name = self._resolve_symbol_name(
             request.symbol,
@@ -115,6 +118,12 @@ class MarketReportGenerator:
                     "volume_ma_5": volume_ma_5,
                     "golden_cross_signal": golden_cross_signal,
                     "golden_cross_reason": golden_cross_reason,
+                    "rsi_strategy_signal": strategy_outcomes["rsi"]["signal"],
+                    "rsi_strategy_reason": strategy_outcomes["rsi"]["reason"],
+                    "trend_filter_signal": strategy_outcomes["trend_filter"]["signal"],
+                    "trend_filter_reason": strategy_outcomes["trend_filter"]["reason"],
+                    "mean_reversion_signal": strategy_outcomes["mean_reversion"]["signal"],
+                    "mean_reversion_reason": strategy_outcomes["mean_reversion"]["reason"],
                     "trend_state": trend_state,
                     "rsi_state": rsi_state,
                     "volume_state": volume_state,
@@ -183,6 +192,29 @@ class MarketReportGenerator:
             return self.raw_storage.load(dataset, filename)
         except (EmptyDataError, FileNotFoundError):
             return pd.DataFrame()
+
+    @staticmethod
+    def _build_market_snapshot(indicator_frame: pd.DataFrame, latest_indicator: pd.Series) -> dict[str, object]:
+        snapshot = latest_indicator.to_dict() if not latest_indicator.empty else {}
+        if len(indicator_frame.index) >= 2:
+            snapshot["prev_close"] = indicator_frame.iloc[-2].get("close")
+        return snapshot
+
+    @staticmethod
+    def _evaluate_strategy_outcomes(market_snapshot: dict[str, object]) -> dict[str, dict[str, str]]:
+        strategies = {
+            "rsi": RSIStrategy(),
+            "trend_filter": TrendFilterStrategy(),
+            "mean_reversion": MeanReversionStrategy(),
+        }
+        outcomes: dict[str, dict[str, str]] = {}
+        for key, strategy in strategies.items():
+            result = strategy.evaluate(market_snapshot)
+            outcomes[key] = {
+                "signal": result.signal.value,
+                "reason": result.reason,
+            }
+        return outcomes
 
     @staticmethod
     def _latest_row(frame: pd.DataFrame) -> pd.Series:

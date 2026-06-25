@@ -39,6 +39,12 @@ def test_dashboard_service_builds_streamlit_snapshot_and_test_report() -> None:
                     "date": "2026-03-29",
                     "golden_cross_signal": "buy",
                     "golden_cross_reason": "ma_5 crossed above ma_20.",
+                    "rsi_strategy_signal": "hold",
+                    "rsi_strategy_reason": "rsi_14 is 58.00, between buy threshold 30.00 and sell threshold 70.00.",
+                    "trend_filter_signal": "buy",
+                    "trend_filter_reason": "close is 72000.00, above ma_60 68900.00 and above prev_close 71500.00.",
+                    "mean_reversion_signal": "hold",
+                    "mean_reversion_reason": "close is 72000.00, at 1.0256 of ma_20 70200.00, inside the mean-reversion band.",
                     "trend_state": "bullish",
                     "rsi_state": "strong",
                     "volume_state": "active",
@@ -89,6 +95,9 @@ def test_dashboard_service_builds_streamlit_snapshot_and_test_report() -> None:
     assert report_preview.display_name == "시장 상황 요약 리포트"
     assert report_preview.symbol_name == "삼성전자"
     assert "final_opinion" in report_preview.recommended_columns
+    assert "rsi_strategy_signal" in report_preview.recommended_columns
+    assert "trend_filter_signal" in report_preview.recommended_columns
+    assert "mean_reversion_signal" in report_preview.recommended_columns
 
     assert report is not None
     assert report.total == 2
@@ -126,3 +135,16 @@ def test_dashboard_service_prefers_canonical_symbol_names_over_stock_info_snapsh
 
     assert daily_preview.symbol == "000660"
     assert daily_preview.symbol_name == "SK하이닉스"
+
+
+def test_dashboard_service_describes_strategy_fields_in_market_report_metadata() -> None:
+    service = DashboardDataService()
+
+    guide = service.DATASET_GUIDES["market_reports"]
+    assert "rsi_strategy_signal" in guide.recommended_columns
+    assert "trend_filter_signal" in guide.recommended_columns
+    assert "mean_reversion_signal" in guide.recommended_columns
+
+    assert service.COLUMN_META["rsi_strategy_signal"].label == "RSI 전략 판단"
+    assert service.COLUMN_META["trend_filter_signal"].label == "추세 필터 전략 판단"
+    assert service.COLUMN_META["mean_reversion_signal"].label == "평균회귀 전략 판단"

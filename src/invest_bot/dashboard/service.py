@@ -133,14 +133,17 @@ class DashboardDataService:
         ),
         "market_reports": DatasetGuide(
             title="시장 상황 요약 리포트",
-            summary="지표, 골든크로스 신호, 투자자 수급을 묶어 현재 장 상황을 한 줄로 정리한 리포트입니다.",
-            purpose="전문 용어를 몰라도 지금 상태가 어떤지 빠르게 이해할 수 있습니다.",
-            first_look="final_opinion, summary, trend_state, golden_cross_signal, rsi_state를 먼저 보세요.",
+            summary="지표, 골든크로스, 추가 전략 판단, 투자자 수급을 묶어 현재 장 상황을 정리한 리포트입니다.",
+            purpose="종합 의견과 전략별 판단을 함께 읽어 현재 상태를 더 입체적으로 이해할 수 있습니다.",
+            first_look="final_opinion, summary, golden_cross_signal, rsi_strategy_signal, trend_filter_signal, mean_reversion_signal을 먼저 보세요.",
             recommended_columns=(
                 "date",
                 "symbol_name",
                 "final_opinion",
                 "summary",
+                "rsi_strategy_signal",
+                "trend_filter_signal",
+                "mean_reversion_signal",
                 "trend_state",
                 "golden_cross_signal",
                 "rsi_state",
@@ -205,6 +208,12 @@ class DashboardDataService:
         "personal_net": ColumnMeta("개인 순매수", "개인이 순수하게 얼마나 샀는지 보여줍니다.", "개인 투자자 흐름을 비교할 수 있습니다."),
         "summary": ColumnMeta("한 줄 요약", "현재 장 상황을 사람이 읽기 쉬운 문장으로 정리한 내용입니다.", "숫자에 익숙하지 않아도 상황을 바로 이해할 수 있습니다."),
         "final_opinion": ColumnMeta("최종 판단", "현재 데이터 기준으로 정리한 최종 의견입니다.", "매수, 매도, 관망 중 어떤 해석이 적절한지 바로 볼 수 있습니다."),
+        "rsi_strategy_signal": ColumnMeta("RSI 전략 판단", "RSI 전략이 낸 직접 신호입니다.", "과매수·과매도 기준에서 전략이 매수, 매도, 관망 중 무엇으로 해석했는지 보여줍니다."),
+        "rsi_strategy_reason": ColumnMeta("RSI 전략 이유", "RSI 전략이 왜 그런 판단을 했는지 설명한 문장입니다.", "RSI 값과 임계값 비교 근거를 함께 읽을 수 있습니다."),
+        "trend_filter_signal": ColumnMeta("추세 필터 전략 판단", "추세 필터 전략이 낸 직접 신호입니다.", "종가, 장기 이동평균, 직전 종가 비교 기준에서 현재 방향을 볼 수 있습니다."),
+        "trend_filter_reason": ColumnMeta("추세 필터 전략 이유", "추세 필터 전략의 판단 근거입니다.", "close, ma_60, prev_close 비교 결과를 설명합니다."),
+        "mean_reversion_signal": ColumnMeta("평균회귀 전략 판단", "평균회귀 전략이 낸 직접 신호입니다.", "현재 가격이 기준 이동평균에서 얼마나 벗어났는지 바탕으로 판단합니다."),
+        "mean_reversion_reason": ColumnMeta("평균회귀 전략 이유", "평균회귀 전략의 판단 근거입니다.", "가격과 ma_20 비율이 밴드 안인지 밖인지 설명합니다."),
     }
 
     STATE_LABELS = {
