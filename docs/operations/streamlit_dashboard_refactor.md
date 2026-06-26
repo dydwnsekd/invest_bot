@@ -10,6 +10,7 @@
 - 기준 시점 파일 크기: 약 1,282 lines
 - 현재 파일 크기: 72 lines
 - 현재 전략: 동작 변경 없이 안전한 분리부터 순차 진행
+- 후속 기능 반영: `streamlit_reports.py`가 단일 리포트 본문 흐름과 전략별 판단 요약 렌더링까지 담당
 
 ## 진행 원칙
 
@@ -86,6 +87,19 @@
 
 ## 작업 로그
 
+### 2026-06-25
+
+- 후속 리포트 UX 반영
+- 대상 파일
+  - `src/invest_bot/dashboard/streamlit_reports.py`
+  - `src/invest_bot/dashboard/service.py`
+- 정리 내용
+  - `리포트 해석` 탭을 선택된 1건 중심 본문 흐름으로 고정
+  - 리포트 카드에 RSI / Trend Filter / Mean Reversion 전략별 판단과 이유를 표시
+  - `market_reports` 데이터셋 메타데이터와 추천 컬럼을 새 전략 필드 기준으로 갱신
+- 참고
+  - 즐겨찾기 저장은 아직 후속 범위로 남아 있음
+
 ### 2026-06-10
 
 - Phase 1 시작
@@ -143,6 +157,15 @@
 
 ## 검증 로그
 
+### 2026-06-25 / Report UX follow-up
+
+- Host syntax check
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/jobs/generate_market_report.py src/invest_bot/dashboard/streamlit_reports.py src/invest_bot/dashboard/service.py tests/test_market_report_generator.py tests/test_streamlit_dashboard.py tests/test_dashboard_service.py`
+  - 결과: `PASS`
+- Targeted tests
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_market_report_generator.py tests/test_streamlit_dashboard.py tests/test_dashboard_service.py tests/test_db_frame_storage.py -q`
+  - 결과: `33 passed in 0.50s`
+
 ### 2026-06-10 / Phase 1
 
 - Host syntax check
@@ -183,5 +206,6 @@
 
 - 현재 분리 계획 완료
 - 후속 개선 후보:
+  - 리포트 즐겨찾기 저장과 필터 UX 추가 검토
   - 필요 시 `streamlit_layout.py` 내부 UI 조각을 더 세분화
   - 탭별 시각 회귀 검증을 추가할지 검토

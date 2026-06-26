@@ -39,14 +39,20 @@
 - 전략 공통 인터페이스
 - 샘플 전략
 - 골든크로스 전략
+- RSI 전략
+- Trend Filter 전략
+- Mean Reversion 전략
 - 골든크로스 신호 생성
 - 현재 장 상황 요약 리포트 생성
+- 시장 리포트 전략별 직접 판단 필드 생성
 - 골든크로스 백테스트 초안
 
 ### 대시보드
 
 - Streamlit 기반 운영 대시보드
 - 원본/분석/신호/리포트 데이터 조회
+- 리포트 해석 탭 단일 리포트 본문 표시
+- 전략별 판단 요약 표시
 - 시장 리포트 생성 실행
 - 데이터 수집 실행
 - 지표 계산 실행
@@ -228,8 +234,11 @@ python scripts/run_collection.py 005930 000660 035420
 종목 파일 사용:
 
 ```powershell
-python scripts/run_collection.py --symbols-file symbols.txt --days 60
+python scripts/run_collection.py --symbols-file symbols.txt --days 90
 ```
+
+현재 전략 세트를 안정적으로 돌리려면 최소 60거래일이 필요합니다.  
+기본 수집값은 이를 확보하기 쉽도록 90일 조회 기준으로 맞춰져 있습니다.
 
 ### 4. 정기 다중 종목 수집
 
@@ -268,6 +277,14 @@ python scripts/run_golden_cross_signals.py 005930
 ```powershell
 python scripts/run_market_report.py 005930
 ```
+
+생성된 리포트에는 종합 의견(`final_opinion`)과 별도로 아래 전략별 판단 필드가 함께 포함됩니다.
+
+- `rsi_strategy_signal`, `rsi_strategy_reason`
+- `trend_filter_signal`, `trend_filter_reason`
+- `mean_reversion_signal`, `mean_reversion_reason`
+
+필수 지표가 부족하면 각 전략 필드는 `hold`와 `Missing indicators: ...` 형식으로 기록됩니다.
 
 ### 8. 백테스트 초안 실행
 
@@ -369,6 +386,7 @@ data/processed/test_reports/
 
 - [`service.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/service.py)
 - [`streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_dashboard.py)
+- [`streamlit_reports.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_reports.py)
 
 ## 현재 진행 상태
 
@@ -380,9 +398,12 @@ data/processed/test_reports/
 - [x] 시장 리포트 생성
 - [x] 골든크로스 백테스트 초안
 - [x] Streamlit 대시보드
+- [x] 리포트 해석 탭 단일 리포트 본문 표시
+- [x] 리포트 해석 탭 전략별 판단 요약 표시
 - [x] 다중 종목 배치 수집
 - [x] 정기 수집 스케줄링 초안
 - [ ] 백테스트 결과 시각화
+- [ ] 리포트 즐겨찾기 저장
 - [ ] 모의투자 주문 실행
 - [ ] 실거래 주문 실행
 - [ ] 리스크 관리 정책 자동화
