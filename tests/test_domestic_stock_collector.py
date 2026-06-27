@@ -6,7 +6,7 @@ import pandas as pd
 
 from invest_bot.config.settings import AppSettings
 from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
-from invest_bot.market.collector import BatchCollectionResult, MarketDataCollector
+from invest_bot.market.collector import BatchCollectionResult, MarketDataCollector, MIN_REQUIRED_DAILY_PRICE_ROWS
 from invest_bot.market.domestic_stock import DailyPriceRequest, DomesticStockDataCollector, InvestorDailyRequest, StockInfoRequest
 from invest_bot.market.storage import CsvStorage
 from tests.helpers import make_test_dir
@@ -97,13 +97,16 @@ def test_market_data_collector_saves_all_requested_csv_files():
 
 def test_market_data_collector_can_collect_multiple_symbols_with_stubbed_methods(monkeypatch):
     collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(make_test_dir("market_data_batch")))
+    sufficient_prices = pd.DataFrame(
+        [{"stck_bsop_date": f"202603{index + 1:02d}", "symbol": "stub"} for index in range(MIN_REQUIRED_DAILY_PRICE_ROWS)]
+    )
 
     monkeypatch.setattr(
         collector,
         "collect_daily_prices",
         lambda symbol, start_date, end_date: (
             pd.DataFrame([{"symbol": symbol}]),
-            pd.DataFrame([{"stck_bsop_date": "20260328", "symbol": symbol}]),
+            sufficient_prices.assign(symbol=symbol),
         ),
     )
     monkeypatch.setattr(
@@ -131,6 +134,29 @@ def test_market_data_collector_can_collect_multiple_symbols_with_stubbed_methods
     assert all(result.status == "success" for result in results)
     assert results[0].symbol == "005930"
     assert results[1].symbol == "000660"
+
+
+def test_collect_symbol_bundle_fails_when_daily_price_history_is_too_short(monkeypatch):
+    collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(make_test_dir("market_data_short_history")))
+
+    monkeypatch.setattr(
+        collector,
+        "collect_daily_prices",
+        lambda symbol, start_date, end_date: (
+            pd.DataFrame([{"symbol": symbol}]),
+            pd.DataFrame([{"stck_bsop_date": "20260328", "symbol": symbol}] * (MIN_REQUIRED_DAILY_PRICE_ROWS - 1)),
+        ),
+    )
+
+    result = collector.collect_symbol_bundle(
+        symbol="005930",
+        start_date=date(2026, 3, 1),
+        end_date=date(2026, 3, 29),
+    )
+
+    assert result.status == "failed"
+    assert result.daily_price_rows == MIN_REQUIRED_DAILY_PRICE_ROWS - 1
+    assert "At least 60 daily price rows are required" in result.error
 
 
 def test_collect_market_data_for_symbols_summarizes_batch_results():
@@ -174,19 +200,24 @@ def test_collect_market_data_for_symbols_summarizes_batch_results():
     assert summary["symbol_count"] == 2
     assert summary["symbols"] == ["005930", "000660"]
     assert summary["days"] == 15
+    assert summary["successful_symbols"] == ["005930"]
+    assert summary["failed_symbols"] == ["000660"]
     assert summary["success_count"] == 1
     assert summary["failed_count"] == 1
 
 
 def test_collect_symbol_bundle_falls_back_when_stock_info_endpoint_fails(monkeypatch):
     collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(make_test_dir("market_data_stock_info_fallback")))
+    sufficient_prices = pd.DataFrame(
+        [{"stck_bsop_date": f"202603{index + 1:02d}", "symbol": "stub"} for index in range(MIN_REQUIRED_DAILY_PRICE_ROWS)]
+    )
 
     monkeypatch.setattr(
         collector,
         "collect_daily_prices",
         lambda symbol, start_date, end_date: (
             pd.DataFrame([{"symbol": symbol}]),
-            pd.DataFrame([{"stck_bsop_date": "20260328", "symbol": symbol}]),
+            sufficient_prices.assign(symbol=symbol),
         ),
     )
     monkeypatch.setattr(

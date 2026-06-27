@@ -18,6 +18,8 @@ from invest_bot.market.domestic_stock import (
 from invest_bot.market.repositories import DatasetStorage, MarketDataWriter
 from invest_bot.market.storage import SavedDataset
 
+MIN_REQUIRED_DAILY_PRICE_ROWS = 60
+
 
 @dataclass(slots=True)
 class CollectionRequest:
@@ -129,6 +131,21 @@ class MarketDataCollector:
     def collect_symbol_bundle(self, symbol: str, start_date: date, end_date: date) -> BatchCollectionResult:
         try:
             daily_summary, daily_prices = self.collect_daily_prices(symbol, start_date, end_date)
+            if len(daily_prices.index) < MIN_REQUIRED_DAILY_PRICE_ROWS:
+                return BatchCollectionResult(
+                    symbol=symbol,
+                    status="failed",
+                    daily_summary_rows=len(daily_summary),
+                    daily_price_rows=len(daily_prices),
+                    stock_info_rows=0,
+                    investor_daily_rows=0,
+                    investor_summary_rows=0,
+                    saved_files=[],
+                    error=(
+                        "At least "
+                        f"{MIN_REQUIRED_DAILY_PRICE_ROWS} daily price rows are required for the current strategy analysis."
+                    ),
+                )
             stock_info_error = ""
             try:
                 stock_info = self.collect_stock_info(symbol)

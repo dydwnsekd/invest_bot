@@ -7,6 +7,9 @@ from datetime import date, timedelta
 from invest_bot.config.settings import AppSettings
 from invest_bot.market.collector import MarketDataCollector
 
+MIN_REQUIRED_TRADING_DAYS = 60
+DEFAULT_COLLECTION_LOOKBACK_DAYS = 90
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Collect domestic stock market datasets.")
@@ -16,7 +19,15 @@ def _parse_args() -> argparse.Namespace:
         dest="symbols_file",
         help="Optional text file containing one stock symbol per line.",
     )
-    parser.add_argument("--days", type=int, default=30, help="Number of days of daily price history to collect.")
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=DEFAULT_COLLECTION_LOOKBACK_DAYS,
+        help=(
+            "Number of calendar days of daily price history to request. "
+            f"The current strategy set requires at least {MIN_REQUIRED_TRADING_DAYS} daily price rows."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -64,6 +75,9 @@ def collect_market_data_for_symbols(
         "symbol_count": len(unique_symbols),
         "symbols": unique_symbols,
         "days": days,
+        "minimum_required_trading_days": MIN_REQUIRED_TRADING_DAYS,
+        "successful_symbols": [result.symbol for result in results if result.status == "success"],
+        "failed_symbols": [result.symbol for result in results if result.status == "failed"],
         "success_count": sum(1 for result in results if result.status == "success"),
         "failed_count": sum(1 for result in results if result.status == "failed"),
         "results": [asdict(result) for result in results],

@@ -8,7 +8,11 @@ import pytest
 
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
 from invest_bot.dashboard.streamlit_charts import available_chart_presets, default_chart_preset, prepare_time_series_frame
-from invest_bot.dashboard.streamlit_actions import require_selected_items, require_single_selected_item
+from invest_bot.dashboard.streamlit_actions import (
+    require_selected_items,
+    require_single_selected_item,
+    successful_symbols_from_collection_result,
+)
 from invest_bot.dashboard.streamlit_formatters import (
     default_selected_symbols as _default_selected_symbols,
     default_single_symbol as _default_single_symbol,
@@ -69,6 +73,11 @@ def test_selection_guards_raise_clear_messages() -> None:
 
     with pytest.raises(ValueError, match="단일 작업을 실행하려면 대상 종목을 하나 선택해 주세요."):
         require_single_selected_item(None)
+
+
+def test_successful_symbols_from_collection_result_prefers_explicit_success_list() -> None:
+    assert successful_symbols_from_collection_result({"successful_symbols": ["005930", "000660"]}) == ["005930", "000660"]
+    assert successful_symbols_from_collection_result({"symbols": ["005930"]}) == []
 
 
 def test_localize_reason_translates_known_english_patterns() -> None:

@@ -11,7 +11,11 @@ from invest_bot.dashboard.streamlit_formatters import (
     format_symbol_option,
 )
 from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
-from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
+from invest_bot.jobs.collect_market_data import (
+    DEFAULT_COLLECTION_LOOKBACK_DAYS,
+    MIN_REQUIRED_TRADING_DAYS,
+    collect_market_data_for_symbols,
+)
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
 from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolLookup
@@ -70,7 +74,17 @@ def render_actions_tab(
             st.caption(f"선택된 종목 {len(selected_items)}개: {', '.join(format_symbol_option(item) for item in selected_items[:4])}")
         else:
             st.caption("여러 종목 작업을 실행하려면 자동완성 목록에서 종목을 하나 이상 선택해 주세요.")
-        days = st.number_input("수집 일수", min_value=1, max_value=3650, value=30, step=1)
+        days = st.number_input(
+            "수집 일수",
+            min_value=MIN_REQUIRED_TRADING_DAYS,
+            max_value=3650,
+            value=DEFAULT_COLLECTION_LOOKBACK_DAYS,
+            step=1,
+        )
+        st.caption(
+            f"현재 전략 세트는 최소 {MIN_REQUIRED_TRADING_DAYS}거래일이 필요해서 기본값을 "
+            f"{DEFAULT_COLLECTION_LOOKBACK_DAYS}일로 맞춰 두었습니다."
+        )
         multi_columns = st.columns(2, gap="small")
         if multi_columns[0].button("데이터 수집", width="stretch", type="primary"):
             run_collect_action(selected_items, int(days))
@@ -154,7 +168,7 @@ def run_full_pipeline_action(selected_items: list[ResolvedSymbol], days: int) ->
     try:
         resolved_items = require_selected_items(selected_items)
         collect_result = collect_market_data_for_symbols(symbols=[item.symbol for item in resolved_items], days=days)
-        for symbol in collect_result["symbols"]:
+        for symbol in successful_symbols_from_collection_result(collect_result):
             generate_indicators_for_symbol(symbol)
             generate_golden_cross_signals_for_symbol(symbol)
             generate_market_report_for_symbol(symbol)
@@ -179,6 +193,13 @@ def require_single_selected_item(selected_item: ResolvedSymbol | None) -> Resolv
     if selected_item is None:
         raise ValueError("단일 작업을 실행하려면 대상 종목을 하나 선택해 주세요.")
     return selected_item
+
+
+def successful_symbols_from_collection_result(result: dict[str, object]) -> list[str]:
+    successful_symbols = result.get("successful_symbols")
+    if isinstance(successful_symbols, list):
+        return [str(symbol) for symbol in successful_symbols]
+    return []
 
 
 def set_action_message(message: str, message_type: str) -> None:
