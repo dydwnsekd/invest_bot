@@ -6,6 +6,7 @@ from html import escape
 import pandas as pd
 import streamlit as st
 
+from invest_bot.dashboard.report_favorites import ReportFavoritesStore
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
 from invest_bot.dashboard.streamlit_charts import render_chart_selector
 from invest_bot.dashboard.streamlit_formatters import (
@@ -18,6 +19,8 @@ from invest_bot.dashboard.streamlit_formatters import (
 )
 
 REPORT_SELECTION_KEY = "report_selected_entry_key"
+REPORT_FAVORITES_ONLY_KEY = "report_favorites_only"
+REPORT_SORT_OPTION_KEY = "report_sort_option"
 
 def render_reports_tab(
     snapshot,
@@ -25,6 +28,7 @@ def render_reports_tab(
     *,
     read_preview_frame: Callable[[object], pd.DataFrame],
     load_indicator_frame_for_symbol: Callable[[str], pd.DataFrame | None],
+    favorites_store: ReportFavoritesStore | None = None,
 ) -> None:
     st.markdown('<h3 class="section-title">리포트 해석</h3>', unsafe_allow_html=True)
     st.markdown(
@@ -37,18 +41,54 @@ def render_reports_tab(
         st.info("표시할 시장 리포트가 아직 없습니다. 전체 파이프라인이나 리포트 생성을 먼저 실행해 주세요.")
         return
 
+    favorites_store = favorites_store or ReportFavoritesStore()
+    favorite_symbols = favorites_store.load_symbols()
+
     query = st.text_input(
         "리포트 검색",
         placeholder="종목코드 또는 종목명으로 찾기",
         key="report_query",
     ).strip().lower()
     visible_previews = query_report_previews(report_previews, query)
-    visible_entries = build_report_entries(visible_previews, service, read_preview_frame=read_preview_frame)
+    report_entries = build_report_entries(
+        visible_previews,
+        service,
+        read_preview_frame=read_preview_frame,
+        favorite_symbols=favorite_symbols,
+    )
+
+    filter_columns = st.columns(2)
+    favorites_only = filter_columns[0].toggle(
+        "즐겨찾기만 보기",
+        value=bool(st.session_state.get(REPORT_FAVORITES_ONLY_KEY, False)),
+        key=REPORT_FAVORITES_ONLY_KEY,
+    )
+    sort_option = filter_columns[1].selectbox(
+        "정렬",
+        options=["최신순", "즐겨찾기 우선", "종목명순", "매수 관점 우선"],
+        index=["최신순", "즐겨찾기 우선", "종목명순", "매수 관점 우선"].index(
+            str(st.session_state.get(REPORT_SORT_OPTION_KEY, "최신순"))
+        )
+        if str(st.session_state.get(REPORT_SORT_OPTION_KEY, "최신순")) in {"최신순", "즐겨찾기 우선", "종목명순", "매수 관점 우선"}
+        else 0,
+        key=REPORT_SORT_OPTION_KEY,
+    )
+    visible_entries = sort_report_entries(
+        filter_report_entries(
+            report_entries,
+            query="",
+            opinion_filter="전체",
+            trend_filter="전체",
+            signal_filter="전체",
+            favorites_only=favorites_only,
+        ),
+        sort_option,
+    )
 
     metric_columns = st.columns(3)
     metric_columns[0].metric("전체 리포트", len(report_previews))
     metric_columns[1].metric("현재 후보", len(visible_entries))
-    metric_columns[2].metric("매수 관점", sum(1 for item in visible_entries if item["final_opinion"] == "buy"))
+    metric_columns[2].metric("즐겨찾기", sum(1 for item in report_entries if item["is_favorite"]))
 
     if not visible_entries:
         st.warning("현재 검색 조건에 맞는 리포트가 없습니다.")
@@ -76,6 +116,8 @@ def render_reports_tab(
         frame=selected_entry["frame"],
         read_preview_frame=read_preview_frame,
         load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
+        favorites_store=favorites_store,
+        is_favorite=bool(selected_entry["is_favorite"]),
     )
 
 def build_report_entries(
@@ -83,8 +125,10 @@ def build_report_entries(
     service: DashboardDataService,
     *,
     read_preview_frame: Callable[[object], pd.DataFrame],
+    favorite_symbols: set[str] | None = None,
 ) -> list[dict[str, object]]:
     entries: list[dict[str, object]] = []
+    favorite_symbols = favorite_symbols or set()
     for preview in previews:
         frame = read_preview_frame(preview)
         if frame.empty:
@@ -106,6 +150,7 @@ def build_report_entries(
                 "display_opinion": state_label(service, str(row.get("final_opinion", "unknown"))),
                 "display_trend": state_label(service, str(row.get("trend_state", "unknown"))),
                 "display_signal": state_label(service, str(row.get("golden_cross_signal", "unknown"))),
+                "is_favorite": preview.symbol in favorite_symbols,
             }
         )
     return entries
@@ -185,9 +230,10 @@ def format_report_selection_option(report_entries: list[dict[str, object]], entr
         symbol = str(entry["symbol"])
         opinion = str(entry["display_opinion"])
         date = str(entry["date"])
+        favorite_prefix = "★ " if bool(entry.get("is_favorite")) else ""
         if symbol_name:
-            return f"{symbol_name} ({symbol}) · {opinion} · {date}"
-        return f"{symbol} · {opinion} · {date}"
+            return f"{favorite_prefix}{symbol_name} ({symbol}) · {opinion} · {date}"
+        return f"{favorite_prefix}{symbol} · {opinion} · {date}"
     return entry_key
 
 
@@ -217,8 +263,11 @@ def filter_report_entries(
     opinion_filter: str,
     trend_filter: str,
     signal_filter: str,
+    favorites_only: bool = False,
 ) -> list[dict[str, object]]:
     filtered = query_report_entries(report_entries, query)
+    if favorites_only:
+        filtered = [entry for entry in filtered if bool(entry.get("is_favorite"))]
     if opinion_filter != "전체":
         filtered = [entry for entry in filtered if entry["display_opinion"] == opinion_filter]
     if trend_filter != "전체":
@@ -230,6 +279,16 @@ def filter_report_entries(
 def sort_report_entries(report_entries: list[dict[str, object]], sort_option: str) -> list[dict[str, object]]:
     if sort_option == "종목명순":
         return sorted(report_entries, key=lambda entry: (str(entry["symbol_name"]), str(entry["symbol"])))
+    if sort_option == "즐겨찾기 우선":
+        return sorted(
+            report_entries,
+            key=lambda entry: (
+                0 if bool(entry.get("is_favorite")) else 1,
+                str(entry["date"]),
+                str(entry["symbol"]),
+            ),
+            reverse=False,
+        )
     if sort_option == "매수 관점 우선":
         opinion_rank = {"buy": 0, "watch": 1, "hold": 2, "sell": 3, "unknown": 4}
         return sorted(
@@ -249,6 +308,8 @@ def render_market_report_card(
     frame: pd.DataFrame | None = None,
     read_preview_frame: Callable[[object], pd.DataFrame],
     load_indicator_frame_for_symbol: Callable[[str], pd.DataFrame | None],
+    favorites_store: ReportFavoritesStore | None = None,
+    is_favorite: bool = False,
 ) -> None:
     frame = frame if frame is not None else read_preview_frame(preview)
     if frame.empty:
@@ -260,6 +321,7 @@ def render_market_report_card(
     summary = localize_report_summary_from_row(service, row)
     reason = localize_reason(str(row.get("golden_cross_reason", "")))
     strategy_items = build_strategy_summary_items(service, row)
+    favorites_store = favorites_store or ReportFavoritesStore()
 
     with st.container(border=True):
         st.markdown(
@@ -277,6 +339,15 @@ def render_market_report_card(
             """,
             unsafe_allow_html=True,
         )
+
+        favorite_label = "★ 즐겨찾기 해제" if is_favorite else "☆ 즐겨찾기 추가"
+        if st.button(favorite_label, key=f"favorite_report_{preview.symbol}_{preview.path.name}"):
+            now_favorite = favorites_store.toggle(preview.symbol)
+            st.session_state["action_message"] = (
+                f"{symbol_label} 즐겨찾기 추가 완료" if now_favorite else f"{symbol_label} 즐겨찾기 해제 완료"
+            )
+            st.session_state["action_message_type"] = "success"
+            st.rerun()
 
         metric_columns = st.columns(4)
         metric_columns[0].metric("추세", state_label(service, str(row.get("trend_state", "unknown"))))

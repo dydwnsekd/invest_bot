@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
+from invest_bot.dashboard.report_favorites import ReportFavoritesStore
 from invest_bot.dashboard.streamlit_charts import available_chart_presets, default_chart_preset, prepare_time_series_frame
 from invest_bot.dashboard.streamlit_actions import (
     require_selected_items,
@@ -24,6 +25,7 @@ from invest_bot.dashboard.streamlit_formatters import (
     localize_report_summary_from_row as _localize_report_summary_from_row,
 )
 import invest_bot.dashboard.streamlit_reports as streamlit_reports_module
+import invest_bot.dashboard.streamlit_watchlist as streamlit_watchlist_module
 from invest_bot.dashboard.streamlit_reports import (
     build_strategy_summary_items,
     filter_report_entries,
@@ -37,7 +39,9 @@ from invest_bot.dashboard.streamlit_reports import (
     selected_entry_key_index,
     sort_report_entries,
 )
+from invest_bot.dashboard.streamlit_watchlist import render_watchlist_tab
 from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolEntry
+from tests.helpers import make_test_dir
 
 
 def test_format_symbol_display_prefers_name_and_code() -> None:
@@ -255,6 +259,21 @@ def test_format_report_selection_option_includes_name_symbol_opinion_and_date() 
     assert format_report_selection_option(entries, "missing") == "missing"
 
 
+def test_format_report_selection_option_marks_favorite_entries() -> None:
+    entries = [
+        {
+            "entry_key": "005930:a.csv",
+            "symbol": "005930",
+            "symbol_name": "삼성전자",
+            "display_opinion": "매수 관점",
+            "date": "2026-06-24",
+            "is_favorite": True,
+        }
+    ]
+
+    assert format_report_selection_option(entries, "005930:a.csv") == "★ 삼성전자 (005930) · 매수 관점 · 2026-06-24"
+
+
 def test_build_strategy_summary_items_formats_three_strategy_rows() -> None:
     service = DashboardDataService()
     row = pd.Series(
@@ -276,8 +295,19 @@ def test_build_strategy_summary_items_formats_three_strategy_rows() -> None:
 
 
 class _FakeMetricColumn:
+    def __init__(self, owner=None):
+        self.owner = owner
+
     def metric(self, *args, **kwargs) -> None:
         return None
+
+    def toggle(self, *args, **kwargs) -> bool:
+        assert self.owner is not None
+        return self.owner.toggle(*args, **kwargs)
+
+    def selectbox(self, *args, **kwargs):
+        assert self.owner is not None
+        return self.owner.selectbox(*args, **kwargs)
 
 
 class _FakeContext:
@@ -289,9 +319,18 @@ class _FakeContext:
 
 
 class _FakeStreamlit:
-    def __init__(self, *, query: str = "", selected_value: str | None = None):
+    def __init__(
+        self,
+        *,
+        query: str = "",
+        selected_value: str | None = None,
+        toggle_values: dict[str, bool] | None = None,
+        button_values: dict[str, bool] | None = None,
+    ):
         self.query = query
         self.selected_value = selected_value
+        self.toggle_values = toggle_values or {}
+        self.button_values = button_values or {}
         self.session_state: dict[str, object] = {}
         self.warning_messages: list[str] = []
         self.info_messages: list[str] = []
@@ -304,7 +343,7 @@ class _FakeStreamlit:
 
     def columns(self, spec, **kwargs):
         count = spec if isinstance(spec, int) else len(spec)
-        return [_FakeMetricColumn() for _ in range(count)]
+        return [_FakeMetricColumn(self) for _ in range(count)]
 
     def warning(self, message: str) -> None:
         self.warning_messages.append(message)
@@ -324,10 +363,19 @@ class _FakeStreamlit:
     def container(self, **kwargs):
         return _FakeContext()
 
-    def toggle(self, *args, **kwargs) -> bool:
-        return False
+    def toggle(self, label: str, value: bool = False, key: str | None = None, **kwargs) -> bool:
+        result = self.toggle_values.get(key or label, value)
+        if key is not None:
+            self.session_state[key] = result
+        return result
+
+    def button(self, label: str, key: str | None = None, **kwargs) -> bool:
+        return self.button_values.get(key or label, False)
 
     def dataframe(self, *args, **kwargs) -> None:
+        return None
+
+    def rerun(self) -> None:
         return None
 
 
@@ -378,6 +426,22 @@ def test_render_reports_tab_renders_only_one_selected_report(monkeypatch: pytest
     assert captured == ["005930"]
 
 
+def test_build_report_entries_marks_favorite_symbols() -> None:
+    previews = [_make_report_preview("005930", "삼성전자", "005930_20260624.csv")]
+    frames = {
+        "005930": pd.DataFrame([{"date": "2026-06-24", "symbol_name": "삼성전자", "final_opinion": "buy", "summary": "a", "trend_state": "bullish", "golden_cross_signal": "buy", "rsi_state": "strong", "investor_flow": "supportive"}]),
+    }
+
+    entries = streamlit_reports_module.build_report_entries(
+        previews,
+        DashboardDataService(),
+        read_preview_frame=lambda preview: frames[preview.symbol],
+        favorite_symbols={"005930"},
+    )
+
+    assert entries[0]["is_favorite"] is True
+
+
 def test_render_reports_tab_shows_warning_and_skips_body_when_query_has_no_match(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_st = _FakeStreamlit(query="없는종목")
     monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
@@ -404,6 +468,74 @@ def test_render_reports_tab_shows_warning_and_skips_body_when_query_has_no_match
 
     assert captured == []
     assert fake_st.warning_messages == ["현재 검색 조건에 맞는 리포트가 없습니다."]
+
+
+def test_filter_report_entries_can_limit_to_favorites_only() -> None:
+    entries = [
+        {"symbol": "005930", "symbol_name": "삼성전자", "display_opinion": "매수 관점", "display_trend": "상승 우세", "display_signal": "매수 관점", "is_favorite": True},
+        {"symbol": "000660", "symbol_name": "SK하이닉스", "display_opinion": "관망", "display_trend": "중립", "display_signal": "관망", "is_favorite": False},
+    ]
+
+    filtered = filter_report_entries(entries, query="", opinion_filter="전체", trend_filter="전체", signal_filter="전체", favorites_only=True)
+
+    assert [entry["symbol"] for entry in filtered] == ["005930"]
+
+
+def test_sort_report_entries_can_prioritize_favorites() -> None:
+    entries = [
+        {"symbol": "000660", "symbol_name": "SK하이닉스", "date": "2026-06-24", "is_favorite": False},
+        {"symbol": "005930", "symbol_name": "삼성전자", "date": "2026-06-23", "is_favorite": True},
+    ]
+
+    sorted_entries = sort_report_entries(entries, "즐겨찾기 우선")
+
+    assert [entry["symbol"] for entry in sorted_entries] == ["005930", "000660"]
+
+
+def test_resolve_selected_report_key_keeps_current_selection_when_still_visible() -> None:
+    entries = [
+        {"entry_key": "005930:a.csv", "symbol": "005930", "symbol_name": "삼성전자", "is_favorite": True},
+        {"entry_key": "000660:b.csv", "symbol": "000660", "symbol_name": "SK하이닉스", "is_favorite": False},
+    ]
+
+    assert resolve_selected_report_key(entries, "000660:b.csv") == "000660:b.csv"
+
+
+def test_render_market_report_card_toggles_favorite_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(button_values={"favorite_report_005930_005930_20260624.csv": True})
+    monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_reports_module, "render_chart_selector", lambda *args, **kwargs: None)
+    preview = _make_report_preview("005930", "삼성전자", "005930_20260624.csv")
+    frame = pd.DataFrame([{
+        "date": "2026-06-24",
+        "symbol_name": "삼성전자",
+        "final_opinion": "buy",
+        "summary": "a",
+        "trend_state": "bullish",
+        "golden_cross_signal": "buy",
+        "rsi_state": "strong",
+        "investor_flow": "supportive",
+        "close": 100,
+        "ma_5": 90,
+        "ma_20": 80,
+        "rsi_14": 60,
+        "golden_cross_reason": "ma_5 crossed above ma_20.",
+    }])
+    store_path = make_test_dir("report_card_toggle") / "favorites.json"
+    store = ReportFavoritesStore(store_path)
+
+    streamlit_reports_module.render_market_report_card(
+        preview,
+        DashboardDataService(),
+        frame=frame,
+        read_preview_frame=lambda _: frame,
+        load_indicator_frame_for_symbol=lambda symbol: frame,
+        favorites_store=store,
+        is_favorite=False,
+    )
+
+    assert store.load_symbols() == {"005930"}
+    assert "즐겨찾기 추가 완료" in str(fake_st.session_state["action_message"])
 
 
 def test_render_market_report_card_keeps_chart_for_selected_symbol(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -449,6 +581,58 @@ def test_render_market_report_card_keeps_chart_for_selected_symbol(monkeypatch: 
 
     assert loaded_symbols == ["005930"]
     assert chart_calls == [("daily_prices_indicators", "report_005930_005930_20260624.csv")]
+
+
+def test_render_watchlist_tab_shows_info_when_no_favorites(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_watchlist_module, "st", fake_st)
+    snapshot = SimpleNamespace(processed_previews=[_make_report_preview("005930", "삼성전자", "005930_20260624.csv")])
+    store = ReportFavoritesStore(make_test_dir("watchlist_no_favorites") / "favorites.json")
+
+    render_watchlist_tab(
+        snapshot,
+        DashboardDataService(),
+        read_preview_frame=lambda preview: pd.DataFrame(),
+        load_indicator_frame_for_symbol=lambda symbol: None,
+        favorites_store=store,
+    )
+
+    assert fake_st.info_messages == ["아직 저장된 관심종목이 없습니다. `리포트 해석` 탭에서 관심종목을 추가해 보세요."]
+
+
+def test_render_watchlist_tab_renders_only_one_selected_favorite(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(selected_value="005930:005930_20260624.csv")
+    monkeypatch.setattr(streamlit_watchlist_module, "st", fake_st)
+
+    captured: list[str] = []
+
+    def fake_render_market_report_card(preview, service, **kwargs) -> None:
+        captured.append(preview.symbol)
+
+    monkeypatch.setattr(streamlit_watchlist_module, "render_market_report_card", fake_render_market_report_card)
+
+    previews = [
+        _make_report_preview("005930", "삼성전자", "005930_20260624.csv"),
+        _make_report_preview("000660", "SK하이닉스", "000660_20260624.csv"),
+    ]
+    frames = {
+        "005930": pd.DataFrame([{"date": "2026-06-24", "symbol_name": "삼성전자", "final_opinion": "buy", "summary": "a", "trend_state": "bullish", "golden_cross_signal": "buy", "rsi_state": "strong", "investor_flow": "supportive"}]),
+        "000660": pd.DataFrame([{"date": "2026-06-24", "symbol_name": "SK하이닉스", "final_opinion": "hold", "summary": "b", "trend_state": "neutral", "golden_cross_signal": "hold", "rsi_state": "neutral", "investor_flow": "mixed"}]),
+    }
+    snapshot = SimpleNamespace(processed_previews=previews)
+    store = ReportFavoritesStore(make_test_dir("watchlist_selected") / "favorites.json")
+    store.add("005930")
+    store.add("000660")
+
+    render_watchlist_tab(
+        snapshot,
+        DashboardDataService(),
+        read_preview_frame=lambda preview: frames[preview.symbol],
+        load_indicator_frame_for_symbol=lambda symbol: frames[symbol],
+        favorites_store=store,
+    )
+
+    assert captured == ["005930"]
 
 
 def test_query_report_previews_filters_before_frame_loading() -> None:

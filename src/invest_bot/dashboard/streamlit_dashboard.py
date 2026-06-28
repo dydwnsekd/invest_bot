@@ -24,6 +24,7 @@ from invest_bot.dashboard.streamlit_state import (
 )
 from invest_bot.dashboard.streamlit_styles import apply_custom_style as _apply_custom_style
 from invest_bot.dashboard.streamlit_tests import render_test_tab as _render_test_tab
+from invest_bot.dashboard.streamlit_watchlist import render_watchlist_tab as _render_watchlist_tab
 from invest_bot.market.symbol_lookup import SymbolLookup
 
 
@@ -65,6 +66,13 @@ def main() -> None:
         _render_actions_tab(symbol_lookup, schedule_status, render_schedule_status_panel=_render_schedule_status_panel)
     elif tab == "리포트 해석":
         _render_reports_tab(
+            snapshot,
+            service,
+            read_preview_frame=read_preview_frame,
+            load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
+        )
+    elif tab == "관심종목":
+        _render_watchlist_tab(
             snapshot,
             service,
             read_preview_frame=read_preview_frame,
