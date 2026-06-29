@@ -16,6 +16,7 @@ from invest_bot.dashboard.streamlit_formatters import (
     localize_reason,
     localize_report_summary_from_row,
     state_label,
+    state_text_color,
 )
 
 REPORT_SELECTION_KEY = "report_selected_entry_key"
@@ -84,11 +85,6 @@ def render_reports_tab(
         ),
         sort_option,
     )
-
-    metric_columns = st.columns(3)
-    metric_columns[0].metric("전체 리포트", len(report_previews))
-    metric_columns[1].metric("현재 후보", len(visible_entries))
-    metric_columns[2].metric("즐겨찾기", sum(1 for item in report_entries if item["is_favorite"]))
 
     if not visible_entries:
         st.warning("현재 검색 조건에 맞는 리포트가 없습니다.")
@@ -364,7 +360,12 @@ def render_market_report_card(
         st.markdown("#### 전략별 판단")
         for item in strategy_items:
             st.markdown(
-                f"**{escape(item['label'])}** · {escape(item['signal_label'])}<br/>{escape(item['reason'])}",
+                (
+                    f"<div class='summary-box' style='margin-bottom:0.6rem;'>"
+                    f"<strong>{escape(item['label'])}</strong> · "
+                    f"<span style='color:{escape(state_text_color(item['signal']))};font-weight:700;'>"
+                    f"{escape(item['signal_label'])}</span><br/>{escape(item['reason'])}</div>"
+                ),
                 unsafe_allow_html=True,
             )
 

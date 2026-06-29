@@ -46,6 +46,10 @@ STATE_COLUMNS = {
     "investor_flow",
 }
 
+POSITIVE_STATE_VALUES = {"buy", "bullish", "supportive", "active", "strong"}
+NEGATIVE_STATE_VALUES = {"sell", "bearish", "weak", "overbought"}
+NEUTRAL_STATE_VALUES = {"hold", "watch", "neutral", "normal", "quiet", "oversold", "mixed", "unknown"}
+
 
 def format_frame_for_display(frame: pd.DataFrame, service: DashboardDataService) -> pd.DataFrame:
     display = frame.copy()
@@ -74,6 +78,26 @@ def format_display_value(service: DashboardDataService, column: str, value: obje
 
 def state_label(service: DashboardDataService, value: str) -> str:
     return service.STATE_LABELS.get(value, value)
+
+
+def state_tone(value: str) -> str:
+    normalized = str(value).strip().lower()
+    if normalized in POSITIVE_STATE_VALUES:
+        return "positive"
+    if normalized in NEGATIVE_STATE_VALUES:
+        return "negative"
+    if normalized in NEUTRAL_STATE_VALUES:
+        return "neutral"
+    return "neutral"
+
+
+def state_text_color(value: str) -> str:
+    tone = state_tone(value)
+    if tone == "positive":
+        return "#15803d"
+    if tone == "negative":
+        return "#b91c1c"
+    return "#111827"
 
 
 def format_symbol_display(symbol: str, symbol_name: str) -> str:
