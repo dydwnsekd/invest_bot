@@ -43,7 +43,7 @@
 - 상태: `DONE`
 - 결과
   - 액션 탭 렌더링 분리
-  - 다중 종목/단일 종목 실행 로직 분리
+  - 선택 종목 기준 배치 실행 로직 분리
   - 선택 검증과 액션 메시지 갱신 로직 분리
 
 ### Phase 3. Reports 탭 분리
@@ -100,6 +100,46 @@
 - 참고
   - 즐겨찾기 저장은 아직 후속 범위로 남아 있음
 
+### 2026-06-27
+
+- favorites/watchlist 1차 반영
+- 대상 파일
+  - `src/invest_bot/dashboard/report_favorites.py`
+  - `src/invest_bot/dashboard/streamlit_reports.py`
+  - `src/invest_bot/dashboard/streamlit_watchlist.py`
+  - `src/invest_bot/dashboard/streamlit_dashboard.py`
+  - `src/invest_bot/dashboard/streamlit_layout.py`
+- 정리 내용
+  - symbol 기준 local favorites persistence helper 추가
+  - selected report 본문에 즐겨찾기 토글 추가
+  - favorites-only filter와 즐겨찾기 우선 정렬 추가
+  - 별도 `관심종목` 탭을 추가해 저장된 종목만 다시 선택/확인할 수 있게 구성
+  - persistence와 session UI state 경계를 분리
+- 참고
+  - DB-backed shared watchlist는 아직 후속 범위로 남아 있음
+
+### 2026-06-27 / Session summary
+
+- 사용자 요구 반영
+  - 리포트 단위가 아니라 종목 단위 관심종목으로 관리
+  - `리포트 해석` 내 빠른 토글은 유지
+  - 별도 확인용 `관심종목` 탭 추가
+- 이번 세션 산출물
+  - `report_favorites.py` 추가
+  - `streamlit_watchlist.py` 추가
+  - `streamlit_dashboard.py` 탭 라우팅 확장
+  - `streamlit_layout.py` 탭 목록 확장
+  - `tests/test_report_favorites.py`, `tests/test_streamlit_dashboard.py` 보강
+- 현재 결정 사항
+  - 저장 단위는 `symbol`
+  - 저장 범위는 로컬 단일 사용자 상태
+  - `관심종목` 탭 본문은 한 번에 1개만 표시
+- 검증 결과
+  - `38 passed in 0.69s`
+- 후속 판단 포인트
+  - 공유형 watchlist 필요 여부
+  - 관심종목 탭에 비교 차트까지 확장할지 여부
+
 ### 2026-06-10
 
 - Phase 1 시작
@@ -155,6 +195,26 @@
   - 스케줄 상태 로딩, 미리보기 CSV 로딩, 지표 데이터 로딩을 `streamlit_state.py`로 이동
   - `streamlit_dashboard.py`를 72 lines 수준의 엔트리 조립 파일로 축소
 
+
+### 2026-06-28
+
+- UI clarification pass 반영
+- 대상 파일
+  - `src/invest_bot/dashboard/streamlit_actions.py`
+  - `src/invest_bot/dashboard/streamlit_reports.py`
+  - `src/invest_bot/dashboard/streamlit_formatters.py`
+  - `src/invest_bot/dashboard/streamlit_data.py`
+  - `tests/test_streamlit_dashboard.py`
+- 정리 내용
+  - `작업 실행` 탭을 여러 종목 기준 배치 실행 구조로 단순화하고 `한 종목` 섹션 제거
+  - `리포트 해석` 탭 상단 metrics strip 제거 및 전략 판단 텍스트 색상화 적용
+  - `데이터 탐색` 탭을 종목 선택 기반 summary-first 흐름으로 재구성
+  - `unsafe_allow_html` 경로에 대한 escaping 보강과 회귀 테스트 추가
+- 검증 결과
+  - `39 passed in 0.48s`
+- 참고
+  - 배치 실행 기본 흐름은 `데이터 수집 -> 지표 계산 -> 신호 생성 -> 리포트 생성`을 여러 종목에 대해 반복 수행하는 방향으로 정리됨
+
 ## 검증 로그
 
 ### 2026-06-25 / Report UX follow-up
@@ -165,6 +225,24 @@
 - Targeted tests
   - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_market_report_generator.py tests/test_streamlit_dashboard.py tests/test_dashboard_service.py tests/test_db_frame_storage.py -q`
   - 결과: `33 passed in 0.50s`
+
+### 2026-06-27 / Favorites follow-up
+
+- Host syntax check
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/report_favorites.py src/invest_bot/dashboard/streamlit_reports.py src/invest_bot/dashboard/streamlit_watchlist.py src/invest_bot/dashboard/streamlit_dashboard.py src/invest_bot/dashboard/streamlit_layout.py tests/test_report_favorites.py tests/test_streamlit_dashboard.py`
+  - 결과: `PASS`
+- Targeted tests
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_report_favorites.py tests/test_streamlit_dashboard.py -q`
+  - 결과: `38 passed in 0.69s`
+
+### 2026-06-28 / UI clarification follow-up
+
+- Host syntax check
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_actions.py src/invest_bot/dashboard/streamlit_reports.py src/invest_bot/dashboard/streamlit_formatters.py src/invest_bot/dashboard/streamlit_data.py tests/test_streamlit_dashboard.py`
+  - 결과: `PASS`
+- Targeted tests
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `39 passed in 0.48s`
 
 ### 2026-06-10 / Phase 1
 
@@ -206,6 +284,6 @@
 
 - 현재 분리 계획 완료
 - 후속 개선 후보:
-  - 리포트 즐겨찾기 저장과 필터 UX 추가 검토
+  - DB-backed shared watchlist 필요성 재검토
   - 필요 시 `streamlit_layout.py` 내부 UI 조각을 더 세분화
   - 탭별 시각 회귀 검증을 추가할지 검토

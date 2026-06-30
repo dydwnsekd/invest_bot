@@ -7,10 +7,12 @@
 ## 완료된 항목
 
 - [x] Streamlit 기반 대시보드 구현
-- [x] raw/processed 데이터 미리보기 구현
+- [x] 종목 선택 기반 summary-first 데이터 탐색 구현
 - [x] 골든크로스 신호 및 시장 리포트 표시
 - [x] 리포트 해석 탭에서 선택된 1건 중심 본문 표시
 - [x] 리포트 카드 내 전략별 판단 요약 표시
+- [x] 리포트 즐겨찾기 저장
+- [x] 관심종목 전용 탭 추가
 - [x] 테스트 결과 표시
 - [x] 데이터 수집 실행
 - [x] 지표 계산 실행
@@ -21,18 +23,60 @@
 
 ## 남은 항목
 
-- [ ] 리포트 즐겨찾기 저장
 - [ ] 종목 비교 차트
 - [ ] 최신 수집/분석 시각 강조
 - [ ] 백테스트 결과 시각화
 - [ ] 대시보드 설정 저장 고도화
+
+## 현재 작업 실행 탭 동작
+
+- 여러 종목 선택 기반 **배치 실행**만 노출
+- `한 종목` 전용 섹션은 제거
+- 선택 종목들에 대해 아래 작업을 직접 실행 가능
+  - 데이터 수집
+  - 지표 계산
+  - 신호 생성
+  - 리포트 생성
+  - 전체 파이프라인
+- 종목 1개만 선택해도 동일한 배치 흐름으로 사용 가능
 
 ## 현재 리포트 해석 탭 동작
 
 - 상단 선택 컨트롤로 종목/리포트를 고른 뒤 본문에는 선택된 1건만 표시
 - 선택된 리포트 아래에서 차트와 상세 데이터 표를 계속 확인 가능
 - `final_opinion`과 별도로 RSI / Trend Filter / Mean Reversion 전략의 직접 판단과 이유를 함께 표시
-- 즐겨찾기 저장 기능은 아직 구현되지 않음
+- 선택된 종목을 즐겨찾기로 저장/해제할 수 있음
+- 즐겨찾기만 보기와 즐겨찾기 우선 정렬을 지원함
+- 별도 `관심종목` 탭에서 저장된 종목만 다시 모아 보고 1건씩 본문으로 확인 가능
+- 즐겨찾기는 로컬 단일 사용자 상태로 저장되며 report `entry_key`가 아니라 `symbol` 기준으로 관리됨
+
+## 이번 세션 작업 요약 (2026-06-28)
+
+- `streamlit_actions.py` 수정
+  - `한 종목` 섹션 제거
+  - `작업 실행` 탭을 여러 종목 기준 배치 실행 흐름으로 단순화
+  - `데이터 수집`, `지표 계산`, `신호 생성`, `리포트 생성`, `전체 파이프라인`을 모두 선택 종목들에 대해 실행 가능하게 정리
+- `streamlit_reports.py`, `streamlit_formatters.py` 수정
+  - `리포트 해석` 탭 상단 metrics strip 제거
+  - 전략 판단 텍스트에 green/red/black 상태 색상 적용
+- `streamlit_data.py` 수정
+  - `원본 데이터 / 분석 데이터` 이원 진입 제거
+  - 종목 선택 기반 summary-first 데이터 탐색 흐름으로 재구성
+  - 차트/전체 표/컬럼 설명은 expander 아래로 이동
+- `tests/test_streamlit_dashboard.py` 보강
+  - 배치 실행 구조, report top metrics 제거, 색상 contract, symbol-first data flow, HTML escaping 회귀 검증 추가
+- 검증
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_actions.py src/invest_bot/dashboard/streamlit_reports.py src/invest_bot/dashboard/streamlit_formatters.py src/invest_bot/dashboard/streamlit_data.py tests/test_streamlit_dashboard.py`
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `39 passed in 0.48s`
+
+## 현재 잔여 작업
+
+- 관심종목 공유 저장소(DB/shared watchlist) 필요 여부 결정
+- 종목 비교 차트
+- 최신 수집/분석 시각 강조
+- 백테스트 결과 시각화
+- 대시보드 설정 저장 고도화
 
 ## 접속 정보
 
@@ -47,5 +91,7 @@ http://127.0.0.1:8000
 - [`service.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/service.py)
 - [`streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_dashboard.py)
 - [`streamlit_reports.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_reports.py)
+- [`streamlit_watchlist.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_watchlist.py)
+- [`report_favorites.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/report_favorites.py)
 - [`run_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_dashboard.py)
 - [`run_streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_streamlit_dashboard.py)

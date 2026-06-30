@@ -14,6 +14,23 @@
 
 ## 현재 구현 범위
 
+### 이번 세션 업데이트 (2026-06-28)
+
+- `작업 실행` 탭을 여러 종목 기준 **배치 실행** 흐름으로 단순화
+  - `한 종목` 섹션 제거
+  - `데이터 수집`, `지표 계산`, `신호 생성`, `리포트 생성`, `전체 파이프라인`을 모두 선택 종목들에 대해 실행 가능
+- `리포트 해석` 탭 상단 metrics strip 제거
+- 전략 판단 텍스트에 상태별 색상 적용
+  - 긍정: 녹색
+  - 부정: 빨간색
+  - 중립: 검정색
+- `데이터 탐색` 탭을 종목 선택 기반 **summary-first** 흐름으로 재구성
+  - `원본 데이터 / 분석 데이터` 진입 탭 제거
+  - 요약 카드와 빠른 미리보기를 먼저 표시
+  - 차트/상세 표/컬럼 설명은 expander 아래로 이동
+- HTML escape 보강 및 관련 회귀 테스트 추가
+- 관련 검증 완료 (`39 passed in 0.48s`)
+
 ### 데이터 수집
 
 - 국내주식 일봉 데이터 수집
@@ -50,14 +67,16 @@
 ### 대시보드
 
 - Streamlit 기반 운영 대시보드
-- 원본/분석/신호/리포트 데이터 조회
+- 종목 선택 기반 데이터 탐색과 요약 우선 미리보기
 - 리포트 해석 탭 단일 리포트 본문 표시
-- 전략별 판단 요약 표시
-- 시장 리포트 생성 실행
-- 데이터 수집 실행
-- 지표 계산 실행
-- 골든크로스 신호 생성 실행
-- 전체 파이프라인 실행
+- 전략별 판단 요약 및 상태별 색상 표시
+- 리포트 관심종목(즐겨찾기) 저장 및 별도 탭 확인
+- 여러 종목 기준 배치 실행
+  - 데이터 수집
+  - 지표 계산
+  - 골든크로스 신호 생성
+  - 시장 리포트 생성
+  - 전체 파이프라인 실행
 - 정기 수집 상태와 최근 로그 표시
 
 ### 테스트
@@ -387,6 +406,8 @@ data/processed/test_reports/
 - [`service.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/service.py)
 - [`streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_dashboard.py)
 - [`streamlit_reports.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_reports.py)
+- [`streamlit_watchlist.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_watchlist.py)
+- [`report_favorites.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/report_favorites.py)
 
 ## 현재 진행 상태
 
@@ -400,10 +421,10 @@ data/processed/test_reports/
 - [x] Streamlit 대시보드
 - [x] 리포트 해석 탭 단일 리포트 본문 표시
 - [x] 리포트 해석 탭 전략별 판단 요약 표시
+- [x] 리포트 관심종목(즐겨찾기) 저장 및 관심종목 탭
 - [x] 다중 종목 배치 수집
 - [x] 정기 수집 스케줄링 초안
 - [ ] 백테스트 결과 시각화
-- [ ] 리포트 즐겨찾기 저장
 - [ ] 모의투자 주문 실행
 - [ ] 실거래 주문 실행
 - [ ] 리스크 관리 정책 자동화
