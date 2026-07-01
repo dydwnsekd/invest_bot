@@ -680,7 +680,7 @@ def test_render_market_report_card_keeps_chart_for_selected_symbol(monkeypatch: 
 
 def test_refresh_favorite_symbols_bootstraps_missing_data_and_runs_pipeline() -> None:
     service = DashboardDataService(dataset_storage=_FakeDatasetStorage({}))
-    collect_calls: list[tuple[list[str], int]] = []
+    collect_calls: list[tuple[str, date, date]] = []
     analyzed: list[str] = []
     signaled: list[str] = []
     reported: list[str] = []
@@ -689,16 +689,13 @@ def test_refresh_favorite_symbols_bootstraps_missing_data_and_runs_pipeline() ->
         service,
         {"005930"},
         today=date(2026, 6, 29),
-        collect_callback=lambda symbols, days: (
-            collect_calls.append((symbols, days))
-            or {"successful_symbols": ["005930"], "failed_count": 0}
-        ),
+        collect_callback=lambda symbol, start_date, end_date: collect_calls.append((symbol, start_date, end_date)) or True,
         analyze_callback=lambda symbol: analyzed.append(symbol),
         signal_callback=lambda symbol: signaled.append(symbol),
         report_callback=lambda symbol: reported.append(symbol),
     )
 
-    assert collect_calls == [(["005930"], 365)]
+    assert collect_calls == [("005930", date(2025, 6, 29), date(2026, 6, 29))]
     assert analyzed == ["005930"]
     assert signaled == ["005930"]
     assert reported == ["005930"]
@@ -724,14 +721,14 @@ def test_refresh_favorite_symbols_skips_when_current_and_report_ready() -> None:
         }
     )
     service = DashboardDataService(dataset_storage=storage)
-    collect_calls: list[tuple[list[str], int]] = []
+    collect_calls: list[tuple[str, date, date]] = []
     pipeline_calls: list[str] = []
 
     result = refresh_favorite_symbols_if_needed(
         service,
         {"005930"},
         today=date(2026, 6, 29),
-        collect_callback=lambda symbols, days: (collect_calls.append((symbols, days)) or {"successful_symbols": symbols}),
+        collect_callback=lambda symbol, start_date, end_date: collect_calls.append((symbol, start_date, end_date)) or True,
         analyze_callback=lambda symbol: pipeline_calls.append(f"analyze:{symbol}"),
         signal_callback=lambda symbol: pipeline_calls.append(f"signal:{symbol}"),
         report_callback=lambda symbol: pipeline_calls.append(f"report:{symbol}"),
@@ -760,20 +757,20 @@ def test_refresh_favorite_symbols_recollects_stale_data_and_rebuilds_report() ->
         }
     )
     service = DashboardDataService(dataset_storage=storage)
-    collect_calls: list[tuple[list[str], int]] = []
+    collect_calls: list[tuple[str, date, date]] = []
     pipeline_calls: list[str] = []
 
     result = refresh_favorite_symbols_if_needed(
         service,
         {"005930"},
         today=date(2026, 6, 29),
-        collect_callback=lambda symbols, days: (collect_calls.append((symbols, days)) or {"successful_symbols": ["005930"]}),
+        collect_callback=lambda symbol, start_date, end_date: collect_calls.append((symbol, start_date, end_date)) or True,
         analyze_callback=lambda symbol: pipeline_calls.append(f"analyze:{symbol}"),
         signal_callback=lambda symbol: pipeline_calls.append(f"signal:{symbol}"),
         report_callback=lambda symbol: pipeline_calls.append(f"report:{symbol}"),
     )
 
-    assert collect_calls == [(["005930"], 365)]
+    assert collect_calls == [("005930", date(2026, 6, 28), date(2026, 6, 29))]
     assert pipeline_calls == ["analyze:005930", "signal:005930", "report:005930"]
     assert result["collected_symbols"] == ["005930"]
     assert result["pipeline_symbols"] == ["005930"]
