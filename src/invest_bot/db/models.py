@@ -98,3 +98,13 @@ class DatasetFrame(Base):
     )
 
     symbol_ref: Mapped[Symbol | None] = relationship()
+
+
+class ReportFavoriteSymbol(Base):
+    __tablename__ = "report_favorite_symbols"
+
+    symbol: Mapped[str] = mapped_column(String(12), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False
+    )

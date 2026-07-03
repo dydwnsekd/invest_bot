@@ -9,6 +9,8 @@ import pytest
 
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
 from invest_bot.dashboard.report_favorites import ReportFavoritesStore
+from invest_bot.db.engine import build_engine, build_session_factory
+from invest_bot.db.repositories import SqlAlchemyReportFavoriteSymbolRepository
 from invest_bot.dashboard.streamlit_charts import available_chart_presets, default_chart_preset, prepare_time_series_frame
 import invest_bot.dashboard.streamlit_actions as streamlit_actions_module
 import invest_bot.dashboard.streamlit_data as streamlit_data_module
@@ -44,7 +46,7 @@ from invest_bot.dashboard.streamlit_reports import (
 )
 from invest_bot.dashboard.streamlit_watchlist import refresh_favorite_symbols_if_needed, render_watchlist_tab
 from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolEntry
-from tests.helpers import make_test_dir
+from tests.helpers import init_test_db, make_test_dir
 
 
 class _FakeDatasetStorage:
@@ -60,6 +62,14 @@ class _FakeDatasetStorage:
             if current_dataset == dataset and current_filename == filename:
                 return frame
         raise FileNotFoundError(filename)
+
+
+def _make_favorites_store(name: str) -> ReportFavoritesStore:
+    test_dir = make_test_dir(name)
+    database_url = f"sqlite+pysqlite:///{(test_dir / 'favorites.db').as_posix()}"
+    init_test_db(database_url)
+    repository = SqlAlchemyReportFavoriteSymbolRepository(build_session_factory(build_engine(database_url)))
+    return ReportFavoritesStore(repository)
 
 
 def test_format_symbol_display_prefers_name_and_code() -> None:
@@ -515,6 +525,7 @@ def test_render_reports_tab_renders_only_one_selected_report(monkeypatch: pytest
         DashboardDataService(),
         read_preview_frame=lambda preview: frames[preview.symbol],
         load_indicator_frame_for_symbol=lambda symbol: frames[symbol],
+        favorites_store=_make_favorites_store("reports_selected"),
     )
 
     assert captured == ["005930"]
@@ -558,6 +569,7 @@ def test_render_reports_tab_shows_warning_and_skips_body_when_query_has_no_match
         DashboardDataService(),
         read_preview_frame=lambda preview: frames[preview.symbol],
         load_indicator_frame_for_symbol=lambda symbol: frames[symbol],
+        favorites_store=_make_favorites_store("reports_no_match"),
     )
 
     assert captured == []
@@ -615,8 +627,7 @@ def test_render_market_report_card_toggles_favorite_store(monkeypatch: pytest.Mo
         "rsi_14": 60,
         "golden_cross_reason": "ma_5 crossed above ma_20.",
     }])
-    store_path = make_test_dir("report_card_toggle") / "favorites.json"
-    store = ReportFavoritesStore(store_path)
+    store = _make_favorites_store("report_card_toggle")
 
     streamlit_reports_module.render_market_report_card(
         preview,
@@ -779,7 +790,7 @@ def test_render_watchlist_tab_shows_info_when_no_favorites(monkeypatch: pytest.M
     fake_st = _FakeStreamlit()
     monkeypatch.setattr(streamlit_watchlist_module, "st", fake_st)
     snapshot = SimpleNamespace(processed_previews=[_make_report_preview("005930", "삼성전자", "005930_20260624.csv")])
-    store = ReportFavoritesStore(make_test_dir("watchlist_no_favorites") / "favorites.json")
+    store = _make_favorites_store("watchlist_no_favorites")
 
     render_watchlist_tab(
         snapshot,
@@ -817,7 +828,7 @@ def test_render_watchlist_tab_renders_only_one_selected_favorite(monkeypatch: py
         "000660": pd.DataFrame([{"date": "2026-06-24", "symbol_name": "SK하이닉스", "final_opinion": "hold", "summary": "b", "trend_state": "neutral", "golden_cross_signal": "hold", "rsi_state": "neutral", "investor_flow": "mixed"}]),
     }
     snapshot = SimpleNamespace(processed_previews=previews)
-    store = ReportFavoritesStore(make_test_dir("watchlist_selected") / "favorites.json")
+    store = _make_favorites_store("watchlist_selected")
     store.add("005930")
     store.add("000660")
 
@@ -939,6 +950,7 @@ def test_render_reports_tab_removes_top_metrics_strip_and_keeps_single_report_fl
         DashboardDataService(),
         read_preview_frame=lambda preview: frame,
         load_indicator_frame_for_symbol=lambda symbol: frame,
+        favorites_store=_make_favorites_store("reports_metrics"),
     )
 
     metric_labels = [label for label, _ in fake_st.metric_calls]
@@ -1027,8 +1039,12 @@ def test_streamlit_apptest_smoke_for_actions_reports_and_data_tabs() -> None:
         import pandas as pd
         from pathlib import Path
         from invest_bot.dashboard.service import DashboardDataService
+        from invest_bot.dashboard.report_favorites import ReportFavoritesStore
         from invest_bot.dashboard.streamlit_reports import render_reports_tab
         from invest_bot.dashboard.service import DatasetPreview
+        from invest_bot.db.engine import build_engine, build_session_factory
+        from invest_bot.db.repositories import SqlAlchemyReportFavoriteSymbolRepository
+        from tests.helpers import init_test_db, make_test_dir
 
         preview = DatasetPreview(
             name="market_reports",
@@ -1055,14 +1071,21 @@ def test_streamlit_apptest_smoke_for_actions_reports_and_data_tabs() -> None:
             "close": 100,
             "ma_5": 90,
             "ma_20": 80,
-            "rsi_14": 60,
-            "golden_cross_reason": "ma_5 crossed above ma_20.",
-        }])
+                "rsi_14": 60,
+                "golden_cross_reason": "ma_5 crossed above ma_20.",
+            }])
+        test_dir = make_test_dir("reports_smoke_apptest")
+        database_url = f"sqlite+pysqlite:///{(test_dir / 'favorites.db').as_posix()}"
+        init_test_db(database_url)
+        favorites_store = ReportFavoritesStore(
+            SqlAlchemyReportFavoriteSymbolRepository(build_session_factory(build_engine(database_url)))
+        )
         render_reports_tab(
             SimpleNamespace(processed_previews=[preview]),
             DashboardDataService(),
             read_preview_frame=lambda _: frame,
             load_indicator_frame_for_symbol=lambda _: frame,
+            favorites_store=favorites_store,
         )
 
     def render_data_smoke() -> None:

@@ -7,6 +7,7 @@ from typing import Sequence
 
 import pandas as pd
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from invest_bot.db.contracts import (
@@ -14,9 +15,10 @@ from invest_bot.db.contracts import (
     DatasetFrameRecord,
     InvestorDailyRecord,
     StockInfoSnapshotRecord,
+    ReportFavoriteSymbolRecord,
     StockRecord,
 )
-from invest_bot.db.models import DatasetFrame, DailyPrice, InvestorDaily, StockInfoSnapshot, Symbol
+from invest_bot.db.models import DatasetFrame, DailyPrice, InvestorDaily, ReportFavoriteSymbol, StockInfoSnapshot, Symbol
 
 
 class SqlAlchemyStockRepository:
@@ -272,6 +274,51 @@ class SqlAlchemyDatasetFrameRepository:
                         )
                     )
         return records
+
+
+class SqlAlchemyReportFavoriteSymbolRepository:
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self.session_factory = session_factory
+
+    def load_all(self) -> Sequence[ReportFavoriteSymbolRecord]:
+        with self.session_factory() as session:
+            rows = session.scalars(select(ReportFavoriteSymbol).order_by(ReportFavoriteSymbol.created_at.asc())).all()
+            return [
+                ReportFavoriteSymbolRecord(
+                    symbol=row.symbol,
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
+                )
+                for row in rows
+            ]
+
+    def add(self, symbol: str) -> bool:
+        normalized = normalize_symbol(symbol)
+        if not normalized:
+            return False
+        with self.session_factory() as session:
+            existing = session.get(ReportFavoriteSymbol, normalized)
+            if existing is not None:
+                return False
+            try:
+                session.add(ReportFavoriteSymbol(symbol=normalized))
+                session.commit()
+                return True
+            except IntegrityError:
+                session.rollback()
+                return False
+
+    def remove(self, symbol: str) -> bool:
+        normalized = normalize_symbol(symbol)
+        if not normalized:
+            return False
+        with self.session_factory() as session:
+            existing = session.get(ReportFavoriteSymbol, normalized)
+            if existing is None:
+                return False
+            session.delete(existing)
+            session.commit()
+            return True
 
 
 def ensure_symbol(session: Session, symbol: str, *, symbol_name: str | None = None, market: str = "unknown") -> None:

@@ -109,4 +109,5 @@ def test_init_db_script_upgrades_legacy_bootstrap_sqlite_db(tmp_path) -> None:
         connection.close()
 
     assert "dataset_frames" in tables
-    assert versions == [("20260612_000002",)]
+    assert "report_favorite_symbols" in tables
+    assert versions == [("20260703_000003",)]

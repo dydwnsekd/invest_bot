@@ -63,6 +63,13 @@ class DatasetFrameRecord:
     as_of_date: date | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ReportFavoriteSymbolRecord:
+    symbol: str
+    created_at: datetime
+    updated_at: datetime
+
+
 @runtime_checkable
 class StockRepository(Protocol):
     def upsert(self, record: StockRecord) -> None: ...
@@ -111,3 +118,12 @@ class DatasetFrameRepository(Protocol):
     def latest_for_symbol(self, dataset: str, symbol: str) -> DatasetFrameRecord | None: ...
 
     def list_latest(self, datasets: Sequence[str]) -> Sequence[DatasetFrameRecord]: ...
+
+
+@runtime_checkable
+class ReportFavoriteSymbolRepository(Protocol):
+    def load_all(self) -> Sequence[ReportFavoriteSymbolRecord]: ...
+
+    def add(self, symbol: str) -> bool: ...
+
+    def remove(self, symbol: str) -> bool: ...
