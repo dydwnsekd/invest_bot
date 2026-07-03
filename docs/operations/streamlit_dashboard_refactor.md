@@ -110,13 +110,13 @@
   - `src/invest_bot/dashboard/streamlit_dashboard.py`
   - `src/invest_bot/dashboard/streamlit_layout.py`
 - 정리 내용
-  - symbol 기준 local favorites persistence helper 추가
+  - symbol 기준 DB-backed favorites persistence helper/adapter로 전환
   - selected report 본문에 즐겨찾기 토글 추가
   - favorites-only filter와 즐겨찾기 우선 정렬 추가
   - 별도 `관심종목` 탭을 추가해 저장된 종목만 다시 선택/확인할 수 있게 구성
   - persistence와 session UI state 경계를 분리
 - 참고
-  - DB-backed shared watchlist는 아직 후속 범위로 남아 있음
+  - 1차는 DB-backed 단일 watchlist까지만 반영했고 user/account ownership 확장은 후속 범위로 남아 있음
 
 ### 2026-06-27 / Session summary
 
@@ -132,7 +132,7 @@
   - `tests/test_report_favorites.py`, `tests/test_streamlit_dashboard.py` 보강
 - 현재 결정 사항
   - 저장 단위는 `symbol`
-  - 저장 범위는 로컬 단일 사용자 상태
+  - 저장 범위는 DB-backed 단일 watchlist 상태
   - `관심종목` 탭 본문은 한 번에 1개만 표시
 - 검증 결과
   - `38 passed in 0.69s`
@@ -217,6 +217,35 @@
 
 ## 검증 로그
 
+### 2026-07-03 / DB watchlist persistence
+
+- 관심종목 persistence 안정화 반영
+- 대상 파일
+  - `src/invest_bot/db/models.py`
+  - `migrations/versions/20260703_000003_add_report_favorite_symbols.py`
+  - `src/invest_bot/db/contracts.py`
+  - `src/invest_bot/db/repositories.py`
+  - `src/invest_bot/dashboard/report_favorites.py`
+  - `tests/test_init_db_script.py`
+  - `tests/test_report_favorites.py`
+  - `tests/test_streamlit_dashboard.py`
+  - `docs/tasks/04_dashboard.md`
+- 정리 내용
+  - 로컬 JSON 기반 관심종목 저장을 DB-backed 단일 watchlist로 교체
+  - `report_favorite_symbols` 테이블과 migration 추가
+  - `ReportFavoritesStore`를 DB repository 위의 thin adapter로 유지
+  - 기존 `ReportFavoritesStore(Path(...))` 호출 형태 호환 유지
+  - duplicate insert race 시 `IntegrityError`를 삼켜 `False`를 반환하도록 보강
+  - automatic JSON backfill/import는 추가하지 않음
+- 검증 결과
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_report_favorites.py tests/test_init_db_script.py tests/test_streamlit_dashboard.py -q`
+  - 결과: `51 passed in 1.64s`
+  - `docker compose` web recreate 이후 container 내부 `ReportFavoritesStore().load_symbols()`가 `['005930']` 유지
+  - `curl http://127.0.0.1:8000` → `HTTP/1.1 200 OK`
+- 결정 메모
+  - 1차 범위는 user/account ownership 없는 single global symbol table
+  - persistence 매체만 DB로 바꾸고 기존 리포트/관심종목 UX는 유지
+
 ### 2026-06-25 / Report UX follow-up
 
 - Host syntax check
@@ -284,6 +313,6 @@
 
 - 현재 분리 계획 완료
 - 후속 개선 후보:
-  - DB-backed shared watchlist 필요성 재검토
+  - user/account ownership을 가진 shared watchlist 확장 필요성 재검토
   - 필요 시 `streamlit_layout.py` 내부 UI 조각을 더 세분화
   - 탭별 시각 회귀 검증을 추가할지 검토

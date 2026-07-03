@@ -48,7 +48,23 @@
 - 선택된 종목을 즐겨찾기로 저장/해제할 수 있음
 - 즐겨찾기만 보기와 즐겨찾기 우선 정렬을 지원함
 - 별도 `관심종목` 탭에서 저장된 종목만 다시 모아 보고 1건씩 본문으로 확인 가능
-- 즐겨찾기는 로컬 단일 사용자 상태로 저장되며 report `entry_key`가 아니라 `symbol` 기준으로 관리됨
+- 즐겨찾기는 DB 기반 단일 watchlist 상태로 저장되며 report `entry_key`가 아니라 `symbol` 기준으로 관리됨
+- 같은 DB 볼륨을 유지하는 정상적인 app/container 재시작 후에도 관심종목 상태가 유지됨
+
+## 이번 세션 작업 요약 (2026-07-03)
+
+- 관심종목 persistence를 로컬 JSON에서 DB 기반 단일 watchlist로 전환
+- `report_favorite_symbols` 테이블과 Alembic migration 추가
+- `ReportFavoritesStore`를 DB-backed thin adapter로 전환
+- 기존 `ReportFavoritesStore(Path(...))` 호출 형태 호환 유지
+- duplicate insert race 시 `IntegrityError` 대신 `False`를 반환하도록 repository 보강
+- 자동 JSON backfill/import는 이번 1차 범위에서 제외
+- user/account ownership 없는 단일 global symbol watchlist 범위 유지
+- 검증
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_report_favorites.py tests/test_init_db_script.py tests/test_streamlit_dashboard.py -q`
+  - 결과: `51 passed in 1.64s`
+  - `docker compose` 기준 web recreate 이후에도 `['005930']` 유지 확인
+  - `curl http://127.0.0.1:8000` → `HTTP/1.1 200 OK`
 
 ## 이번 세션 작업 요약 (2026-06-28)
 
@@ -72,7 +88,7 @@
 
 ## 현재 잔여 작업
 
-- 관심종목 공유 저장소(DB/shared watchlist) 필요 여부 결정
+- 사용자/account ownership이 필요한 shared watchlist 확장 여부 결정
 - 종목 비교 차트
 - 최신 수집/분석 시각 강조
 - 백테스트 결과 시각화
