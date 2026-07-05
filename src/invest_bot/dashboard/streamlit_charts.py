@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 from dataclasses import dataclass
 
 import altair as alt
 import pandas as pd
 import streamlit as st
+
+try:
+    import plotly.graph_objects as go
+except ImportError:  # pragma: no cover - exercised via fallback path when dependency is absent.
+    go = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +72,38 @@ PRICE_COLOR_DOMAIN = ["종가", "5일선", "20일선", "60일선"]
 PRICE_COLOR_RANGE = ["#0f766e", "#f59e0b", "#dc2626", "#7c3aed"]
 FLOW_COLOR_DOMAIN = ["외국인 순매수", "기관 순매수", "개인 순매수"]
 FLOW_COLOR_RANGE = ["#2563eb", "#059669", "#f97316"]
+DEFAULT_RANGE_PRESET = "90d"
+RANGE_PRESET_DAYS = {
+    "30d": 30,
+    "90d": 90,
+    "180d": 180,
+    "365d": 365,
+    "all": None,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class RangeState:
+    mode: str
+    preset: str
+    dates: tuple[date, date]
+    min_date: date
+    max_date: date
+
+
+@dataclass(frozen=True, slots=True)
+class RangePresetOption:
+    key: str
+    label: str
+
+
+RANGE_PRESET_OPTIONS = (
+    RangePresetOption("30d", "1개월"),
+    RangePresetOption("90d", "3개월"),
+    RangePresetOption("180d", "6개월"),
+    RangePresetOption("365d", "1년"),
+    RangePresetOption("all", "전체"),
+)
 
 
 def available_chart_presets(dataset_name: str, frame: pd.DataFrame) -> list[ChartPreset]:
@@ -136,6 +174,124 @@ def prepare_time_series_frame(frame: pd.DataFrame, max_points: int = 90) -> pd.D
     return working.tail(max_points).reset_index(drop=True)
 
 
+def preset_days(preset: str) -> int | None:
+    return RANGE_PRESET_DAYS.get(str(preset), RANGE_PRESET_DAYS[DEFAULT_RANGE_PRESET])
+
+
+def resolve_range_state(
+    frame: pd.DataFrame,
+    *,
+    key_prefix: str,
+    session_state=None,
+    default_preset: str = DEFAULT_RANGE_PRESET,
+    selected_preset: str | None = None,
+    selected_dates: tuple[date | datetime | pd.Timestamp | str, date | datetime | pd.Timestamp | str] | None = None,
+) -> RangeState:
+    session = st.session_state if session_state is None else session_state
+    normalized = prepare_time_series_frame(frame, max_points=len(frame))
+    if normalized.empty:
+        raise ValueError("날짜 범위를 계산할 수 있는 시계열 데이터가 없습니다.")
+
+    min_date = normalized["date"].min().date()
+    max_date = normalized["date"].max().date()
+    mode_key = f"{key_prefix}_range_mode"
+    preset_key = f"{key_prefix}_range_preset"
+    dates_key = f"{key_prefix}_range_dates"
+
+    stored_mode = str(session.get(mode_key, "preset"))
+    stored_preset = str(session.get(preset_key, default_preset))
+    stored_dates = session.get(dates_key)
+
+    if selected_dates is not None:
+        resolved_dates = normalize_range_dates(selected_dates, min_date=min_date, max_date=max_date)
+        mode = "custom"
+        preset = stored_preset
+    elif selected_preset is not None:
+        preset = normalize_range_preset(selected_preset, default_preset=default_preset)
+        resolved_dates = range_dates_for_preset(preset, min_date=min_date, max_date=max_date)
+        mode = "preset"
+    else:
+        preset = normalize_range_preset(stored_preset, default_preset=default_preset)
+        if stored_mode == "custom" and stored_dates is not None:
+            resolved_dates = normalize_range_dates(stored_dates, min_date=min_date, max_date=max_date)
+            mode = "custom"
+        else:
+            resolved_dates = range_dates_for_preset(preset, min_date=min_date, max_date=max_date)
+            mode = "preset"
+
+    session[mode_key] = mode
+    session[preset_key] = preset
+    session[dates_key] = resolved_dates
+    return RangeState(mode=mode, preset=preset, dates=resolved_dates, min_date=min_date, max_date=max_date)
+
+
+def normalize_range_preset(preset: str | None, *, default_preset: str = DEFAULT_RANGE_PRESET) -> str:
+    candidate = str(preset or default_preset)
+    if candidate in RANGE_PRESET_DAYS:
+        return candidate
+    return default_preset
+
+
+def range_dates_for_preset(
+    preset: str,
+    *,
+    min_date: date,
+    max_date: date,
+) -> tuple[date, date]:
+    days = preset_days(preset)
+    if days is None:
+        return (min_date, max_date)
+    start_date = max(min_date, max_date - timedelta(days=max(days - 1, 0)))
+    return (start_date, max_date)
+
+
+def normalize_range_dates(
+    value: tuple[date | datetime | pd.Timestamp | str, date | datetime | pd.Timestamp | str] | list[date | datetime | pd.Timestamp | str],
+    *,
+    min_date: date,
+    max_date: date,
+) -> tuple[date, date]:
+    if len(value) != 2:
+        raise ValueError("조회 기간은 시작일과 종료일 2개 값이어야 합니다.")
+    start_raw, end_raw = value
+    start_date = clamp_date(coerce_to_date(start_raw), min_date=min_date, max_date=max_date)
+    end_date = clamp_date(coerce_to_date(end_raw), min_date=min_date, max_date=max_date)
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+    return (start_date, end_date)
+
+
+def coerce_to_date(value: date | datetime | pd.Timestamp | str) -> date:
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        raise ValueError(f"날짜로 해석할 수 없는 값입니다: {value!r}")
+    return parsed.date()
+
+
+def clamp_date(value: date, *, min_date: date, max_date: date) -> date:
+    if value < min_date:
+        return min_date
+    if value > max_date:
+        return max_date
+    return value
+
+
+def apply_time_window(
+    frame: pd.DataFrame,
+    range_dates: tuple[date | datetime | pd.Timestamp | str, date | datetime | pd.Timestamp | str],
+) -> pd.DataFrame:
+    normalized = prepare_time_series_frame(frame, max_points=len(frame))
+    if normalized.empty:
+        return normalized
+    min_date = normalized["date"].min().date()
+    max_date = normalized["date"].max().date()
+    start_date, end_date = normalize_range_dates(range_dates, min_date=min_date, max_date=max_date)
+    mask = normalized["date"].dt.date.between(start_date, end_date)
+    return normalized.loc[mask].reset_index(drop=True)
+
+
 def infer_date_column(frame: pd.DataFrame) -> str | None:
     for column in ("date", "stck_bsop_date"):
         if column in frame.columns:
@@ -173,17 +329,82 @@ def render_chart_selector(
         key=f"{key_prefix}_chart_type",
     )
     st.caption(preset_by_key[selected_key].description)
-    chart = build_chart(frame, selected_key, height=height)
+    selected_preset, selected_dates = render_range_controls(frame, key_prefix=key_prefix)
+    range_state = resolve_range_state(
+        frame,
+        key_prefix=key_prefix,
+        selected_preset=selected_preset,
+        selected_dates=selected_dates,
+    )
+    filtered_frame = apply_time_window(frame, range_state.dates)
+    st.caption(
+        f"조회 기간: {range_state.dates[0].isoformat()} ~ {range_state.dates[1].isoformat()}"
+    )
+    chart = build_chart(filtered_frame, selected_key, height=height, library=preferred_chart_library())
     if chart is None:
         st.info("선택한 차트를 그리기 위한 컬럼이 부족합니다.")
+        return
+    render_chart(chart, key_prefix=key_prefix)
+
+
+def render_range_controls(
+    frame: pd.DataFrame,
+    *,
+    key_prefix: str,
+) -> tuple[str | None, tuple[date, date] | None]:
+    current_state = resolve_range_state(frame, key_prefix=key_prefix)
+    preset_options = [option.key for option in RANGE_PRESET_OPTIONS]
+    preset_labels = {option.key: option.label for option in RANGE_PRESET_OPTIONS}
+    preset_widget_key = f"{key_prefix}_range_preset_widget"
+    date_widget_key = f"{key_prefix}_range_dates_widget"
+
+    selected_preset = st.radio(
+        "빠른 조회 기간",
+        options=preset_options,
+        index=preset_options.index(current_state.preset),
+        format_func=lambda key: preset_labels[key],
+        horizontal=True,
+        key=preset_widget_key,
+    )
+    selected_dates = st.date_input(
+        "직접 기간 선택",
+        value=current_state.dates,
+        min_value=current_state.min_date,
+        max_value=current_state.max_date,
+        key=date_widget_key,
+    )
+
+    normalized_selected_dates = tuple(selected_dates) if isinstance(selected_dates, (list, tuple)) and len(selected_dates) == 2 else current_state.dates
+    if selected_preset != current_state.preset:
+        st.session_state[date_widget_key] = range_dates_for_preset(
+            selected_preset,
+            min_date=current_state.min_date,
+            max_date=current_state.max_date,
+        )
+        return (selected_preset, None)
+    if normalized_selected_dates != current_state.dates:
+        return (None, normalized_selected_dates)
+    return (None, None)
+
+
+def preferred_chart_library() -> str:
+    return "plotly" if go is not None else "altair"
+
+
+def render_chart(chart, *, key_prefix: str) -> None:
+    if preferred_chart_library() == "plotly" and go is not None:
+        st.plotly_chart(chart, use_container_width=True, key=f"{key_prefix}_plotly_chart")
         return
     st.altair_chart(chart, use_container_width=True)
 
 
-def build_chart(frame: pd.DataFrame, chart_type: str, *, height: int = 280) -> alt.Chart | alt.LayerChart | None:
-    normalized = prepare_time_series_frame(frame)
+def build_chart(frame: pd.DataFrame, chart_type: str, *, height: int = 280, library: str | None = None):
+    normalized = prepare_time_series_frame(frame, max_points=len(frame))
     if normalized.empty:
         return None
+    resolved_library = library or preferred_chart_library()
+    if resolved_library == "plotly" and go is not None:
+        return build_plotly_chart(normalized, chart_type, height=height)
     if chart_type == "close_only":
         return build_price_line_chart(normalized, ["close"], height=height)
     if chart_type == "close_ma":
@@ -198,6 +419,158 @@ def build_chart(frame: pd.DataFrame, chart_type: str, *, height: int = 280) -> a
     if chart_type == "flow":
         return build_flow_chart(normalized, height=height)
     return None
+
+
+def build_plotly_chart(frame: pd.DataFrame, chart_type: str, *, height: int = 280):
+    if chart_type == "close_only":
+        return build_plotly_price_line_chart(frame, ["close"], height=height)
+    if chart_type == "close_ma":
+        columns = [column for column in ("close", "ma_5", "ma_20", "ma_60") if column in frame.columns]
+        return build_plotly_price_line_chart(frame, columns, height=height)
+    if chart_type == "candlestick":
+        return build_plotly_candlestick_chart(frame, height=height)
+    if chart_type == "volume":
+        return build_plotly_volume_chart(frame, height=height)
+    if chart_type == "rsi":
+        return build_plotly_rsi_chart(frame, height=height)
+    if chart_type == "flow":
+        return build_plotly_flow_chart(frame, height=height)
+    return None
+
+
+def apply_plotly_interaction_layout(figure, *, height: int, yaxis_title: str) -> None:
+    figure.update_layout(
+        height=height,
+        hovermode="x unified",
+        margin=dict(l=20, r=20, t=16, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis=dict(
+            title="날짜",
+            showspikes=True,
+            spikemode="across",
+            spikesnap="cursor",
+            spikedash="solid",
+            spikethickness=1,
+            rangeslider=dict(visible=False),
+        ),
+        yaxis=dict(title=yaxis_title),
+    )
+
+
+def build_plotly_price_line_chart(frame: pd.DataFrame, columns: list[str], *, height: int):
+    columns = [column for column in columns if column in frame.columns]
+    if not columns:
+        return None
+    figure = go.Figure()
+    palette = dict(zip(PRICE_COLOR_DOMAIN, PRICE_COLOR_RANGE, strict=False))
+    for column in columns:
+        label = SERIES_LABELS.get(column, column)
+        figure.add_trace(
+            go.Scatter(
+                x=frame["date"],
+                y=frame[column],
+                mode="lines+markers",
+                name=label,
+                line=dict(width=2, color=palette.get(label)),
+                hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:,.0f}<extra></extra>",
+            )
+        )
+    apply_plotly_interaction_layout(figure, height=height, yaxis_title="가격")
+    return figure
+
+
+def build_plotly_candlestick_chart(frame: pd.DataFrame, *, height: int):
+    required = {"open", "high", "low", "close"}
+    if not required.issubset(frame.columns):
+        return None
+    chart_data = frame[["date", "open", "high", "low", "close"]].dropna()
+    if chart_data.empty:
+        return None
+    figure = go.Figure(
+        data=[
+            go.Candlestick(
+                x=chart_data["date"],
+                open=chart_data["open"],
+                high=chart_data["high"],
+                low=chart_data["low"],
+                close=chart_data["close"],
+                name="캔들",
+                increasing_line_color="#dc2626",
+                decreasing_line_color="#2563eb",
+                hovertemplate=None,
+            )
+        ]
+    )
+    apply_plotly_interaction_layout(figure, height=height, yaxis_title="가격")
+    return figure
+
+
+def build_plotly_volume_chart(frame: pd.DataFrame, *, height: int):
+    if "volume" not in frame.columns:
+        return None
+    chart_data = frame[["date", "volume"]].dropna()
+    if chart_data.empty:
+        return None
+    figure = go.Figure(
+        data=[
+            go.Bar(
+                x=chart_data["date"],
+                y=chart_data["volume"],
+                name="거래량",
+                marker_color="#2563eb",
+                hovertemplate="%{x|%Y-%m-%d}<br>거래량: %{y:,.0f}<extra></extra>",
+            )
+        ]
+    )
+    apply_plotly_interaction_layout(figure, height=height, yaxis_title="거래량")
+    return figure
+
+
+def build_plotly_rsi_chart(frame: pd.DataFrame, *, height: int):
+    if "rsi_14" not in frame.columns:
+        return None
+    chart_data = frame[["date", "rsi_14"]].dropna()
+    if chart_data.empty:
+        return None
+    figure = go.Figure()
+    figure.add_trace(
+        go.Scatter(
+            x=chart_data["date"],
+            y=chart_data["rsi_14"],
+            mode="lines+markers",
+            name="RSI 14",
+            line=dict(width=2, color="#7c3aed"),
+            hovertemplate="%{x|%Y-%m-%d}<br>RSI 14: %{y:.2f}<extra></extra>",
+        )
+    )
+    for level, label in ((30, "과매도 기준"), (70, "과열 기준")):
+        figure.add_hline(y=level, line_dash="dash", line_color="#9ca3af", annotation_text=label, annotation_position="top left")
+    apply_plotly_interaction_layout(figure, height=height, yaxis_title="RSI 14")
+    figure.update_yaxes(range=[0, 100])
+    return figure
+
+
+def build_plotly_flow_chart(frame: pd.DataFrame, *, height: int):
+    columns = flow_series_columns(frame)
+    if not columns:
+        return None
+    figure = go.Figure()
+    palette = dict(zip(FLOW_COLOR_DOMAIN, FLOW_COLOR_RANGE, strict=False))
+    for column in columns:
+        label = SERIES_LABELS.get(column, column)
+        figure.add_trace(
+            go.Scatter(
+                x=frame["date"],
+                y=frame[column],
+                mode="lines+markers",
+                name=label,
+                line=dict(width=2, color=palette.get(label)),
+                hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:,.0f}<extra></extra>",
+            )
+        )
+    apply_plotly_interaction_layout(figure, height=height, yaxis_title="순매수")
+    figure.add_hline(y=0, line_dash="dot", line_color="#9ca3af")
+    return figure
 
 
 def build_price_line_chart(frame: pd.DataFrame, columns: list[str], *, height: int) -> alt.Chart | None:

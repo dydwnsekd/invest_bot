@@ -11,7 +11,15 @@ from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
 from invest_bot.dashboard.report_favorites import ReportFavoritesStore
 from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.repositories import SqlAlchemyReportFavoriteSymbolRepository
-from invest_bot.dashboard.streamlit_charts import available_chart_presets, default_chart_preset, prepare_time_series_frame
+from invest_bot.dashboard.streamlit_charts import (
+    apply_time_window,
+    available_chart_presets,
+    build_chart,
+    default_chart_preset,
+    prepare_time_series_frame,
+    resolve_range_state,
+)
+import invest_bot.dashboard.streamlit_charts as streamlit_charts_module
 import invest_bot.dashboard.streamlit_actions as streamlit_actions_module
 import invest_bot.dashboard.streamlit_data as streamlit_data_module
 from invest_bot.dashboard.streamlit_actions import (
@@ -234,6 +242,171 @@ def test_available_chart_presets_detects_investor_flow_chart() -> None:
     assert default_chart_preset("investor_daily", presets) == "flow"
 
 
+def test_resolve_range_state_initializes_preset_and_range_dates() -> None:
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "close": 10},
+            {"date": "2026-02-15", "close": 20},
+            {"date": "2026-03-31", "close": 30},
+        ]
+    )
+    session_state: dict[str, object] = {}
+
+    state = resolve_range_state(frame, key_prefix="report_chart", session_state=session_state)
+
+    assert state.mode == "preset"
+    assert state.preset == "90d"
+    assert state.dates == (date(2026, 1, 1), date(2026, 3, 31))
+    assert session_state["report_chart_range_mode"] == "preset"
+    assert session_state["report_chart_range_preset"] == "90d"
+    assert session_state["report_chart_range_dates"] == (date(2026, 1, 1), date(2026, 3, 31))
+
+
+def test_resolve_range_state_syncs_range_dates_when_preset_changes() -> None:
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "close": 10},
+            {"date": "2026-02-15", "close": 20},
+            {"date": "2026-03-31", "close": 30},
+        ]
+    )
+    session_state = {
+        "report_chart_range_mode": "custom",
+        "report_chart_range_preset": "90d",
+        "report_chart_range_dates": (date(2026, 1, 15), date(2026, 2, 10)),
+    }
+
+    state = resolve_range_state(
+        frame,
+        key_prefix="report_chart",
+        session_state=session_state,
+        selected_preset="30d",
+    )
+
+    assert state.mode == "preset"
+    assert state.preset == "30d"
+    assert state.dates == (date(2026, 3, 2), date(2026, 3, 31))
+    assert session_state["report_chart_range_dates"] == (date(2026, 3, 2), date(2026, 3, 31))
+
+
+def test_resolve_range_state_makes_direct_dates_authoritative_and_clamps() -> None:
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "close": 10},
+            {"date": "2026-02-15", "close": 20},
+            {"date": "2026-03-31", "close": 30},
+        ]
+    )
+    session_state = {
+        "report_chart_range_mode": "preset",
+        "report_chart_range_preset": "30d",
+        "report_chart_range_dates": (date(2026, 3, 2), date(2026, 3, 31)),
+    }
+
+    state = resolve_range_state(
+        frame,
+        key_prefix="report_chart",
+        session_state=session_state,
+        selected_dates=(date(2025, 12, 1), date(2026, 2, 20)),
+    )
+
+    assert state.mode == "custom"
+    assert state.preset == "30d"
+    assert state.dates == (date(2026, 1, 1), date(2026, 2, 20))
+    assert session_state["report_chart_range_mode"] == "custom"
+    assert session_state["report_chart_range_dates"] == (date(2026, 1, 1), date(2026, 2, 20))
+
+
+def test_apply_time_window_filters_inclusive_range_after_normalization() -> None:
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "close": 10},
+            {"date": "2026-02-15", "close": 20},
+            {"date": "2026-03-31", "close": 30},
+        ]
+    )
+
+    filtered = apply_time_window(frame, (date(2026, 2, 1), date(2026, 3, 1)))
+
+    assert filtered["date"].dt.strftime("%Y-%m-%d").tolist() == ["2026-02-15"]
+
+
+def test_build_chart_uses_plotly_library_for_close_ma_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeFigure:
+        def __init__(self):
+            self.traces = []
+            self.layout_updates = []
+            self.yaxis_updates = []
+            self.hlines = []
+
+        def add_trace(self, trace) -> None:
+            self.traces.append(trace)
+
+        def update_layout(self, **kwargs) -> None:
+            self.layout_updates.append(kwargs)
+
+        def update_yaxes(self, **kwargs) -> None:
+            self.yaxis_updates.append(kwargs)
+
+        def add_hline(self, **kwargs) -> None:
+            self.hlines.append(kwargs)
+
+    class _FakeGo:
+        Figure = _FakeFigure
+
+        @staticmethod
+        def Scatter(**kwargs):
+            return ("scatter", kwargs)
+
+        @staticmethod
+        def Bar(**kwargs):
+            return ("bar", kwargs)
+
+        @staticmethod
+        def Candlestick(**kwargs):
+            return ("candlestick", kwargs)
+
+    monkeypatch.setattr(streamlit_charts_module, "go", _FakeGo)
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-03-28", "close": 70800, "ma_5": 70200, "ma_20": 69000},
+            {"date": "2026-03-29", "close": 71000, "ma_5": 70400, "ma_20": 69200},
+        ]
+    )
+
+    figure = build_chart(frame, "close_ma", library="plotly")
+
+    assert isinstance(figure, _FakeFigure)
+    assert len(figure.traces) == 3
+    assert figure.layout_updates[-1]["hovermode"] == "x unified"
+    assert figure.layout_updates[-1]["xaxis"]["showspikes"] is True
+
+
+def test_build_chart_preserves_full_filtered_range_instead_of_retruncating() -> None:
+    frame = pd.DataFrame(
+        [
+            {"date": f"2026-01-{day:02d}", "close": day}
+            for day in range(1, 32)
+        ]
+        + [
+            {"date": f"2026-02-{day:02d}", "close": 31 + day}
+            for day in range(1, 29)
+        ]
+        + [
+            {"date": f"2026-03-{day:02d}", "close": 59 + day}
+            for day in range(1, 32)
+        ]
+        + [
+            {"date": f"2026-04-{day:02d}", "close": 90 + day}
+            for day in range(1, 31)
+        ]
+    )
+
+    chart = build_chart(frame, "close_only", library="plotly")
+
+    assert len(chart.data[0].x) == len(frame)
+
+
 def test_query_report_entries_filters_by_symbol_or_name() -> None:
     entries = [
         {"entry_key": "005930:a.csv", "symbol": "005930", "symbol_name": "삼성전자"},
@@ -364,6 +537,14 @@ class _FakeMetricColumn:
         assert self.owner is not None
         return self.owner.slider(*args, **kwargs)
 
+    def radio(self, *args, **kwargs):
+        assert self.owner is not None
+        return self.owner.radio(*args, **kwargs)
+
+    def date_input(self, *args, **kwargs):
+        assert self.owner is not None
+        return self.owner.date_input(*args, **kwargs)
+
 
 class _FakeContext:
     def __enter__(self):
@@ -413,6 +594,10 @@ class _FakeStreamlit:
         self.expander_labels: list[str] = []
         self.tab_labels: list[str] = []
         self.dataframe_calls = 0
+        self.radio_labels: list[str] = []
+        self.date_input_labels: list[str] = []
+        self.altair_chart_calls: list[object] = []
+        self.plotly_chart_calls: list[object] = []
 
     def markdown(self, body: str, *args, **kwargs) -> None:
         self.markdown_calls.append(body)
@@ -452,6 +637,20 @@ class _FakeStreamlit:
             self.session_state[key] = value
         return value
 
+    def radio(self, label: str, options: list[str], index: int = 0, key: str | None = None, **kwargs):
+        self.radio_labels.append(label)
+        value = self.session_state.get(key, options[index]) if key is not None else options[index]
+        if key is not None:
+            self.session_state[key] = value
+        return value
+
+    def date_input(self, label: str, value, key: str | None = None, **kwargs):
+        self.date_input_labels.append(label)
+        resolved = self.session_state.get(key, value) if key is not None else value
+        if key is not None:
+            self.session_state[key] = resolved
+        return resolved
+
     def caption(self, body: str, *args, **kwargs) -> None:
         self.caption_calls.append(body)
 
@@ -479,8 +678,80 @@ class _FakeStreamlit:
     def dataframe(self, *args, **kwargs) -> None:
         self.dataframe_calls += 1
 
+    def altair_chart(self, chart, *args, **kwargs) -> None:
+        self.altair_chart_calls.append(chart)
+
+    def plotly_chart(self, chart, *args, **kwargs) -> None:
+        self.plotly_chart_calls.append(chart)
+
     def rerun(self) -> None:
         return None
+
+
+def test_render_chart_selector_adds_period_controls_and_uses_plotly_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_charts_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_charts_module, "go", object())
+    monkeypatch.setattr(streamlit_charts_module, "preferred_chart_library", lambda: "plotly")
+    monkeypatch.setattr(streamlit_charts_module, "build_chart", lambda *args, **kwargs: {"engine": "plotly"})
+
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "close": 10, "ma_5": 9, "ma_20": 8},
+            {"date": "2026-02-15", "close": 20, "ma_5": 19, "ma_20": 18},
+            {"date": "2026-03-31", "close": 30, "ma_5": 29, "ma_20": 28},
+        ]
+    )
+
+    streamlit_charts_module.render_chart_selector(
+        frame,
+        dataset_name="daily_prices_indicators",
+        key_prefix="report_chart",
+        height=280,
+    )
+
+    assert "차트 유형" in fake_st.selectbox_labels
+    assert "빠른 조회 기간" in fake_st.radio_labels
+    assert "직접 기간 선택" in fake_st.date_input_labels
+    assert fake_st.plotly_chart_calls == [{"engine": "plotly"}]
+    assert fake_st.session_state["report_chart_range_dates"] == (date(2026, 1, 1), date(2026, 3, 31))
+
+
+def test_render_range_controls_resets_stale_date_widget_state_when_preset_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    fake_st.session_state.update(
+        {
+            "report_chart_range_mode": "custom",
+            "report_chart_range_preset": "90d",
+            "report_chart_range_dates": (date(2026, 1, 15), date(2026, 2, 10)),
+            "report_chart_range_preset_widget": "30d",
+            "report_chart_range_dates_widget": (date(2026, 1, 15), date(2026, 2, 10)),
+        }
+    )
+    monkeypatch.setattr(streamlit_charts_module, "st", fake_st)
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "close": 10},
+            {"date": "2026-02-15", "close": 20},
+            {"date": "2026-03-31", "close": 30},
+        ]
+    )
+
+    selected_preset, selected_dates = streamlit_charts_module.render_range_controls(frame, key_prefix="report_chart")
+
+    assert (selected_preset, selected_dates) == ("30d", None)
+    assert fake_st.session_state["report_chart_range_dates_widget"] == (date(2026, 3, 2), date(2026, 3, 31))
+
+    streamlit_charts_module.resolve_range_state(
+        frame,
+        key_prefix="report_chart",
+        selected_preset=selected_preset,
+        selected_dates=selected_dates,
+    )
+    second_selected_preset, second_selected_dates = streamlit_charts_module.render_range_controls(frame, key_prefix="report_chart")
+
+    assert (second_selected_preset, second_selected_dates) == (None, None)
+    assert fake_st.session_state["report_chart_range_dates"] == (date(2026, 3, 2), date(2026, 3, 31))
 
 
 def _make_report_preview(symbol: str, symbol_name: str, filename: str) -> DatasetPreview:
