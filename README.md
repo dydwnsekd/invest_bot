@@ -14,7 +14,25 @@
 
 ## 현재 구현 범위
 
-### 이번 세션 업데이트 (2026-06-28)
+### 이번 세션 업데이트 (2026-07-05)
+
+- `리포트 해석` / `데이터 탐색` 탭 공통 차트 렌더러를 Plotly 우선 경로로 확장
+  - hover 시 날짜 기준으로 모든 visible series 값을 함께 확인 가능
+  - 세로 crosshair(spike line) 기반으로 특정 시점 해석 강화
+  - Plotly 미사용 환경에서는 기존 Altair fallback 유지
+- 조회 기간 조절 기능 추가
+  - 빠른 기간 선택: `1개월`, `3개월`, `6개월`, `1년`, `전체`
+  - 직접 시작일/종료일 선택 지원
+  - preset 변경과 직접 날짜 변경 모두 Streamlit rerun 이후 일관되게 유지되도록 session state 동기화 보강
+- 선택된 조회 기간이 차트 빌더 내부에서 다시 축소되지 않도록 range helper path 정리
+- 관련 회귀 테스트 보강
+  - 기간 상태 초기화 / preset sync / custom range authority
+  - 긴 조회 기간 보존
+  - preset 변경 시 stale date widget state reset
+  - Plotly 렌더링 경로 검증
+- 관련 검증 완료 (`50 passed in 0.65s`)
+
+### 이전 세션 업데이트 (2026-06-28)
 
 - `작업 실행` 탭을 여러 종목 기준 **배치 실행** 흐름으로 단순화
   - `한 종목` 섹션 제거
@@ -69,6 +87,10 @@
 - Streamlit 기반 운영 대시보드
 - 종목 선택 기반 데이터 탐색과 요약 우선 미리보기
 - 리포트 해석 탭 단일 리포트 본문 표시
+- `리포트 해석` / `데이터 탐색` 탭 공통 인터랙티브 차트
+  - Plotly 우선 렌더링 + Altair fallback
+  - 날짜 기준 unified hover / crosshair
+  - preset + 직접 date range 기반 조회 기간 조절
 - 전략별 판단 요약 및 상태별 색상 표시
 - 리포트 관심종목(즐겨찾기) 저장 및 별도 탭 확인
 - 여러 종목 기준 배치 실행
@@ -405,6 +427,7 @@ data/processed/test_reports/
 
 - [`service.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/service.py)
 - [`streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_dashboard.py)
+- [`streamlit_charts.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_charts.py)
 - [`streamlit_reports.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_reports.py)
 - [`streamlit_watchlist.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_watchlist.py)
 - [`report_favorites.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/report_favorites.py)
@@ -421,6 +444,7 @@ data/processed/test_reports/
 - [x] Streamlit 대시보드
 - [x] 리포트 해석 탭 단일 리포트 본문 표시
 - [x] 리포트 해석 탭 전략별 판단 요약 표시
+- [x] 리포트 해석 / 데이터 탐색 탭 공통 인터랙티브 차트와 조회 기간 조절
 - [x] 리포트 관심종목(즐겨찾기) 저장 및 관심종목 탭
 - [x] 다중 종목 배치 수집
 - [x] 정기 수집 스케줄링 초안

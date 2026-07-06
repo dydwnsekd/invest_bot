@@ -215,6 +215,32 @@
 - 참고
   - 배치 실행 기본 흐름은 `데이터 수집 -> 지표 계산 -> 신호 생성 -> 리포트 생성`을 여러 종목에 대해 반복 수행하는 방향으로 정리됨
 
+### 2026-07-05
+
+- chart interaction upgrade 반영
+- 대상 파일
+  - `src/invest_bot/dashboard/streamlit_charts.py`
+  - `src/invest_bot/dashboard/streamlit_reports.py`
+  - `src/invest_bot/dashboard/streamlit_data.py`
+  - `requirements.txt`
+  - `tests/test_streamlit_dashboard.py`
+- 정리 내용
+  - `리포트 해석` / `데이터 탐색` 탭이 같은 `render_chart_selector` 공용 경로를 계속 사용하도록 유지
+  - 공용 차트 렌더러에 Plotly 우선 경로 추가, Altair fallback 유지
+  - 날짜 기준 unified hover와 vertical crosshair를 적용해 특정 시점 값 해석 개선
+  - 빠른 기간 선택(`1개월`, `3개월`, `6개월`, `1년`, `전체`)과 직접 date range 선택 추가
+  - `resolve_range_state` / `apply_time_window` 기반으로 최종 유효 조회 기간을 단일 helper path로 정리
+  - preset 변경 후 rerun에서 stale widget state가 다시 덮지 않도록 session-state sync 보정
+  - 필터된 조회 기간이 차트 builder 내부에서 다시 90개 포인트로 축소되지 않도록 수정
+- 검증 결과
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_charts.py src/invest_bot/dashboard/streamlit_data.py src/invest_bot/dashboard/streamlit_reports.py tests/test_streamlit_dashboard.py`
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `50 passed in 0.65s`
+- 결정 메모
+  - 1차 범위는 both-tabs shared renderer 유지가 우선
+  - chart sync / export / mobile optimization은 이번 변경 범위에서 제외
+  - Plotly는 기본 의존성으로 선언했지만 Altair fallback도 당장은 유지
+
 ## 검증 로그
 
 ### 2026-07-03 / DB watchlist persistence

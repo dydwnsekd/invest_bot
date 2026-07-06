@@ -11,6 +11,7 @@
 - [x] 골든크로스 신호 및 시장 리포트 표시
 - [x] 리포트 해석 탭에서 선택된 1건 중심 본문 표시
 - [x] 리포트 카드 내 전략별 판단 요약 표시
+- [x] 리포트 해석 / 데이터 탐색 탭 공통 인터랙티브 차트와 조회 기간 조절
 - [x] 리포트 즐겨찾기 저장
 - [x] 관심종목 전용 탭 추가
 - [x] 테스트 결과 표시
@@ -44,12 +45,45 @@
 
 - 상단 선택 컨트롤로 종목/리포트를 고른 뒤 본문에는 선택된 1건만 표시
 - 선택된 리포트 아래에서 차트와 상세 데이터 표를 계속 확인 가능
+- 차트는 날짜 기준 unified hover와 세로 crosshair로 특정 시점 값을 함께 확인 가능
+- 빠른 기간 선택(`1개월`, `3개월`, `6개월`, `1년`, `전체`)과 직접 시작일/종료일 선택을 지원함
 - `final_opinion`과 별도로 RSI / Trend Filter / Mean Reversion 전략의 직접 판단과 이유를 함께 표시
 - 선택된 종목을 즐겨찾기로 저장/해제할 수 있음
 - 즐겨찾기만 보기와 즐겨찾기 우선 정렬을 지원함
 - 별도 `관심종목` 탭에서 저장된 종목만 다시 모아 보고 1건씩 본문으로 확인 가능
 - 즐겨찾기는 DB 기반 단일 watchlist 상태로 저장되며 report `entry_key`가 아니라 `symbol` 기준으로 관리됨
 - 같은 DB 볼륨을 유지하는 정상적인 app/container 재시작 후에도 관심종목 상태가 유지됨
+
+## 현재 데이터 탐색 탭 차트 동작
+
+- 종목 선택 기반 summary-first 흐름은 유지
+- 상세 expander 안 차트는 `리포트 해석` 탭과 동일한 공용 렌더러를 사용함
+- hover 시 날짜 기준으로 visible series 값을 함께 확인 가능
+- 빠른 기간 선택과 직접 date range 선택을 모두 지원함
+- Plotly 사용이 가능한 환경에서는 Plotly를 우선 사용하고, 그렇지 않으면 Altair fallback으로 표시함
+
+## 이번 세션 작업 요약 (2026-07-05)
+
+- `streamlit_charts.py`를 공통 인터랙티브 차트 경로로 확장
+  - Plotly 우선 렌더링 도입
+  - Altair fallback 유지
+  - 날짜 기준 unified hover / vertical crosshair 적용
+- 조회 기간 상태 helper 추가
+  - `resolve_range_state`
+  - `apply_time_window`
+  - preset / custom date range session-state 동기화
+- preset 변경 후 다음 rerun에서 stale date widget state가 다시 기간을 덮지 않도록 보정
+- 선택된 조회 기간이 차트 빌더 내부에서 다시 90개 포인트로 축소되지 않도록 수정
+- `requirements.txt`에 `plotly>=6.0,<7.0` 반영
+- `tests/test_streamlit_dashboard.py` 보강
+  - range state 초기화 / preset sync / custom authority
+  - full filtered-range preservation
+  - stale widget-state reset
+  - Plotly 경로 렌더링 검증
+- 검증
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_charts.py src/invest_bot/dashboard/streamlit_data.py src/invest_bot/dashboard/streamlit_reports.py tests/test_streamlit_dashboard.py`
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `50 passed in 0.65s`
 
 ## 이번 세션 작업 요약 (2026-07-03)
 
