@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
+from typing import Callable, Literal
+
+from invest_bot.config.settings import AppSettings
+from invest_bot.jobs.discord_report_notifier import DiscordDeliveryResult, send_discord_report
 from invest_bot.jobs.generate_market_report import MarketReportGenerator, MarketReportRequest
 
 
@@ -10,7 +15,14 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def generate_market_report_for_symbol(symbol: str, generator: MarketReportGenerator | None = None) -> dict[str, str | int]:
+def generate_market_report_for_symbol(
+    symbol: str,
+    generator: MarketReportGenerator | None = None,
+    *,
+    delivery_target: Literal["none", "discord"] = "none",
+    notifier: Callable[[dict[str, object]], DiscordDeliveryResult] | None = None,
+    settings: AppSettings | None = None,
+) -> dict[str, object]:
     report_generator = generator or MarketReportGenerator()
     indicator_filename = report_generator.processed_storage.latest_filename("daily_prices_indicators", symbol)
     signal_filename = report_generator.processed_storage.latest_filename("golden_cross_signals", symbol)
@@ -42,14 +54,24 @@ def generate_market_report_for_symbol(symbol: str, generator: MarketReportGenera
     report_date = report.iloc[0]["date"] if not report.empty else "latest"
     report_suffix = str(report_date).replace("-", "")
     saved = report_generator.save_report(f"{symbol}_{report_suffix}.csv", report)
-    return {
+    result: dict[str, object] = {
         "symbol": symbol,
         "rows": len(report),
         "indicator_file": indicator_filename,
         "signal_file": signal_filename,
         "investor_file": investor_filename,
         "saved_path": str(saved.path),
+        "delivery": None,
     }
+    if delivery_target == "discord" and not report.empty:
+        report_row = report.iloc[0].to_dict()
+        delivery_result = (
+            notifier(report_row)
+            if notifier is not None
+            else send_discord_report(report_row, settings=settings or AppSettings.from_file())
+        )
+        result["delivery"] = asdict(delivery_result)
+    return result
 
 
 def main() -> None:

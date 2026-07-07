@@ -31,6 +31,7 @@ class AppSettings:
     kis_live_app_secret: str = ""
     kis_mock_app_key: str = ""
     kis_mock_app_secret: str = ""
+    discord_webhook_url: str = ""
     database_url_value: str = ""
     db_host: str = "localhost"
     db_host_docker: str = ""
@@ -74,6 +75,7 @@ class AppSettings:
             kis_live_app_secret=configured_value("kis_live_app_secret", ""),
             kis_mock_app_key=configured_value("kis_mock_app_key", ""),
             kis_mock_app_secret=configured_value("kis_mock_app_secret", ""),
+            discord_webhook_url=configured_value("discord_webhook_url", "").strip(),
             database_url_value=configured_value("database_url", "").strip(),
             db_host=configured_value("db_host", "localhost"),
             db_host_docker=configured_value("db_host_docker", "").strip(),

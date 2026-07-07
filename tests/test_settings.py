@@ -18,6 +18,7 @@ def test_app_settings_defaults_to_mock_mode(monkeypatch):
     assert settings.enable_db_write is False
     assert settings.stock_master_update_on_startup is True
     assert settings.stock_master_refresh_interval_minutes == 1440
+    assert settings.discord_webhook_url == ""
 
 
 def test_app_settings_loads_file_values(monkeypatch):
@@ -36,6 +37,7 @@ def test_app_settings_loads_file_values(monkeypatch):
                 "kis_live_app_secret: live-secret",
                 "kis_mock_app_key: mock-key",
                 "kis_mock_app_secret: mock-secret",
+                "discord_webhook_url: https://discord.example/webhook",
                 "db_host: db",
                 "db_host_docker: db-internal",
                 "db_port: 5433",
@@ -56,6 +58,7 @@ def test_app_settings_loads_file_values(monkeypatch):
     assert settings.kis_app_key == "live-key"
     assert settings.kis_app_secret == "live-secret"
     assert settings.trading_mode is TradingMode.LIVE
+    assert settings.discord_webhook_url == "https://discord.example/webhook"
     assert settings.enable_db_write is True
     assert settings.stock_master_update_on_startup is False
     assert settings.stock_master_refresh_interval_minutes == 60
@@ -171,3 +174,14 @@ def test_app_settings_reads_kis_credentials_from_app_yaml(monkeypatch):
     assert settings.kis_live_app_secret == "file-live-secret"
     assert settings.kis_mock_app_key == "file-mock-key"
     assert settings.kis_mock_app_secret == "file-mock-secret"
+
+
+def test_app_settings_reads_discord_webhook_url_from_app_yaml(monkeypatch):
+    _clear_settings_env(monkeypatch)
+    test_dir = make_test_dir("settings_discord_webhook")
+    config_path = test_dir / "app.yaml"
+    config_path.write_text("discord_webhook_url: https://discord.example/webhook/abc\n", encoding="utf-8")
+
+    settings = AppSettings.from_file(config_path)
+
+    assert settings.discord_webhook_url == "https://discord.example/webhook/abc"

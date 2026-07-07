@@ -21,11 +21,19 @@ from invest_bot.dashboard.streamlit_charts import (
 )
 import invest_bot.dashboard.streamlit_charts as streamlit_charts_module
 import invest_bot.dashboard.streamlit_actions as streamlit_actions_module
+import invest_bot.dashboard.streamlit_dashboard as streamlit_dashboard_module
 import invest_bot.dashboard.streamlit_data as streamlit_data_module
+import invest_bot.dashboard.streamlit_layout as streamlit_layout_module
 from invest_bot.dashboard.streamlit_actions import (
+    describe_delivery_problems,
+    normalize_delivery_detail,
     require_selected_items,
+    run_full_pipeline_action,
+    run_market_report_batch_action,
     successful_symbols_from_collection_result,
+    summarize_report_delivery_results,
 )
+from invest_bot.config.settings import AppSettings
 from invest_bot.dashboard.streamlit_formatters import (
     default_selected_symbols as _default_selected_symbols,
     default_single_symbol as _default_single_symbol,
@@ -585,6 +593,8 @@ class _FakeStreamlit:
         self.session_state = _FakeSessionState()
         self.warning_messages: list[str] = []
         self.info_messages: list[str] = []
+        self.success_messages: list[str] = []
+        self.error_messages: list[str] = []
         self.markdown_calls: list[str] = []
         self.caption_calls: list[str] = []
         self.metric_calls: list[tuple[str, object]] = []
@@ -602,6 +612,9 @@ class _FakeStreamlit:
     def markdown(self, body: str, *args, **kwargs) -> None:
         self.markdown_calls.append(body)
 
+    def set_page_config(self, **kwargs) -> None:
+        return None
+
     def text_input(self, *args, **kwargs) -> str:
         return self.query
 
@@ -614,6 +627,12 @@ class _FakeStreamlit:
 
     def info(self, message: str) -> None:
         self.info_messages.append(message)
+
+    def success(self, message: str) -> None:
+        self.success_messages.append(message)
+
+    def error(self, message: str) -> None:
+        self.error_messages.append(message)
 
     def selectbox(self, label: str, options: list[str], index: int = 0, format_func=None, key: str | None = None, **kwargs):
         self.selectbox_labels.append(label)
@@ -1183,6 +1202,7 @@ def test_render_actions_tab_removes_actions_guide_and_keeps_primary_controls_vis
     streamlit_actions_module.render_actions_tab(
         symbol_lookup,
         schedule_status=None,
+        settings=AppSettings(),
         render_schedule_status_panel=lambda _: None,
     )
 
@@ -1296,12 +1316,14 @@ def test_streamlit_apptest_smoke_for_actions_reports_and_data_tabs() -> None:
 
     def render_actions_smoke() -> None:
         from types import SimpleNamespace
+        from invest_bot.config.settings import AppSettings
         from invest_bot.dashboard.streamlit_actions import render_actions_tab
         from invest_bot.market.symbol_lookup import SymbolEntry
 
         render_actions_tab(
             SimpleNamespace(list_entries=lambda: [SymbolEntry(symbol="005930", symbol_name="삼성전자")]),
             schedule_status=None,
+            settings=AppSettings(),
             render_schedule_status_panel=lambda _: None,
         )
 
@@ -1342,9 +1364,9 @@ def test_streamlit_apptest_smoke_for_actions_reports_and_data_tabs() -> None:
             "close": 100,
             "ma_5": 90,
             "ma_20": 80,
-                "rsi_14": 60,
-                "golden_cross_reason": "ma_5 crossed above ma_20.",
-            }])
+            "rsi_14": 60,
+            "golden_cross_reason": "ma_5 crossed above ma_20.",
+        }])
         test_dir = make_test_dir("reports_smoke_apptest")
         database_url = f"sqlite+pysqlite:///{(test_dir / 'favorites.db').as_posix()}"
         init_test_db(database_url)
@@ -1400,3 +1422,177 @@ def test_streamlit_apptest_smoke_for_actions_reports_and_data_tabs() -> None:
     data_app = AppTest.from_function(render_data_smoke)
     data_app.run()
     assert not data_app.exception
+
+
+def test_summarize_report_delivery_results_returns_warning_for_partial_delivery() -> None:
+    items = [ResolvedSymbol(raw_input="005930", symbol="005930", symbol_name="삼성전자")]
+
+    message, message_type = summarize_report_delivery_results(
+        [
+            {
+                "symbol": "005930",
+                "delivery": {
+                    "status": "skipped",
+                    "channel": "discord",
+                    "message": "payload",
+                    "error_detail": "Discord webhook URL is not configured.",
+                },
+            }
+        ],
+        selected_items=items,
+        action_name="시장 리포트 생성",
+    )
+
+    assert message_type == "warning"
+    assert message == "시장 리포트 생성 완료(1건). Discord 전송 경고: 삼성전자 (005930) skipped(웹훅 미설정)"
+
+
+def test_describe_delivery_problems_formats_failed_and_skipped_symbols() -> None:
+    items = [
+        ResolvedSymbol(raw_input="005930", symbol="005930", symbol_name="삼성전자"),
+        ResolvedSymbol(raw_input="000660", symbol="000660", symbol_name="SK하이닉스"),
+    ]
+
+    problems = describe_delivery_problems(
+        [
+            {"symbol": "005930", "delivery": {"status": "skipped", "error_detail": "Discord webhook URL is not configured."}},
+            {"symbol": "000660", "delivery": {"status": "failed", "error_detail": "HTTP 500"}},
+        ],
+        selected_items=items,
+    )
+
+    assert problems == [
+        "삼성전자 (005930) skipped(웹훅 미설정)",
+        "SK하이닉스 (000660) failed(HTTP 500)",
+    ]
+
+
+def test_normalize_delivery_detail_translates_missing_webhook_warning() -> None:
+    assert normalize_delivery_detail("skipped", "Discord webhook URL is not configured.") == "웹훅 미설정"
+    assert normalize_delivery_detail("failed", "HTTP 500") == "HTTP 500"
+
+
+def test_run_market_report_batch_action_sets_warning_message_for_delivery_issue(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_actions_module, "st", fake_st)
+    monkeypatch.setattr(
+        streamlit_actions_module,
+        "generate_market_report_for_symbol",
+        lambda symbol, **kwargs: {
+            "symbol": symbol,
+            "delivery": {
+                "status": "skipped",
+                "channel": "discord",
+                "message": "payload",
+                "error_detail": "Discord webhook URL is not configured.",
+            },
+        },
+    )
+
+    run_market_report_batch_action(
+        [ResolvedSymbol(raw_input="005930", symbol="005930", symbol_name="삼성전자")],
+        settings=AppSettings(),
+    )
+
+    assert fake_st.session_state["action_message_type"] == "warning"
+    assert "Discord 전송 경고" in fake_st.session_state["action_message"]
+
+
+def test_run_full_pipeline_action_sets_warning_message_for_partial_delivery(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_actions_module, "st", fake_st)
+    monkeypatch.setattr(
+        streamlit_actions_module,
+        "collect_market_data_for_symbols",
+        lambda symbols, days: {
+            "successful_symbols": ["005930"],
+            "failed_count": 0,
+            "symbol_count": 1,
+        },
+    )
+    monkeypatch.setattr(streamlit_actions_module, "generate_indicators_for_symbol", lambda symbol: None)
+    monkeypatch.setattr(streamlit_actions_module, "generate_golden_cross_signals_for_symbol", lambda symbol: None)
+    monkeypatch.setattr(
+        streamlit_actions_module,
+        "generate_market_report_for_symbol",
+        lambda symbol, **kwargs: {
+            "symbol": symbol,
+            "delivery": {
+                "status": "failed",
+                "channel": "discord",
+                "message": "payload",
+                "error_detail": "HTTP 500",
+            },
+        },
+    )
+
+    run_full_pipeline_action(
+        [ResolvedSymbol(raw_input="005930", symbol="005930", symbol_name="삼성전자")],
+        30,
+        settings=AppSettings(),
+    )
+
+    assert fake_st.session_state["action_message_type"] == "warning"
+    assert "전체 파이프라인 완료(1건). Discord 전송 경고: 삼성전자 (005930) failed(HTTP 500)" == fake_st.session_state["action_message"]
+
+
+def test_render_action_feedback_uses_warning_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    fake_st.session_state["action_message"] = "경고 메시지"
+    fake_st.session_state["action_message_type"] = "warning"
+    monkeypatch.setattr(streamlit_layout_module, "st", fake_st)
+
+    streamlit_layout_module.render_action_feedback()
+
+    assert fake_st.warning_messages == ["경고 메시지"]
+    assert fake_st.info_messages == []
+
+
+def test_streamlit_dashboard_main_builds_settings_once_and_injects_them(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    fake_st.session_state["selected_tab"] = "작업 실행"
+    settings = AppSettings(discord_webhook_url="https://discord.example/webhook")
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(streamlit_dashboard_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_dashboard_module, "_apply_custom_style", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_sidebar", lambda *args, **kwargs: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_header", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_action_feedback", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_load_optional_schedule_status", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_read_preview_frame", lambda service, preview: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_load_indicator_frame_for_symbol", lambda service, symbol: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_schedule_status_panel", lambda *args, **kwargs: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "SymbolLookup", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        streamlit_dashboard_module.AppSettings,
+        "from_file",
+        classmethod(lambda cls: settings),
+    )
+
+    class _FakeService:
+        def __init__(self, *, settings):
+            captured["service_settings"] = settings
+
+        def build_snapshot(self):
+            return SimpleNamespace()
+
+        def load_test_report(self):
+            return None
+
+    monkeypatch.setattr(streamlit_dashboard_module, "DashboardDataService", _FakeService)
+    monkeypatch.setattr(
+        streamlit_dashboard_module,
+        "_render_actions_tab",
+        lambda symbol_lookup, schedule_status, *, settings, render_schedule_status_panel: captured.update(
+            {
+                "actions_settings": settings,
+                "symbol_lookup": symbol_lookup,
+            }
+        ),
+    )
+
+    streamlit_dashboard_module.main()
+
+    assert captured["service_settings"] is settings
+    assert captured["actions_settings"] is settings

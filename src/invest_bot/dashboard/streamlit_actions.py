@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 import streamlit as st
 
+from invest_bot.config.settings import AppSettings
 from invest_bot.dashboard.streamlit_formatters import default_selected_symbols, format_symbol_display, format_symbol_option
 from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.collect_market_data import (
@@ -20,6 +21,7 @@ def render_actions_tab(
     symbol_lookup: SymbolLookup,
     schedule_status,
     *,
+    settings: AppSettings,
     render_schedule_status_panel: Callable[[object], None],
 ) -> None:
     st.markdown('<h3 class="section-title">작업 실행</h3>', unsafe_allow_html=True)
@@ -83,7 +85,7 @@ def render_actions_tab(
         if action_row_top[0].button("데이터 수집", width="stretch", type="primary"):
             run_collect_action(selected_items, int(days))
         if action_row_top[1].button("전체 파이프라인", width="stretch"):
-            run_full_pipeline_action(selected_items, int(days))
+            run_full_pipeline_action(selected_items, int(days), settings=settings)
 
         action_row_bottom = st.columns(3, gap="small")
         if action_row_bottom[0].button("지표 계산", width="stretch"):
@@ -91,7 +93,7 @@ def render_actions_tab(
         if action_row_bottom[1].button("신호 생성", width="stretch"):
             run_batch_symbol_action(selected_items, generate_golden_cross_signals_for_symbol, "골든크로스 신호 생성")
         if action_row_bottom[2].button("리포트 생성", width="stretch"):
-            run_batch_symbol_action(selected_items, generate_market_report_for_symbol, "시장 리포트 생성")
+            run_market_report_batch_action(selected_items, settings=settings)
 
 
 def run_collect_action(selected_items: list[ResolvedSymbol], days: int) -> None:
@@ -122,18 +124,42 @@ def run_batch_symbol_action(selected_items: list[ResolvedSymbol], callback, acti
     st.rerun()
 
 
-def run_full_pipeline_action(selected_items: list[ResolvedSymbol], days: int) -> None:
+def run_market_report_batch_action(selected_items: list[ResolvedSymbol], *, settings: AppSettings) -> None:
+    try:
+        resolved_items = require_selected_items(selected_items)
+        report_results = [
+            generate_market_report_for_symbol(item.symbol, delivery_target="discord", settings=settings)
+            for item in resolved_items
+        ]
+        message, message_type = summarize_report_delivery_results(report_results, selected_items=resolved_items, action_name="시장 리포트 생성")
+        set_action_message(message, message_type)
+    except Exception as error:  # noqa: BLE001
+        set_action_message(f"시장 리포트 생성 중 오류가 발생했습니다: {error}", "error")
+    st.rerun()
+
+
+def run_full_pipeline_action(selected_items: list[ResolvedSymbol], days: int, *, settings: AppSettings) -> None:
     try:
         resolved_items = require_selected_items(selected_items)
         collect_result = collect_market_data_for_symbols(symbols=[item.symbol for item in resolved_items], days=days)
+        report_results: list[dict[str, object]] = []
         for symbol in successful_symbols_from_collection_result(collect_result):
             generate_indicators_for_symbol(symbol)
             generate_golden_cross_signals_for_symbol(symbol)
-            generate_market_report_for_symbol(symbol)
-        set_action_message(
-            f"전체 파이프라인 완료: {summarize_selected_items(resolved_items)} · {collect_result['symbol_count']}개 종목 처리",
-            "success" if collect_result["failed_count"] == 0 else "info",
-        )
+            report_results.append(generate_market_report_for_symbol(symbol, delivery_target="discord", settings=settings))
+        delivery_problem_count = count_delivery_problems(report_results)
+        if delivery_problem_count > 0:
+            message, message_type = summarize_report_delivery_results(
+                report_results,
+                selected_items=resolved_items,
+                action_name="전체 파이프라인",
+            )
+            set_action_message(message, message_type)
+        else:
+            set_action_message(
+                f"전체 파이프라인 완료: {summarize_selected_items(resolved_items)} · {collect_result['symbol_count']}개 종목 처리",
+                "success" if collect_result["failed_count"] == 0 else "info",
+            )
     except Exception as error:  # noqa: BLE001
         set_action_message(f"전체 파이프라인 실행 중 오류가 발생했습니다: {error}", "error")
     st.rerun()
@@ -161,3 +187,58 @@ def successful_symbols_from_collection_result(result: dict[str, object]) -> list
 def set_action_message(message: str, message_type: str) -> None:
     st.session_state.action_message = message
     st.session_state.action_message_type = message_type
+
+
+def summarize_report_delivery_results(
+    report_results: list[dict[str, object]],
+    *,
+    selected_items: list[ResolvedSymbol],
+    action_name: str,
+) -> tuple[str, str]:
+    delivery_problems = describe_delivery_problems(report_results, selected_items=selected_items)
+    if delivery_problems:
+        return (
+            f"{action_name} 완료({len(report_results)}건). Discord 전송 경고: {', '.join(delivery_problems)}",
+            "warning",
+        )
+    return (
+        f"{action_name} 완료: {summarize_selected_items(selected_items)} · {len(report_results)}개 종목 처리",
+        "success",
+    )
+
+
+def count_delivery_problems(report_results: list[dict[str, object]]) -> int:
+    count = 0
+    for result in report_results:
+        delivery = result.get("delivery")
+        if isinstance(delivery, dict) and str(delivery.get("status", "")).strip() not in {"", "sent"}:
+            count += 1
+    return count
+
+
+def describe_delivery_problems(
+    report_results: list[dict[str, object]],
+    *,
+    selected_items: list[ResolvedSymbol],
+) -> list[str]:
+    symbol_names = {item.symbol: item.symbol_name for item in selected_items}
+    problems: list[str] = []
+    for result in report_results:
+        delivery = result.get("delivery")
+        if not isinstance(delivery, dict):
+            continue
+        status = str(delivery.get("status", "")).strip()
+        if status in {"", "sent"}:
+            continue
+        symbol = str(result.get("symbol", "")).strip()
+        symbol_name = symbol_names.get(symbol, "")
+        label = format_symbol_display(symbol, symbol_name)
+        detail = normalize_delivery_detail(status, str(delivery.get("error_detail", "")).strip())
+        problems.append(f"{label} {status}({detail})")
+    return problems
+
+
+def normalize_delivery_detail(status: str, detail: str) -> str:
+    if status == "skipped" and detail == "Discord webhook URL is not configured.":
+        return "웹훅 미설정"
+    return detail or "-"

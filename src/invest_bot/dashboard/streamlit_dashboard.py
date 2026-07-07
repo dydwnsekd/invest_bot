@@ -4,6 +4,7 @@ from functools import partial
 
 import streamlit as st
 
+from invest_bot.config.settings import AppSettings
 from invest_bot.dashboard.service import DashboardDataService
 from invest_bot.dashboard.streamlit_actions import render_actions_tab as _render_actions_tab
 from invest_bot.dashboard.streamlit_data import render_data_tab as _render_data_tab
@@ -39,7 +40,8 @@ def main() -> None:
     )
     _apply_custom_style()
 
-    service = DashboardDataService()
+    settings = AppSettings.from_file()
+    service = DashboardDataService(settings=settings)
     symbol_lookup = SymbolLookup()
     schedule_status = _load_optional_schedule_status()
     read_preview_frame = partial(_read_preview_frame, service)
@@ -63,7 +65,12 @@ def main() -> None:
     if tab == "상태판":
         _render_overview_tab(snapshot, service, test_report, schedule_status, read_preview_frame=read_preview_frame)
     elif tab == "작업 실행":
-        _render_actions_tab(symbol_lookup, schedule_status, render_schedule_status_panel=_render_schedule_status_panel)
+        _render_actions_tab(
+            symbol_lookup,
+            schedule_status,
+            settings=settings,
+            render_schedule_status_panel=_render_schedule_status_panel,
+        )
     elif tab == "리포트 해석":
         _render_reports_tab(
             snapshot,

@@ -73,6 +73,8 @@ def render_action_feedback() -> None:
     message_type = st.session_state.get("action_message_type", "info")
     if message_type == "success":
         st.success(message)
+    elif message_type == "warning":
+        st.warning(message)
     elif message_type == "error":
         st.error(message)
     else:
