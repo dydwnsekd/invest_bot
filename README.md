@@ -14,7 +14,27 @@
 
 ## 현재 구현 범위
 
-### 이번 세션 업데이트 (2026-07-05)
+### 이번 세션 업데이트 (2026-07-06)
+
+- 시장 리포트 생성 후 Discord 전송 경로 1차 구현
+  - 대상은 **배치 실행 / 전체 파이프라인** 경로만 포함
+  - 수동 단건 CLI 기본 실행은 계속 Discord를 보내지 않음
+- Discord 전송은 시장 리포트 row를 source of truth로 사용
+  - 포함 내용: `final_opinion`, `summary`, 전략별 신호/이유, 핵심 지표, 투자자 수급
+  - 형식은 plain-text only (`content`)로 고정
+- 전송 결과 계약 추가
+  - `sent`
+  - `skipped` (예: 웹훅 미설정)
+  - `failed` (예: HTTP 오류)
+- Discord 전송 실패는 리포트 저장 실패로 승격하지 않음
+- Streamlit `작업 실행` 탭에서 report/full-pipeline partial delivery를 `warning`으로 분리 노출
+- 대시보드 app entry는 `AppSettings.from_file()`를 1회만 생성해 데이터 서비스와 action layer에 함께 주입
+- `config/app.yaml`의 tracked credential-like 값 제거
+- 관련 검증 완료
+  - `pytest` targeted suites `76 passed`
+  - post-review config delta rerun `73 passed`
+
+### 이전 세션 업데이트 (2026-07-05)
 
 - `리포트 해석` / `데이터 탐색` 탭 공통 차트 렌더러를 Plotly 우선 경로로 확장
   - hover 시 날짜 기준으로 모든 visible series 값을 함께 확인 가능
@@ -80,6 +100,10 @@
 - 골든크로스 신호 생성
 - 현재 장 상황 요약 리포트 생성
 - 시장 리포트 전략별 직접 판단 필드 생성
+- 시장 리포트 생성 후 Discord plain-text delivery 지원
+  - batch/full-pipeline opt-in only
+  - `sent` / `skipped` / `failed` delivery status
+  - delivery failure non-blocking
 - 골든크로스 백테스트 초안
 
 ### 대시보드
@@ -99,6 +123,7 @@
   - 골든크로스 신호 생성
   - 시장 리포트 생성
   - 전체 파이프라인 실행
+- 리포트/전체 파이프라인 Discord delivery warning 노출
 - 정기 수집 상태와 최근 로그 표시
 
 ### 테스트

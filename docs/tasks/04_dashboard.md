@@ -20,6 +20,7 @@
 - [x] 골든크로스 신호 생성 실행
 - [x] 시장 리포트 생성 실행
 - [x] 전체 파이프라인 실행
+- [x] 시장 리포트 Discord warning/success 분리 노출
 - [x] 정기 수집 상태와 최근 실행 로그 표시
 
 ## 남은 항목
@@ -40,6 +41,11 @@
   - 리포트 생성
   - 전체 파이프라인
 - 종목 1개만 선택해도 동일한 배치 흐름으로 사용 가능
+- `리포트 생성` / `전체 파이프라인`은 Discord delivery-aware 집계를 사용함
+  - all sent -> `success`
+  - one or more `skipped` / `failed` -> `warning`
+  - report save failure -> `error`
+- Discord warning은 unrelated collect/indicator/signal batch semantics로 퍼지지 않음
 
 ## 현재 리포트 해석 탭 동작
 
@@ -84,6 +90,27 @@
   - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_charts.py src/invest_bot/dashboard/streamlit_data.py src/invest_bot/dashboard/streamlit_reports.py tests/test_streamlit_dashboard.py`
   - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q`
   - 결과: `50 passed in 0.65s`
+
+## 이번 세션 작업 요약 (2026-07-06)
+
+- `streamlit_dashboard.py` 수정
+  - `AppSettings.from_file()`를 1회만 생성
+  - 동일 `settings` 인스턴스를 `DashboardDataService(settings=settings)`와 `render_actions_tab(..., settings=settings, ...)`에 함께 주입
+- `streamlit_actions.py` 수정
+  - report/full-pipeline 경로만 Discord delivery-aware aggregation 사용
+  - `리포트 생성`은 batch path에서 `delivery_target="discord"` opt-in
+  - `전체 파이프라인`도 report 단계에서만 Discord opt-in
+  - partial delivery는 `warning`으로 요약
+- `streamlit_layout.py` 수정
+  - `warning` feedback branch 추가
+- `tests/test_streamlit_dashboard.py` 보강
+  - report batch warning
+  - full pipeline warning
+  - warning render branch
+  - settings injection path 회귀 검증
+- 검증
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `57 passed in 0.66s`
 
 ## 이번 세션 작업 요약 (2026-07-03)
 

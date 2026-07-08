@@ -6,6 +6,20 @@
 
 현재 리포트는 종목 1개 기준 최신 상태를 한 줄로 정리하는 형태입니다.
 
+## Discord 전달(2026-07-06 추가)
+
+시장 리포트는 생성/저장 후 선택적으로 Discord에 전송할 수 있습니다.
+
+- 1차 범위는 **배치 실행 / 전체 파이프라인** 경로만 포함합니다.
+- 수동 단건 CLI 기본 경로는 Discord를 보내지 않습니다.
+- Discord payload는 리포트 CSV row를 그대로 source of truth로 사용합니다.
+- 전송 형식은 rich embed가 아니라 plain-text `content` 1건입니다.
+- 전송 결과는 아래 3가지 상태를 사용합니다.
+  - `sent`: 전송 성공
+  - `skipped`: 웹훅 미설정 등으로 의도적으로 미전송
+  - `failed`: HTTP 오류 등 전송 실패
+- `skipped` / `failed`여도 리포트 저장 자체는 성공으로 유지됩니다.
+
 ## 리포트 위치
 
 기본 저장 경로:
@@ -192,6 +206,43 @@ Trend is bullish, golden cross signal is buy, RSI state is strong, volume is act
 
 이 문장은 사람이 빠르게 전체 상태를 읽도록 도와주는 요약입니다.
 
+## Discord 메시지에 포함되는 항목
+
+Discord plain-text 메시지는 아래 그룹을 순서대로 묶어 보냅니다.
+
+1. 종목 / 기준일
+2. `final_opinion`
+3. `summary`
+4. 전략 신호
+   - `golden_cross_signal`
+   - `rsi_strategy_signal`
+   - `trend_filter_signal`
+   - `mean_reversion_signal`
+5. 전략 이유
+   - `golden_cross_reason`
+   - `rsi_strategy_reason`
+   - `trend_filter_reason`
+   - `mean_reversion_reason`
+6. 핵심 지표
+   - `close`
+   - `ma_5`
+   - `ma_20`
+   - `ma_60`
+   - `rsi_14`
+   - `volume`
+   - `volume_ma_5`
+7. 투자자 수급
+   - `investor_flow`
+   - `foreign_net`
+   - `institutional_net`
+   - `personal_net`
+
+예시 warning 해석:
+
+```text
+시장 리포트 생성 완료(3건). Discord 전송 경고: 삼성전자 skipped(웹훅 미설정)
+```
+
 ## 예시 리포트
 
 ```json
@@ -235,4 +286,5 @@ Trend is bullish, golden cross signal is buy, RSI state is strong, volume is act
 
 - [generate_market_report.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/generate_market_report.py)
 - [run_market_report.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/run_market_report.py)
+- [discord_report_notifier.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/discord_report_notifier.py)
 - [indicator_guide.md](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/indicator_guide.md)
