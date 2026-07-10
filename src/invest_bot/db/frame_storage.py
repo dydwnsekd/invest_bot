@@ -77,11 +77,9 @@ class DbFrameStorage:
         for column in ("date", "trade_date", "stck_bsop_date"):
             if column not in frame.columns:
                 continue
-            value = frame.iloc[-1].get(column)
-            if value in (None, ""):
+            parsed = pd.to_datetime(frame[column], errors="coerce")
+            latest = parsed.max()
+            if pd.isna(latest):
                 continue
-            parsed = pd.to_datetime(value, errors="coerce")
-            if pd.isna(parsed):
-                continue
-            return parsed.date()
+            return latest.date()
         return None

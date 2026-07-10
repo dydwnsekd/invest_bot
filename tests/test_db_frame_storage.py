@@ -37,6 +37,32 @@ def test_db_frame_storage_round_trips_latest_dataset_snapshots() -> None:
     assert loaded.to_dict(orient="records") == frame.to_dict(orient="records")
 
 
+def test_db_frame_storage_resolves_latest_date_from_unsorted_price_frame() -> None:
+    test_dir = make_test_dir("db_frame_storage_unsorted_as_of")
+    database_url = make_db_url(test_dir)
+    init_test_db(database_url)
+    storage = DbFrameStorage(database_url)
+
+    storage.save(
+        "daily_prices",
+        "005930_20260701_20260710.csv",
+        pd.DataFrame(
+            [
+                {"symbol": "005930", "stck_bsop_date": "20260710", "stck_clpr": "72000"},
+                {"symbol": "005930", "stck_bsop_date": "20260709", "stck_clpr": "71000"},
+                {"symbol": "005930", "stck_bsop_date": "20260701", "stck_clpr": "70000"},
+            ]
+        ),
+    )
+    storage.save(
+        "daily_prices",
+        "005930_20260703.csv",
+        pd.DataFrame([{"symbol": "005930", "stck_bsop_date": "20260703", "stck_clpr": "69000"}]),
+    )
+
+    assert storage.latest_filename("daily_prices", "005930") == "005930_20260701_20260710.csv"
+
+
 def test_db_backed_analysis_and_dashboard_flow() -> None:
     test_dir = make_test_dir("db_backed_analysis_flow")
     database_url = make_db_url(test_dir)
