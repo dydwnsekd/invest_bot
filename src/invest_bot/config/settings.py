@@ -54,12 +54,39 @@ class AppSettings:
             loaded = yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}
             raw_data = {str(key): value for key, value in loaded.items()}
 
+        env_names: dict[str, tuple[str, ...]] = {
+            "app_name": ("INVEST_BOT_APP_NAME",),
+            "market": ("INVEST_BOT_MARKET",),
+            "trading_mode": ("INVEST_BOT_TRADING_MODE",),
+            "environment": ("INVEST_BOT_ENVIRONMENT",),
+            "log_level": ("INVEST_BOT_LOG_LEVEL",),
+            "kis_live_app_key": ("INVEST_BOT_KIS_LIVE_APP_KEY", "INVEST_BOT_KIS_APP_KEY"),
+            "kis_live_app_secret": ("INVEST_BOT_KIS_LIVE_APP_SECRET", "INVEST_BOT_KIS_APP_SECRET"),
+            "kis_mock_app_key": ("INVEST_BOT_KIS_MOCK_APP_KEY", "INVEST_BOT_KIS_APP_KEY"),
+            "kis_mock_app_secret": ("INVEST_BOT_KIS_MOCK_APP_SECRET", "INVEST_BOT_KIS_APP_SECRET"),
+            "discord_webhook_url": ("INVEST_BOT_DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK_URL"),
+            "database_url": ("INVEST_BOT_DATABASE_URL", "DATABASE_URL"),
+            "db_host": ("INVEST_BOT_DB_HOST",),
+            "db_host_docker": ("INVEST_BOT_DB_HOST_DOCKER",),
+            "db_port": ("INVEST_BOT_DB_PORT",),
+            "db_name": ("INVEST_BOT_DB_NAME",),
+            "db_user": ("INVEST_BOT_DB_USER",),
+            "db_password": ("INVEST_BOT_DB_PASSWORD",),
+            "enable_db_write": ("INVEST_BOT_ENABLE_DB_WRITE",),
+            "stock_master_update_on_startup": ("INVEST_BOT_STOCK_MASTER_UPDATE_ON_STARTUP",),
+            "stock_master_refresh_interval_minutes": ("INVEST_BOT_STOCK_MASTER_REFRESH_INTERVAL_MINUTES",),
+        }
+
         def configured_value(yaml_key: str, default: str) -> str:
+            for env_name in env_names.get(yaml_key, ()):
+                env_value = os.getenv(env_name)
+                if env_value not in (None, ""):
+                    return env_value
             configured = raw_data.get(yaml_key, default)
             return str(configured)
 
         def configured_bool(yaml_key: str, default: bool = False) -> bool:
-            configured = raw_data.get(yaml_key, default)
+            configured = configured_value(yaml_key, str(default))
             if isinstance(configured, bool):
                 return configured
             return str(configured).strip().lower() in {"1", "true", "yes", "on"}

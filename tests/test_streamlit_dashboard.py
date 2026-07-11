@@ -1536,6 +1536,34 @@ def test_run_full_pipeline_action_sets_warning_message_for_partial_delivery(monk
     assert "전체 파이프라인 완료(1건). Discord 전송 경고: 삼성전자 (005930) failed(HTTP 500)" == fake_st.session_state["action_message"]
 
 
+def test_run_full_pipeline_action_stops_when_collection_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    called: list[str] = []
+    monkeypatch.setattr(streamlit_actions_module, "st", fake_st)
+    monkeypatch.setattr(
+        streamlit_actions_module,
+        "collect_market_data_for_symbols",
+        lambda symbols, days: {
+            "successful_symbols": [],
+            "failed_count": 1,
+            "symbol_count": 1,
+        },
+    )
+    monkeypatch.setattr(streamlit_actions_module, "generate_indicators_for_symbol", lambda symbol: called.append("indicators"))
+    monkeypatch.setattr(streamlit_actions_module, "generate_golden_cross_signals_for_symbol", lambda symbol: called.append("signals"))
+    monkeypatch.setattr(streamlit_actions_module, "generate_market_report_for_symbol", lambda symbol, **kwargs: called.append("report"))
+
+    run_full_pipeline_action(
+        [ResolvedSymbol(raw_input="005930", symbol="005930", symbol_name="삼성전자")],
+        30,
+        settings=AppSettings(),
+    )
+
+    assert called == []
+    assert fake_st.session_state["action_message_type"] == "error"
+    assert "리포트를 갱신하지 않았습니다" in fake_st.session_state["action_message"]
+
+
 def test_render_action_feedback_uses_warning_channel(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_st = _FakeStreamlit()
     fake_st.session_state["action_message"] = "경고 메시지"

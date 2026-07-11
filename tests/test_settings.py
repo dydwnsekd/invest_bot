@@ -3,7 +3,32 @@ from tests.helpers import make_test_dir
 
 
 def _clear_settings_env(monkeypatch) -> None:
-    for key in ["DATABASE_URL", "INVEST_BOT_DB_HOST", "INVEST_BOT_DB_PORT", "INVEST_BOT_DB_NAME", "INVEST_BOT_DB_USER", "INVEST_BOT_DB_PASSWORD"]:
+    for key in [
+        "DATABASE_URL",
+        "DISCORD_WEBHOOK_URL",
+        "INVEST_BOT_APP_NAME",
+        "INVEST_BOT_MARKET",
+        "INVEST_BOT_TRADING_MODE",
+        "INVEST_BOT_ENVIRONMENT",
+        "INVEST_BOT_LOG_LEVEL",
+        "INVEST_BOT_KIS_APP_KEY",
+        "INVEST_BOT_KIS_APP_SECRET",
+        "INVEST_BOT_KIS_LIVE_APP_KEY",
+        "INVEST_BOT_KIS_LIVE_APP_SECRET",
+        "INVEST_BOT_KIS_MOCK_APP_KEY",
+        "INVEST_BOT_KIS_MOCK_APP_SECRET",
+        "INVEST_BOT_DISCORD_WEBHOOK_URL",
+        "INVEST_BOT_DATABASE_URL",
+        "INVEST_BOT_DB_HOST",
+        "INVEST_BOT_DB_HOST_DOCKER",
+        "INVEST_BOT_DB_PORT",
+        "INVEST_BOT_DB_NAME",
+        "INVEST_BOT_DB_USER",
+        "INVEST_BOT_DB_PASSWORD",
+        "INVEST_BOT_ENABLE_DB_WRITE",
+        "INVEST_BOT_STOCK_MASTER_UPDATE_ON_STARTUP",
+        "INVEST_BOT_STOCK_MASTER_REFRESH_INTERVAL_MINUTES",
+    ]:
         monkeypatch.delenv(key, raising=False)
 
 
@@ -185,3 +210,44 @@ def test_app_settings_reads_discord_webhook_url_from_app_yaml(monkeypatch):
     settings = AppSettings.from_file(config_path)
 
     assert settings.discord_webhook_url == "https://discord.example/webhook/abc"
+
+
+def test_app_settings_reads_runtime_environment_over_blank_app_yaml(monkeypatch):
+    _clear_settings_env(monkeypatch)
+    monkeypatch.setenv("INVEST_BOT_TRADING_MODE", "mock")
+    monkeypatch.setenv("INVEST_BOT_ENVIRONMENT", "docker")
+    monkeypatch.setenv("INVEST_BOT_KIS_APP_KEY", "env-kis-key")
+    monkeypatch.setenv("INVEST_BOT_KIS_APP_SECRET", "env-kis-secret")
+    monkeypatch.setenv("INVEST_BOT_DB_HOST", "db")
+    monkeypatch.setenv("INVEST_BOT_DB_PORT", "15432")
+    monkeypatch.setenv("INVEST_BOT_DB_NAME", "env_db")
+    monkeypatch.setenv("INVEST_BOT_DB_USER", "env_user")
+    monkeypatch.setenv("INVEST_BOT_DB_PASSWORD", "env password")
+    monkeypatch.setenv("INVEST_BOT_ENABLE_DB_WRITE", "true")
+    test_dir = make_test_dir("settings_env_over_blank")
+    config_path = test_dir / "app.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "trading_mode: mock",
+                "environment: local",
+                "kis_mock_app_key: ''",
+                "kis_mock_app_secret: ''",
+                "db_host: localhost",
+                "db_port: 5432",
+                "db_name: invest_bot",
+                "db_user: invest_bot",
+                "db_password: invest_bot",
+                "enable_db_write: false",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = AppSettings.from_file(config_path)
+
+    assert settings.environment == "docker"
+    assert settings.kis_app_key == "env-kis-key"
+    assert settings.kis_app_secret == "env-kis-secret"
+    assert settings.enable_db_write is True
+    assert settings.database_url == "postgresql+psycopg://env_user:env+password@db:15432/env_db"

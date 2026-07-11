@@ -101,9 +101,18 @@ def run_collect_action(selected_items: list[ResolvedSymbol], days: int) -> None:
         resolved_items = require_selected_items(selected_items)
         result = collect_market_data_for_symbols(symbols=[item.symbol for item in resolved_items], days=days)
         label_summary = summarize_selected_items(resolved_items)
+        success_count = int(result.get("success_count", 0))
+        failed_count = int(result.get("failed_count", 0))
+        if success_count == 0 and failed_count > 0:
+            set_action_message(
+                f"데이터 수집 실패: {label_summary} · 성공 0개, 실패 {failed_count}개. 최신 데이터가 저장되지 않았습니다.",
+                "error",
+            )
+            st.rerun()
+            return
         set_action_message(
-            f"데이터 수집 완료: {label_summary} · {result['success_count']}개 성공, {result['failed_count']}개 실패",
-            "success" if result["failed_count"] == 0 else "info",
+            f"데이터 수집 완료: {label_summary} · {success_count}개 성공, {failed_count}개 실패",
+            "success" if failed_count == 0 else "warning",
         )
     except Exception as error:  # noqa: BLE001
         set_action_message(f"데이터 수집 중 오류가 발생했습니다: {error}", "error")
@@ -143,7 +152,19 @@ def run_full_pipeline_action(selected_items: list[ResolvedSymbol], days: int, *,
         resolved_items = require_selected_items(selected_items)
         collect_result = collect_market_data_for_symbols(symbols=[item.symbol for item in resolved_items], days=days)
         report_results: list[dict[str, object]] = []
-        for symbol in successful_symbols_from_collection_result(collect_result):
+        successful_symbols = successful_symbols_from_collection_result(collect_result)
+        failed_count = int(collect_result.get("failed_count", 0))
+        if not successful_symbols:
+            set_action_message(
+                (
+                    f"전체 파이프라인 실패: {summarize_selected_items(resolved_items)} · "
+                    f"데이터 수집 성공 0개, 실패 {failed_count}개. 리포트를 갱신하지 않았습니다."
+                ),
+                "error",
+            )
+            st.rerun()
+            return
+        for symbol in successful_symbols:
             generate_indicators_for_symbol(symbol)
             generate_golden_cross_signals_for_symbol(symbol)
             report_results.append(generate_market_report_for_symbol(symbol, delivery_target="discord", settings=settings))
@@ -156,9 +177,10 @@ def run_full_pipeline_action(selected_items: list[ResolvedSymbol], days: int, *,
             )
             set_action_message(message, message_type)
         else:
+            failed_suffix = "" if failed_count == 0 else f" · 수집 실패 {failed_count}개"
             set_action_message(
-                f"전체 파이프라인 완료: {summarize_selected_items(resolved_items)} · {collect_result['symbol_count']}개 종목 처리",
-                "success" if collect_result["failed_count"] == 0 else "info",
+                f"전체 파이프라인 완료: {summarize_selected_items(resolved_items)} · {len(report_results)}개 리포트 생성{failed_suffix}",
+                "success" if failed_count == 0 else "warning",
             )
     except Exception as error:  # noqa: BLE001
         set_action_message(f"전체 파이프라인 실행 중 오류가 발생했습니다: {error}", "error")
