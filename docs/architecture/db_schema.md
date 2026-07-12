@@ -128,7 +128,7 @@
 | `dataset` | dataset 종류 (`daily_prices`, `market_reports` 등) |
 | `filename` | dataset 내부 고유 snapshot key |
 | `symbol` | 관련 종목 (`symbols.symbol` FK, nullable) |
-| `as_of_date` | 데이터 기준일 |
+| `as_of_date` | 데이터 기준일. `date`, `trade_date`, `stck_bsop_date` 컬럼 중 존재하는 날짜 컬럼의 최대 날짜 |
 | `row_count` | frame row 수 |
 | `frame_json` | 전체 DataFrame payload |
 | `created_at` | snapshot 최초 저장 시각 |
@@ -145,6 +145,7 @@
 **Source of truth / notes**
 - `dataset_frames.stock_info`는 사용자 종목 검색/선택 source로 사용하면 안 된다.
 - `dataset_frames`는 artifact store이며, reference table인 `symbols`와 역할을 분리한다.
+- KIS 일봉 응답은 최신 거래일이 첫 행으로 내려올 수 있으므로 `as_of_date`를 프레임 마지막 행으로 계산하면 안 된다.
 
 ### `stock_info_snapshots`
 

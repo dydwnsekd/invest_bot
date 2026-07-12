@@ -182,10 +182,22 @@ invest_bot/
 
 실제 설정 파일은 `.gitignore`에 포함되어 있습니다.
 
-DB 접근 정보와 KIS API 키/시크릿은 `config/app.yaml` 한 곳에서 관리합니다.
+DB 접근 정보와 KIS API 키/시크릿은 `config/app.yaml` 또는 런타임 환경변수로 관리합니다.
+같은 항목이 둘 다 있으면 `INVEST_BOT_*` 환경변수가 `config/app.yaml`보다 우선합니다.
 Docker Compose는 로컬 `config/` 디렉터리를 컨테이너에 read-only로 마운트하며, 이미지 빌드 레이어에는 실제 `config/app.yaml`을 포함하지 않습니다.
 기본 예시값은 로컬 실행 시 `db_host: localhost`, Docker Compose 내부 실행 시 `db_host_docker: db`를 자동 사용하도록 맞춰져 있습니다.
 `config/kis_credentials.yaml`은 더 이상 읽지 않습니다.
+
+주요 환경변수:
+
+- `INVEST_BOT_KIS_APP_KEY`, `INVEST_BOT_KIS_APP_SECRET`: mock/live 공통 KIS 키 fallback
+- `INVEST_BOT_KIS_MOCK_APP_KEY`, `INVEST_BOT_KIS_MOCK_APP_SECRET`: mock 모드 전용 KIS 키
+- `INVEST_BOT_KIS_LIVE_APP_KEY`, `INVEST_BOT_KIS_LIVE_APP_SECRET`: live 모드 전용 KIS 키
+- `INVEST_BOT_DB_HOST`, `INVEST_BOT_DB_PORT`, `INVEST_BOT_DB_NAME`, `INVEST_BOT_DB_USER`, `INVEST_BOT_DB_PASSWORD`: DB 접속 정보
+- `INVEST_BOT_ENABLE_DB_WRITE`: 수집 데이터를 DB fact table에도 기록할지 여부
+- `INVEST_BOT_KIS_TOKEN_CACHE`: KIS access token 캐시 파일 경로. 미설정 시 `/tmp/invest_bot/` 아래에 자동 저장
+
+KIS access token은 프로세스 간 재발급을 줄이기 위해 파일 캐시를 사용합니다. 이는 Streamlit 버튼 실행이나 CLI 실행이 반복될 때 `tokenP` 발급 제한으로 수집이 실패하는 것을 줄이기 위한 운영 캐시입니다.
 
 ## 설치
 
@@ -345,6 +357,10 @@ python scripts/run_market_report.py 005930
 ```
 
 생성된 리포트에는 종합 의견(`final_opinion`)과 별도로 아래 전략별 판단 필드가 함께 포함됩니다.
+
+리포트의 `date`는 실행한 오늘 날짜가 아니라 최신 골든크로스 신호의 기준 거래일입니다. 신호가 없으면 최신 지표 기준 거래일을 사용합니다. 수집 데이터가 최신이어도 지표 계산과 신호 생성을 다시 실행하지 않으면 리포트 날짜는 이전 신호 기준일로 남을 수 있습니다.
+
+대시보드에서 최신 수집분까지 반영하려면 `전체 파이프라인`을 실행하거나 `데이터 수집 -> 지표 계산 -> 신호 생성 -> 리포트 생성` 순서로 실행합니다. 데이터 수집이 모두 실패하면 전체 파이프라인은 리포트를 갱신하지 않고 실패 메시지를 표시합니다.
 
 - `rsi_strategy_signal`, `rsi_strategy_reason`
 - `trend_filter_signal`, `trend_filter_reason`

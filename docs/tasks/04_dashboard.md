@@ -46,6 +46,9 @@
   - one or more `skipped` / `failed` -> `warning`
   - report save failure -> `error`
 - Discord warning은 unrelated collect/indicator/signal batch semantics로 퍼지지 않음
+- `데이터 수집`에서 선택 종목이 모두 실패하면 error로 표시하고 "최신 데이터가 저장되지 않았습니다"를 안내함
+- `전체 파이프라인`에서 수집 성공 종목이 0개면 지표/신호/리포트 단계를 실행하지 않고 "리포트를 갱신하지 않았습니다"를 안내함
+- 리포트 날짜는 실행일이 아니라 최신 신호/지표 기준 거래일이므로, 최신 수집분 반영은 `전체 파이프라인` 또는 `데이터 수집 -> 지표 계산 -> 신호 생성 -> 리포트 생성` 순서가 필요함
 
 ## 현재 리포트 해석 탭 동작
 

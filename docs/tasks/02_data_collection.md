@@ -14,6 +14,8 @@
 - [x] 단일/다중 종목 수집 스크립트 작성
 - [x] 파일 기반 정기 다중 종목 수집 스케줄링 초안 구현
 - [x] 1회 실행 및 테스트용 제한 실행 지원
+- [x] `INVEST_BOT_*` 환경변수 기반 KIS/DB 런타임 설정 지원
+- [x] KIS access token 파일 캐시로 반복 실행 시 `tokenP` 재발급 최소화
 
 ## 남은 항목
 
@@ -26,6 +28,8 @@
 ## 데이터 구조
 
 기본 저장 대상은 DB의 `dataset_frames`이며, 아래 경로는 파일 fallback 또는 기존 CSV 기반 호환 경로다.
+
+`dataset_frames.as_of_date`는 날짜 컬럼의 최대 날짜로 저장한다. KIS 일봉 응답은 최신 거래일이 첫 행으로 올 수 있으므로 프레임 행 순서에 의존하지 않는다.
 
 ```text
 data/raw/domestic_stock/
