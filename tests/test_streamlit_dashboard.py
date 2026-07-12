@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +25,7 @@ import invest_bot.dashboard.streamlit_actions as streamlit_actions_module
 import invest_bot.dashboard.streamlit_dashboard as streamlit_dashboard_module
 import invest_bot.dashboard.streamlit_data as streamlit_data_module
 import invest_bot.dashboard.streamlit_layout as streamlit_layout_module
+import invest_bot.dashboard.streamlit_styles as streamlit_styles_module
 from invest_bot.dashboard.streamlit_actions import (
     describe_delivery_problems,
     normalize_delivery_detail,
@@ -63,6 +65,45 @@ from invest_bot.dashboard.streamlit_reports import (
 from invest_bot.dashboard.streamlit_watchlist import refresh_favorite_symbols_if_needed, render_watchlist_tab
 from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolEntry
 from tests.helpers import init_test_db, make_test_dir
+
+
+def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def _capture_markdown(body: str, *, unsafe_allow_html: bool) -> None:
+        captured["body"] = body
+        captured["unsafe_allow_html"] = unsafe_allow_html
+
+    monkeypatch.setattr(streamlit_styles_module, "st", SimpleNamespace(markdown=_capture_markdown))
+
+    streamlit_styles_module.apply_custom_style()
+
+    style = str(captured["body"])
+
+    assert captured["unsafe_allow_html"] is True
+    assert '--app-bg: #0b1220;' in style
+    assert 'linear-gradient(180deg, #08111f 0%, #0b1220 48%, #0f172a 100%)' in style
+    assert '"Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic"' in style
+    assert '"Inter", "IBM Plex Sans"' in style
+    assert 'font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;' in style
+    assert 'background: var(--app-success-bg);' in style
+    assert 'background: var(--app-danger-bg);' in style
+    assert 'background: var(--app-neutral-bg);' in style
+
+
+def test_streamlit_config_uses_dark_theme_tokens() -> None:
+    config_path = Path(__file__).resolve().parents[1] / '.streamlit' / 'config.toml'
+
+    with config_path.open('rb') as stream:
+        config = tomllib.load(stream)
+
+    theme = config['theme']
+    assert theme['base'] == 'dark'
+    assert theme['backgroundColor'] == '#0b1220'
+    assert theme['secondaryBackgroundColor'] == '#111827'
+    assert theme['textColor'] == '#e5edf7'
+    assert theme['borderColor'] == '#243041'
+
 
 
 class _FakeDatasetStorage:

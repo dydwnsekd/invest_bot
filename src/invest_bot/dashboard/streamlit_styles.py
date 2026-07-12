@@ -7,13 +7,32 @@ def apply_custom_style() -> None:
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
-
-        html, body, [data-testid="stAppViewContainer"] {
+        html,
+        body,
+        [data-testid="stAppViewContainer"] {
+            --app-bg: #0b1220;
+            --app-panel: #111827;
+            --app-panel-elevated: #182235;
+            --app-panel-soft: #0f172a;
+            --app-border: rgba(148, 163, 184, 0.18);
+            --app-border-strong: rgba(148, 163, 184, 0.28);
+            --app-text: #e5edf7;
+            --app-text-muted: #94a3b8;
+            --app-text-soft: #cbd5e1;
+            --app-accent: #5eead4;
+            --app-accent-strong: #2dd4bf;
+            --app-success-bg: rgba(34, 197, 94, 0.18);
+            --app-success-text: #bbf7d0;
+            --app-danger-bg: rgba(248, 113, 113, 0.18);
+            --app-danger-text: #fecaca;
+            --app-neutral-bg: rgba(148, 163, 184, 0.16);
+            --app-neutral-text: #dbe4f0;
+            --font-ui: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Apple Gothic", "Nanum Gothic", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-label: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", "Inter", "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             background:
-                radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 28%),
-                radial-gradient(circle at top right, rgba(217, 119, 6, 0.10), transparent 24%),
-                linear-gradient(180deg, #f7f2e9 0%, #f3ede2 100%);
+                radial-gradient(circle at top left, rgba(94, 234, 212, 0.08), transparent 26%),
+                radial-gradient(circle at top right, rgba(59, 130, 246, 0.10), transparent 22%),
+                linear-gradient(180deg, #08111f 0%, #0b1220 48%, #0f172a 100%);
         }
 
         [data-testid="stAppViewContainer"],
@@ -40,7 +59,8 @@ def apply_custom_style() -> None:
         [data-testid="stSidebar"] h5,
         [data-testid="stSidebar"] h6,
         [data-testid="stSidebar"] button {
-            font-family: "Noto Sans KR", "Space Grotesk", sans-serif;
+            font-family: var(--font-ui);
+            color: var(--app-text);
         }
 
         .material-symbols-rounded,
@@ -72,47 +92,48 @@ def apply_custom_style() -> None:
 
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+            border-right: 1px solid rgba(148, 163, 184, 0.14);
         }
 
         [data-testid="stSidebar"] * {
-            color: #f8fafc;
+            color: var(--app-text);
         }
 
         [data-testid="stSidebar"] .stButton > button {
             width: 100%;
             border-radius: 0.95rem;
-            border: 1px solid rgba(148, 163, 184, 0.26);
-            background: rgba(30, 41, 59, 0.82);
-            color: #f8fafc;
-            font-weight: 700;
+            border: 1px solid var(--app-border-strong);
+            background: rgba(17, 24, 39, 0.92);
+            color: var(--app-text);
+            font-family: var(--font-label);
+            font-weight: 600;
             box-shadow: none;
-            transition: all 0.16s ease;
+            transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
         }
 
         [data-testid="stSidebar"] .stButton > button:hover {
-            border-color: rgba(45, 212, 191, 0.6);
-            background: rgba(51, 65, 85, 0.96);
-            color: #ffffff;
+            border-color: rgba(94, 234, 212, 0.42);
+            background: rgba(24, 34, 53, 0.96);
+            color: #f8fafc;
         }
 
         [data-testid="stSidebar"] .stButton > button[kind="primary"] {
-            background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
-            border-color: rgba(20, 184, 166, 0.65);
-            color: #f8fffe;
-            box-shadow: 0 10px 24px rgba(15, 118, 110, 0.24);
+            background: linear-gradient(135deg, rgba(45, 212, 191, 0.18), rgba(94, 234, 212, 0.12));
+            border-color: rgba(94, 234, 212, 0.36);
+            color: #d7fffb;
         }
 
         [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-            background: linear-gradient(135deg, #2dd4bf 0%, #0f766e 100%);
-            color: #ffffff;
+            background: linear-gradient(135deg, rgba(45, 212, 191, 0.24), rgba(94, 234, 212, 0.16));
+            color: #effffc;
         }
 
         .hero-shell {
             padding: 1.4rem 1.6rem;
             border-radius: 1.4rem;
-            background: linear-gradient(135deg, rgba(255,250,242,0.96), rgba(255,255,255,0.84));
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            box-shadow: 0 22px 60px rgba(15, 23, 42, 0.08);
+            background: linear-gradient(180deg, rgba(17, 24, 39, 0.94), rgba(15, 23, 42, 0.92));
+            border: 1px solid var(--app-border);
+            box-shadow: 0 18px 36px rgba(2, 6, 23, 0.24);
             margin-bottom: 1rem;
         }
 
@@ -122,47 +143,49 @@ def apply_custom_style() -> None:
             gap: 0.35rem;
             padding: 0.28rem 0.7rem;
             border-radius: 999px;
+            font-family: var(--font-label);
             font-size: 0.78rem;
-            font-weight: 700;
-            color: #0f766e;
-            background: rgba(15, 118, 110, 0.10);
+            font-weight: 600;
+            color: #c7fff7;
+            background: rgba(45, 212, 191, 0.12);
+            border: 1px solid rgba(94, 234, 212, 0.20);
             margin-bottom: 0.75rem;
         }
 
         .hero-title {
-            font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
+            font-family: var(--font-ui);
             font-size: 2.2rem;
             line-height: 1.05;
             margin: 0;
-            color: #111827;
-            letter-spacing: -0.04em;
+            color: #f8fafc;
+            letter-spacing: -0.035em;
         }
 
         .hero-copy {
             margin-top: 0.75rem;
-            color: #475569;
+            color: var(--app-text-soft);
             font-size: 0.98rem;
         }
 
         .streamlit-card {
             padding: 1rem 1rem 0.85rem 1rem;
             border-radius: 1.1rem;
-            background: rgba(255, 252, 247, 0.96);
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+            background: rgba(17, 24, 39, 0.88);
+            border: 1px solid var(--app-border);
+            box-shadow: 0 12px 28px rgba(2, 6, 23, 0.18);
         }
 
         .section-title {
             margin: 0;
-            font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
+            font-family: var(--font-ui);
             font-size: 1.15rem;
-            color: #111827;
-            letter-spacing: -0.03em;
+            color: #f8fafc;
+            letter-spacing: -0.02em;
         }
 
         .section-copy {
             margin-top: 0.35rem;
-            color: #64748b;
+            color: var(--app-text-muted);
             font-size: 0.93rem;
         }
 
@@ -171,60 +194,66 @@ def apply_custom_style() -> None:
             align-items: center;
             border-radius: 999px;
             padding: 0.34rem 0.7rem;
+            font-family: var(--font-label);
             font-size: 0.78rem;
             font-weight: 700;
             margin-right: 0.35rem;
             margin-bottom: 0.35rem;
+            border: 1px solid transparent;
         }
 
         .badge-buy, .badge-bullish, .badge-supportive, .badge-active, .badge-strong {
-            background: rgba(22, 163, 74, 0.12);
-            color: #166534;
+            background: var(--app-success-bg);
+            color: var(--app-success-text);
+            border-color: rgba(34, 197, 94, 0.22);
         }
 
         .badge-sell, .badge-bearish, .badge-weak, .badge-overbought {
-            background: rgba(220, 38, 38, 0.11);
-            color: #991b1b;
+            background: var(--app-danger-bg);
+            color: var(--app-danger-text);
+            border-color: rgba(248, 113, 113, 0.24);
         }
 
         .badge-hold, .badge-watch, .badge-neutral, .badge-normal, .badge-quiet, .badge-oversold, .badge-mixed, .badge-unknown {
-            background: rgba(148, 163, 184, 0.14);
-            color: #334155;
+            background: var(--app-neutral-bg);
+            color: var(--app-neutral-text);
+            border-color: rgba(148, 163, 184, 0.22);
         }
 
         .summary-box {
             padding: 0.95rem 1rem;
             border-radius: 1rem;
-            background: rgba(248, 250, 252, 0.82);
-            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid var(--app-border);
         }
 
         .muted-label {
-            color: #64748b;
+            color: var(--app-text-muted);
+            font-family: var(--font-label);
             font-size: 0.82rem;
         }
 
         .sidebar-nav-title {
             margin-top: 0.4rem;
             margin-bottom: 0.6rem;
-            font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
+            font-family: var(--font-label);
             font-size: 0.92rem;
             letter-spacing: 0.04em;
             text-transform: uppercase;
-            color: #cbd5e1;
+            color: var(--app-text-muted);
         }
 
         .sidebar-info-card {
             margin-top: 0.35rem;
             padding: 0.95rem 1rem;
             border-radius: 1rem;
-            background: rgba(30, 41, 59, 0.78);
-            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(17, 24, 39, 0.76);
+            border: 1px solid var(--app-border);
         }
 
         .sidebar-info-title {
             margin: 0 0 0.6rem 0;
-            font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
+            font-family: var(--font-ui);
             font-size: 0.95rem;
             font-weight: 700;
             color: #f8fafc;
@@ -232,18 +261,20 @@ def apply_custom_style() -> None:
 
         .sidebar-info-label {
             margin-top: 0.45rem;
+            font-family: var(--font-label);
             font-size: 0.78rem;
             text-transform: uppercase;
             letter-spacing: 0.04em;
-            color: #94a3b8;
+            color: var(--app-text-muted);
         }
 
         .sidebar-info-value {
             margin-top: 0.18rem;
             padding: 0.42rem 0.55rem;
             border-radius: 0.7rem;
-            background: rgba(15, 23, 42, 0.5);
-            color: #f8fafc;
+            background: rgba(8, 17, 31, 0.76);
+            color: var(--app-text);
+            font-family: var(--font-label);
             font-size: 0.82rem;
             word-break: break-all;
         }
@@ -252,23 +283,24 @@ def apply_custom_style() -> None:
             gap: 0.45rem;
             padding: 0.3rem;
             border-radius: 1rem;
-            background: rgba(255, 250, 242, 0.82);
-            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(15, 23, 42, 0.84);
+            border: 1px solid var(--app-border);
         }
 
         button[data-baseweb="tab"] {
             height: 2.8rem;
             padding: 0 1rem;
             border-radius: 0.85rem;
-            color: #475569;
+            font-family: var(--font-label);
+            color: var(--app-text-muted);
             background: transparent;
         }
 
         button[data-baseweb="tab"][aria-selected="true"] {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 247, 237, 0.96));
-            color: #0f172a;
-            border: 1px solid rgba(15, 118, 110, 0.18);
-            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+            background: linear-gradient(180deg, rgba(24, 34, 53, 0.96), rgba(17, 24, 39, 0.96));
+            color: #f8fafc;
+            border: 1px solid rgba(94, 234, 212, 0.20);
+            box-shadow: 0 8px 20px rgba(2, 6, 23, 0.18);
         }
 
         button[data-baseweb="tab"]::after {
