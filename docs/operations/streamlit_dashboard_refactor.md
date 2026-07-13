@@ -11,6 +11,7 @@
 - 현재 파일 크기: 72 lines
 - 현재 전략: 동작 변경 없이 안전한 분리부터 순차 진행
 - 후속 기능 반영: `streamlit_reports.py`가 단일 리포트 본문 흐름과 전략별 판단 요약 렌더링까지 담당
+- 현재 테마/폰트 소유 경계: `.streamlit/config.toml`과 `src/invest_bot/dashboard/streamlit_styles.py`가 A+ dark terminal theme/font를 함께 관리
 
 ## 진행 원칙
 
@@ -86,6 +87,33 @@
   - `streamlit_dashboard.py`를 엔트리 조립 파일 중심으로 축소
 
 ## 작업 로그
+
+### 2026-07-14
+
+- A+ dark trading-terminal theme high-contrast 조정 반영
+- 대상 파일
+  - `.streamlit/config.toml`
+  - `src/invest_bot/dashboard/streamlit_styles.py`
+  - `tests/test_streamlit_dashboard.py`
+  - `docs/tasks/04_dashboard.md`
+  - `docs/operations/streamlit_dashboard_refactor.md`
+- 정리 내용
+  - Streamlit base theme를 dark로 고정하고 palette token을 `#38bdf8 / #050816 / #111827 / #f8fafc / #475569`로 정리
+  - `streamlit_styles.py`를 단일 CSS source of truth로 유지하면서 저대비 teal/navy 조합을 high-contrast dark navy / slate palette로 치환
+  - sidebar / hero / card / summary box / tabs / semantic badge 대비를 dark terminal 기준으로 더 선명하게 재조정
+  - 한글 가독성 우선 폰트 스택(`Pretendard`, `Noto Sans KR`, `Apple SD Gothic Neo`, `Malgun Gothic`)과 보조 numeric/label fallback(`Inter`, `IBM Plex Sans`)을 반영
+  - Material Symbols override는 그대로 유지
+- 범위 메모
+  - 데이터 / 전략 / 리포트 로직은 변경하지 않음
+  - 새로운 기능은 추가하지 않음
+- 검증 결과
+  - `PYTHONPATH=src:. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `60 passed in 1.32s`
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_styles.py tests/test_streamlit_dashboard.py`
+  - 결과: `PASS`
+  - `git diff --check -- .streamlit/config.toml src/invest_bot/dashboard/streamlit_styles.py tests/test_streamlit_dashboard.py docs/tasks/04_dashboard.md docs/operations/streamlit_dashboard_refactor.md`
+  - 결과: `PASS`
+
 
 ### 2026-06-25
 
@@ -183,7 +211,9 @@
   - `상태판` 탭 렌더링과 스케줄 상태 패널을 `streamlit_overview.py`로 이동
   - `데이터 탐색` 탭과 데이터셋 미리보기 렌더링을 `streamlit_data.py`로 이동
   - `검증` 탭 렌더링을 `streamlit_tests.py`로 이동
-  - `tests/test_streamlit_dashboard.py`의 포맷터 import를 새 모듈 경계에 맞게 정리
+  - `tests/test_streamlit_dashboard.py`
+  - `docs/tasks/04_dashboard.md`
+  - `docs/operations/streamlit_dashboard_refactor.md`의 포맷터 import를 새 모듈 경계에 맞게 정리
 - Phase 5 시작
 - 목표: entry 조립 파일 정리
 - Phase 5 완료
@@ -205,6 +235,8 @@
   - `src/invest_bot/dashboard/streamlit_formatters.py`
   - `src/invest_bot/dashboard/streamlit_data.py`
   - `tests/test_streamlit_dashboard.py`
+  - `docs/tasks/04_dashboard.md`
+  - `docs/operations/streamlit_dashboard_refactor.md`
 - 정리 내용
   - `작업 실행` 탭을 여러 종목 기준 배치 실행 구조로 단순화하고 `한 종목` 섹션 제거
   - `리포트 해석` 탭 상단 metrics strip 제거 및 전략 판단 텍스트 색상화 적용
@@ -224,6 +256,8 @@
   - `src/invest_bot/dashboard/streamlit_data.py`
   - `requirements.txt`
   - `tests/test_streamlit_dashboard.py`
+  - `docs/tasks/04_dashboard.md`
+  - `docs/operations/streamlit_dashboard_refactor.md`
 - 정리 내용
   - `리포트 해석` / `데이터 탐색` 탭이 같은 `render_chart_selector` 공용 경로를 계속 사용하도록 유지
   - 공용 차트 렌더러에 Plotly 우선 경로 추가, Altair fallback 유지
@@ -255,6 +289,8 @@
   - `tests/test_init_db_script.py`
   - `tests/test_report_favorites.py`
   - `tests/test_streamlit_dashboard.py`
+  - `docs/tasks/04_dashboard.md`
+  - `docs/operations/streamlit_dashboard_refactor.md`
   - `docs/tasks/04_dashboard.md`
 - 정리 내용
   - 로컬 JSON 기반 관심종목 저장을 DB-backed 단일 watchlist로 교체

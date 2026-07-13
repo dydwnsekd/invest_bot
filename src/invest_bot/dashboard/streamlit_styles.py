@@ -10,29 +10,29 @@ def apply_custom_style() -> None:
         html,
         body,
         [data-testid="stAppViewContainer"] {
-            --app-bg: #0b1220;
+            --app-bg: #050816;
             --app-panel: #111827;
-            --app-panel-elevated: #182235;
+            --app-panel-elevated: #1e293b;
             --app-panel-soft: #0f172a;
-            --app-border: rgba(148, 163, 184, 0.18);
-            --app-border-strong: rgba(148, 163, 184, 0.28);
-            --app-text: #e5edf7;
-            --app-text-muted: #94a3b8;
-            --app-text-soft: #cbd5e1;
-            --app-accent: #5eead4;
-            --app-accent-strong: #2dd4bf;
-            --app-success-bg: rgba(34, 197, 94, 0.18);
-            --app-success-text: #bbf7d0;
-            --app-danger-bg: rgba(248, 113, 113, 0.18);
-            --app-danger-text: #fecaca;
-            --app-neutral-bg: rgba(148, 163, 184, 0.16);
-            --app-neutral-text: #dbe4f0;
+            --app-border: rgba(203, 213, 225, 0.32);
+            --app-border-strong: rgba(203, 213, 225, 0.48);
+            --app-text: #f8fafc;
+            --app-text-muted: #cbd5e1;
+            --app-text-soft: #e2e8f0;
+            --app-accent: #38bdf8;
+            --app-accent-strong: #0ea5e9;
+            --app-success-bg: rgba(34, 197, 94, 0.28);
+            --app-success-text: #f8fafc;
+            --app-danger-bg: rgba(248, 113, 113, 0.30);
+            --app-danger-text: #fff7f7;
+            --app-neutral-bg: rgba(148, 163, 184, 0.28);
+            --app-neutral-text: #f8fafc;
             --font-ui: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Apple Gothic", "Nanum Gothic", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             --font-label: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", "Inter", "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             background:
-                radial-gradient(circle at top left, rgba(94, 234, 212, 0.08), transparent 26%),
-                radial-gradient(circle at top right, rgba(59, 130, 246, 0.10), transparent 22%),
-                linear-gradient(180deg, #08111f 0%, #0b1220 48%, #0f172a 100%);
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.14), transparent 26%),
+                radial-gradient(circle at top right, rgba(14, 165, 233, 0.12), transparent 22%),
+                linear-gradient(180deg, #020617 0%, #050816 48%, #0f172a 100%);
         }
 
         [data-testid="stAppViewContainer"],
@@ -92,7 +92,7 @@ def apply_custom_style() -> None:
 
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
-            border-right: 1px solid rgba(148, 163, 184, 0.14);
+            border-right: 1px solid var(--app-border-strong);
         }
 
         [data-testid="stSidebar"] * {
@@ -103,37 +103,37 @@ def apply_custom_style() -> None:
             width: 100%;
             border-radius: 0.95rem;
             border: 1px solid var(--app-border-strong);
-            background: rgba(17, 24, 39, 0.92);
+            background: rgba(17, 24, 39, 0.98);
             color: var(--app-text);
             font-family: var(--font-label);
-            font-weight: 600;
+            font-weight: 700;
             box-shadow: none;
             transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
         }
 
         [data-testid="stSidebar"] .stButton > button:hover {
-            border-color: rgba(94, 234, 212, 0.42);
-            background: rgba(24, 34, 53, 0.96);
+            border-color: rgba(56, 189, 248, 0.72);
+            background: rgba(30, 41, 59, 0.98);
             color: #f8fafc;
         }
 
         [data-testid="stSidebar"] .stButton > button[kind="primary"] {
-            background: linear-gradient(135deg, rgba(45, 212, 191, 0.18), rgba(94, 234, 212, 0.12));
-            border-color: rgba(94, 234, 212, 0.36);
-            color: #d7fffb;
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.34), rgba(56, 189, 248, 0.22));
+            border-color: rgba(56, 189, 248, 0.78);
+            color: #f8fafc;
         }
 
         [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-            background: linear-gradient(135deg, rgba(45, 212, 191, 0.24), rgba(94, 234, 212, 0.16));
-            color: #effffc;
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.44), rgba(56, 189, 248, 0.30));
+            color: #ffffff;
         }
 
         .hero-shell {
             padding: 1.4rem 1.6rem;
             border-radius: 1.4rem;
-            background: linear-gradient(180deg, rgba(17, 24, 39, 0.94), rgba(15, 23, 42, 0.92));
-            border: 1px solid var(--app-border);
-            box-shadow: 0 18px 36px rgba(2, 6, 23, 0.24);
+            background: linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(15, 23, 42, 0.96));
+            border: 1px solid var(--app-border-strong);
+            box-shadow: 0 18px 36px rgba(2, 6, 23, 0.34);
             margin-bottom: 1rem;
         }
 
@@ -145,10 +145,10 @@ def apply_custom_style() -> None:
             border-radius: 999px;
             font-family: var(--font-label);
             font-size: 0.78rem;
-            font-weight: 600;
-            color: #c7fff7;
-            background: rgba(45, 212, 191, 0.12);
-            border: 1px solid rgba(94, 234, 212, 0.20);
+            font-weight: 700;
+            color: #f8fafc;
+            background: rgba(14, 165, 233, 0.24);
+            border: 1px solid rgba(56, 189, 248, 0.42);
             margin-bottom: 0.75rem;
         }
 
@@ -170,9 +170,9 @@ def apply_custom_style() -> None:
         .streamlit-card {
             padding: 1rem 1rem 0.85rem 1rem;
             border-radius: 1.1rem;
-            background: rgba(17, 24, 39, 0.88);
+            background: rgba(17, 24, 39, 0.94);
             border: 1px solid var(--app-border);
-            box-shadow: 0 12px 28px rgba(2, 6, 23, 0.18);
+            box-shadow: 0 12px 28px rgba(2, 6, 23, 0.24);
         }
 
         .section-title {
@@ -205,25 +205,25 @@ def apply_custom_style() -> None:
         .badge-buy, .badge-bullish, .badge-supportive, .badge-active, .badge-strong {
             background: var(--app-success-bg);
             color: var(--app-success-text);
-            border-color: rgba(34, 197, 94, 0.22);
+            border-color: rgba(34, 197, 94, 0.38);
         }
 
         .badge-sell, .badge-bearish, .badge-weak, .badge-overbought {
             background: var(--app-danger-bg);
             color: var(--app-danger-text);
-            border-color: rgba(248, 113, 113, 0.24);
+            border-color: rgba(248, 113, 113, 0.42);
         }
 
         .badge-hold, .badge-watch, .badge-neutral, .badge-normal, .badge-quiet, .badge-oversold, .badge-mixed, .badge-unknown {
             background: var(--app-neutral-bg);
             color: var(--app-neutral-text);
-            border-color: rgba(148, 163, 184, 0.22);
+            border-color: rgba(203, 213, 225, 0.40);
         }
 
         .summary-box {
             padding: 0.95rem 1rem;
             border-radius: 1rem;
-            background: rgba(15, 23, 42, 0.78);
+            background: rgba(15, 23, 42, 0.90);
             border: 1px solid var(--app-border);
         }
 
@@ -247,7 +247,7 @@ def apply_custom_style() -> None:
             margin-top: 0.35rem;
             padding: 0.95rem 1rem;
             border-radius: 1rem;
-            background: rgba(17, 24, 39, 0.76);
+            background: rgba(17, 24, 39, 0.88);
             border: 1px solid var(--app-border);
         }
 
@@ -272,19 +272,20 @@ def apply_custom_style() -> None:
             margin-top: 0.18rem;
             padding: 0.42rem 0.55rem;
             border-radius: 0.7rem;
-            background: rgba(8, 17, 31, 0.76);
+            background: rgba(2, 6, 23, 0.88);
             color: var(--app-text);
             font-family: var(--font-label);
             font-size: 0.82rem;
             word-break: break-all;
+            border: 1px solid var(--app-border);
         }
 
         div[data-baseweb="tab-list"] {
             gap: 0.45rem;
             padding: 0.3rem;
             border-radius: 1rem;
-            background: rgba(15, 23, 42, 0.84);
-            border: 1px solid var(--app-border);
+            background: rgba(15, 23, 42, 0.94);
+            border: 1px solid var(--app-border-strong);
         }
 
         button[data-baseweb="tab"] {
@@ -292,15 +293,23 @@ def apply_custom_style() -> None:
             padding: 0 1rem;
             border-radius: 0.85rem;
             font-family: var(--font-label);
-            color: var(--app-text-muted);
-            background: transparent;
+            color: var(--app-text-soft);
+            background: rgba(15, 23, 42, 0.18);
+            border: 1px solid transparent;
+            font-weight: 600;
+        }
+
+        button[data-baseweb="tab"]:hover {
+            color: #f8fafc;
+            background: rgba(30, 41, 59, 0.78);
+            border-color: rgba(56, 189, 248, 0.36);
         }
 
         button[data-baseweb="tab"][aria-selected="true"] {
-            background: linear-gradient(180deg, rgba(24, 34, 53, 0.96), rgba(17, 24, 39, 0.96));
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(17, 24, 39, 0.98));
             color: #f8fafc;
-            border: 1px solid rgba(94, 234, 212, 0.20);
-            box-shadow: 0 8px 20px rgba(2, 6, 23, 0.18);
+            border: 1px solid rgba(56, 189, 248, 0.60);
+            box-shadow: 0 8px 20px rgba(2, 6, 23, 0.24);
         }
 
         button[data-baseweb="tab"]::after {

@@ -22,6 +22,7 @@
 - [x] 전체 파이프라인 실행
 - [x] 시장 리포트 Discord warning/success 분리 노출
 - [x] 정기 수집 상태와 최근 실행 로그 표시
+- [x] A+ dark terminal theme/font 적용 (고대비 팔레트 반영)
 
 ## 남은 항목
 
@@ -70,6 +71,49 @@
 - hover 시 날짜 기준으로 visible series 값을 함께 확인 가능
 - 빠른 기간 선택과 직접 date range 선택을 모두 지원함
 - Plotly 사용이 가능한 환경에서는 Plotly를 우선 사용하고, 그렇지 않으면 Altair fallback으로 표시함
+
+## 현재 대시보드 테마 / 폰트 동작
+
+- 전역 Streamlit 테마는 `.streamlit/config.toml`에서 dark base로 고정
+- 현재 팔레트 토큰
+  - `primaryColor`: `#38bdf8`
+  - `backgroundColor`: `#050816`
+  - `secondaryBackgroundColor`: `#111827`
+  - `textColor`: `#f8fafc`
+  - `borderColor`: `#475569`
+- 세부 CSS는 `src/invest_bot/dashboard/streamlit_styles.py`에 중앙화되어 있음
+  - 기존 warm beige / teal 계열을 제거
+  - high-contrast dark navy / slate 기반 terminal-like 대비로 정리
+  - sidebar / hero / card / summary box / tabs / semantic badge 명도 대비를 더 강하게 재조정
+- 한글 가독성 우선 폰트 스택을 사용함
+  - 기본: `Pretendard`, `Noto Sans KR`, `Apple SD Gothic Neo`, `Malgun Gothic`, system sans fallback
+  - 보조 label / numeric fallback: `Inter`, `IBM Plex Sans`
+- 아이콘 폰트 충돌을 막기 위한 Material Symbols override는 유지함
+- 이번 변경 범위
+  - presentation / theme / font 정리에 한정
+  - 데이터 수집 / 전략 판단 / 리포트 생성 로직은 변경하지 않음
+  - 새로운 탭, 컨트롤, 기능은 추가하지 않음
+
+## 이번 세션 작업 요약 (2026-07-14)
+
+- `src/invest_bot/dashboard/streamlit_styles.py` 수정
+  - 저대비 teal/navy 중심 스타일을 high-contrast dark navy / slate terminal palette로 교체
+  - sidebar / hero / card / summary box / tabs / semantic badge contrast를 더 선명하게 재정리
+  - Korean readability-first font stack과 numeric fallback stack을 적용
+  - Material Symbols override를 유지
+- `.streamlit/config.toml` 수정
+  - Streamlit base theme를 dark로 고정
+  - `primaryColor`, `backgroundColor`, `secondaryBackgroundColor`, `textColor`, `borderColor` 토큰을 현재 palette로 정리
+- `tests/test_streamlit_dashboard.py` 보강
+  - 테마 / 폰트 / config 회귀 검증을 추가
+- 검증
+  - `PYTHONPATH=src:. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `60 passed in 1.32s`
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_styles.py tests/test_streamlit_dashboard.py`
+  - 결과: `PASS`
+  - `git diff --check -- .streamlit/config.toml src/invest_bot/dashboard/streamlit_styles.py tests/test_streamlit_dashboard.py docs/tasks/04_dashboard.md docs/operations/streamlit_dashboard_refactor.md`
+  - 결과: `PASS`
+
 
 ## 이번 세션 작업 요약 (2026-07-05)
 

@@ -81,8 +81,8 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     style = str(captured["body"])
 
     assert captured["unsafe_allow_html"] is True
-    assert '--app-bg: #0b1220;' in style
-    assert 'linear-gradient(180deg, #08111f 0%, #0b1220 48%, #0f172a 100%)' in style
+    assert '--app-bg: #050816;' in style
+    assert 'linear-gradient(180deg, #020617 0%, #050816 48%, #0f172a 100%)' in style
     assert '"Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic"' in style
     assert '"Inter", "IBM Plex Sans"' in style
     assert 'font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;' in style
@@ -99,10 +99,11 @@ def test_streamlit_config_uses_dark_theme_tokens() -> None:
 
     theme = config['theme']
     assert theme['base'] == 'dark'
-    assert theme['backgroundColor'] == '#0b1220'
+    assert theme['backgroundColor'] == '#050816'
     assert theme['secondaryBackgroundColor'] == '#111827'
-    assert theme['textColor'] == '#e5edf7'
-    assert theme['borderColor'] == '#243041'
+    assert theme['primaryColor'] == '#38bdf8'
+    assert theme['textColor'] == '#f8fafc'
+    assert theme['borderColor'] == '#475569'
 
 
 
