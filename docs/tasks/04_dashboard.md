@@ -12,6 +12,7 @@
 - [x] 리포트 해석 탭에서 선택된 1건 중심 본문 표시
 - [x] 리포트 카드 내 전략별 판단 요약 표시
 - [x] 리포트 해석 / 데이터 탐색 탭 공통 인터랙티브 차트와 조회 기간 조절
+- [x] stock dataset용 전문가형 주가 차트(일봉/주봉/월봉, 수급 panel fallback 포함)
 - [x] 리포트 즐겨찾기 저장
 - [x] 관심종목 전용 탭 추가
 - [x] 테스트 결과 표시
@@ -55,12 +56,15 @@
 
 - 상단 선택 컨트롤로 종목/리포트를 고른 뒤 본문에는 선택된 1건만 표시
 - 선택된 리포트 아래에서 차트와 상세 데이터 표를 계속 확인 가능
-- 차트는 날짜 기준 unified hover와 세로 crosshair로 특정 시점 값을 함께 확인 가능
-- 빠른 기간 선택(`1개월`, `3개월`, `6개월`, `1년`, `전체`)과 직접 시작일/종료일 선택을 지원함
+- stock dataset 차트는 기존 저장 `daily_prices_indicators` / `daily_prices`와 `investor_daily`를 조합한 전문가형 주가 차트로 우선 표시됨
+- 전문가형 차트는 캔들 + 이동평균선, 거래량, RSI 14, 선택적 투자자 수급 panel을 함께 제공함
+- 차트는 `일봉` / `주봉` / `월봉` selector, 날짜 기준 shared x-axis hover / zoom, 세로 crosshair를 지원함
+- 빠른 기간 선택(`1개월`, `3개월`, `6개월`, `1년`, `전체`)과 직접 시작일/종료일 선택을 지원하며 새 수집/API 호출은 추가하지 않음
+- 투자자 수급 데이터가 없으면 차트는 계속 표시되고 `수급 데이터 없음`을 안내함
 - `final_opinion`과 별도로 RSI / Trend Filter / Mean Reversion 전략의 직접 판단과 이유를 함께 표시
 - 선택된 종목을 즐겨찾기로 저장/해제할 수 있음
 - 즐겨찾기만 보기와 즐겨찾기 우선 정렬을 지원함
-- 별도 `관심종목` 탭에서 저장된 종목만 다시 모아 보고 1건씩 본문으로 확인 가능
+- 별도 `관심종목` 탭에서 저장된 종목만 다시 모아 보고 1건씩 본문으로 확인 가능하며 동일한 리포트 카드 기반 전문가형 차트 경로를 그대로 상속함
 - 즐겨찾기는 DB 기반 단일 watchlist 상태로 저장되며 report `entry_key`가 아니라 `symbol` 기준으로 관리됨
 - 같은 DB 볼륨을 유지하는 정상적인 app/container 재시작 후에도 관심종목 상태가 유지됨
 
@@ -68,9 +72,10 @@
 
 - 종목 선택 기반 summary-first 흐름은 유지
 - 상세 expander 안 차트는 `리포트 해석` 탭과 동일한 공용 렌더러를 사용함
-- hover 시 날짜 기준으로 visible series 값을 함께 확인 가능
-- 빠른 기간 선택과 직접 date range 선택을 모두 지원함
-- Plotly 사용이 가능한 환경에서는 Plotly를 우선 사용하고, 그렇지 않으면 Altair fallback으로 표시함
+- `daily_prices` / `daily_prices_indicators`는 전문가형 주가 차트로 우선 표시되고, 다른 dataset은 기존 generic 차트 흐름을 유지함
+- 전문가형 차트는 캔들 + 이동평균선, 거래량, RSI 14, 선택적 투자자 수급 panel과 `일봉` / `주봉` / `월봉` selector를 제공함
+- hover 시 날짜 기준으로 visible series 값을 함께 확인하고 shared x-axis zoom을 사용함
+- 빠른 기간 선택과 직접 date range 선택을 모두 지원하며 Plotly 사용이 불가능한 환경에서는 Altair fallback으로 표시함
 
 ## 현재 대시보드 테마 / 폰트 동작
 
@@ -101,14 +106,19 @@
   - sidebar / hero / card / summary box / tabs / semantic badge contrast를 더 선명하게 재정리
   - Korean readability-first font stack과 numeric fallback stack을 적용
   - Material Symbols override를 유지
+- 문서 동기화
+  - 리포트 해석 / 데이터 탐색 / 관심종목의 전문가형 주가 차트 동작을 현재 구현 기준으로 정리
+  - 저장 데이터 재사용(`daily_prices_indicators` / `daily_prices` / `investor_daily`)과 `수급 데이터 없음` fallback을 명시
 - `.streamlit/config.toml` 수정
   - Streamlit base theme를 dark로 고정
   - `primaryColor`, `backgroundColor`, `secondaryBackgroundColor`, `textColor`, `borderColor` 토큰을 현재 palette로 정리
 - `tests/test_streamlit_dashboard.py` 보강
   - 테마 / 폰트 / config 회귀 검증을 추가
 - 검증
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_charts.py src/invest_bot/dashboard/streamlit_state.py src/invest_bot/dashboard/streamlit_reports.py src/invest_bot/dashboard/streamlit_data.py src/invest_bot/dashboard/streamlit_watchlist.py tests/test_streamlit_dashboard.py`
+  - 결과: `PASS`
   - `PYTHONPATH=src:. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
-  - 결과: `60 passed in 1.32s`
+  - 결과: `78 passed in 0.70s`
   - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_styles.py tests/test_streamlit_dashboard.py`
   - 결과: `PASS`
   - `git diff --check -- .streamlit/config.toml src/invest_bot/dashboard/streamlit_styles.py tests/test_streamlit_dashboard.py docs/tasks/04_dashboard.md docs/operations/streamlit_dashboard_refactor.md`

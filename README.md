@@ -14,7 +14,19 @@
 
 ## 현재 구현 범위
 
-### 이번 세션 업데이트 (2026-07-06)
+### 이번 세션 업데이트 (2026-07-14)
+
+- `리포트 해석` / `데이터 탐색` 공용 주가 차트가 stock dataset에서 전문가용 차트 경로를 사용
+  - 캔들 + 이동평균선, 거래량, RSI 14, 선택적 투자자 수급 panel을 함께 표시
+  - `일봉` / `주봉` / `월봉` 전환과 shared x-axis hover / zoom을 지원
+  - 기존 저장 데이터(`daily_prices_indicators` / `daily_prices` / `investor_daily`)만 사용하며 새 수집/API 호출은 추가하지 않음
+  - 수급 데이터가 없으면 차트는 계속 표시되고 `수급 데이터 없음`만 안내
+- `관심종목` 탭도 기존 리포트 카드 경로를 그대로 사용해 같은 전문가용 차트를 상속
+- 관련 검증 명령 기준
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_charts.py src/invest_bot/dashboard/streamlit_state.py src/invest_bot/dashboard/streamlit_reports.py src/invest_bot/dashboard/streamlit_data.py src/invest_bot/dashboard/streamlit_watchlist.py tests/test_streamlit_dashboard.py`
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q`
+
+### 이전 세션 업데이트 (2026-07-06)
 
 - 시장 리포트 생성 후 Discord 전송 경로 1차 구현
   - 대상은 **배치 실행 / 전체 파이프라인** 경로만 포함
@@ -112,11 +124,14 @@
 - 종목 선택 기반 데이터 탐색과 요약 우선 미리보기
 - 리포트 해석 탭 단일 리포트 본문 표시
 - `리포트 해석` / `데이터 탐색` 탭 공통 인터랙티브 차트
-  - Plotly 우선 렌더링 + Altair fallback
-  - 날짜 기준 unified hover / crosshair
-  - preset + 직접 date range 기반 조회 기간 조절
+  - stock dataset에서는 Plotly 기반 전문가용 차트 우선 렌더링
+  - 캔들 + 이동평균선, 거래량, RSI 14, 선택적 투자자 수급 panel 지원
+  - `일봉` / `주봉` / `월봉` selector와 날짜 기준 shared x-axis hover / zoom 지원
+  - 기존 저장 `daily_prices_indicators` / `daily_prices` / `investor_daily`만 사용하며 새 데이터 수집은 하지 않음
+  - Plotly 미사용 환경에서는 Altair fallback 유지
 - 전략별 판단 요약 및 상태별 색상 표시
 - 리포트 관심종목(즐겨찾기) 저장 및 별도 탭 확인
+- 관심종목 탭도 리포트 카드와 동일한 전문가용 주가 차트 경로 사용
 - 여러 종목 기준 배치 실행
   - 데이터 수집
   - 지표 계산
