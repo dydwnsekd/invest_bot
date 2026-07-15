@@ -13,10 +13,13 @@ from invest_bot.dashboard.report_favorites import ReportFavoritesStore
 from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.repositories import SqlAlchemyReportFavoriteSymbolRepository
 from invest_bot.dashboard.streamlit_charts import (
+    aggregate_professional_chart_frame,
     apply_time_window,
     available_chart_presets,
     build_chart,
+    build_professional_plotly_chart,
     default_chart_preset,
+    is_professional_stock_dataset,
     prepare_time_series_frame,
     resolve_range_state,
 )
@@ -64,6 +67,7 @@ from invest_bot.dashboard.streamlit_reports import (
 )
 from invest_bot.dashboard.streamlit_watchlist import refresh_favorite_symbols_if_needed, render_watchlist_tab
 from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolEntry
+from invest_bot.dashboard.streamlit_state import load_professional_chart_frame_for_symbol
 from tests.helpers import init_test_db, make_test_dir
 
 
@@ -251,7 +255,7 @@ def test_prepare_time_series_frame_normalizes_supported_date_columns() -> None:
 
     normalized = prepare_time_series_frame(frame)
 
-    assert list(normalized.columns) == ["stck_bsop_date", "frgn_ntby_qty", "date"]
+    assert list(normalized.columns) == ["date", "frgn_ntby_qty"]
     assert normalized["date"].dt.strftime("%Y-%m-%d").tolist() == ["2026-03-28", "2026-03-29"]
 
 
@@ -278,6 +282,83 @@ def test_available_chart_presets_detects_stock_price_charts() -> None:
     assert default_chart_preset("daily_prices_indicators", presets) == "close_ma"
 
 
+def test_is_professional_stock_dataset_requires_supported_dataset_and_normalized_ohlc() -> None:
+    raw_daily_prices = pd.DataFrame(
+        [
+            {
+                "stck_bsop_date": "20260328",
+                "stck_oprc": 70000,
+                "stck_hgpr": 71000,
+                "stck_lwpr": 69500,
+                "stck_clpr": 70800,
+            }
+        ]
+    )
+
+    incomplete_ohlc = raw_daily_prices.drop(columns=["stck_lwpr"])
+
+    assert is_professional_stock_dataset("daily_prices", raw_daily_prices) is True
+    assert is_professional_stock_dataset("daily_prices_indicators", incomplete_ohlc) is False
+    assert is_professional_stock_dataset("investor_daily", raw_daily_prices) is False
+
+
+def test_weekly_aggregation_uses_ohlcv_and_flow_sum_semantics() -> None:
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-03-30", "open": 10, "high": 15, "low": 9, "close": 14, "volume": 100, "frgn_ntby_qty": 5},
+            {"date": "2026-03-31", "open": 14, "high": 16, "low": 13, "close": 15, "volume": 150, "frgn_ntby_qty": -2},
+            {"date": "2026-04-03", "open": 15, "high": 18, "low": 14, "close": 17, "volume": 120, "frgn_ntby_qty": 7},
+            {"date": "2026-04-06", "open": 18, "high": 20, "low": 17, "close": 19, "volume": 200, "frgn_ntby_qty": 3},
+        ]
+    )
+
+    aggregated = aggregate_professional_chart_frame(frame, "weekly")
+
+    assert aggregated["date"].dt.strftime("%Y-%m-%d").tolist() == ["2026-04-03", "2026-04-06"]
+    assert aggregated[["open", "high", "low", "close", "volume", "frgn_ntby_qty"]].to_dict("records") == [
+        {"open": 10, "high": 18, "low": 9, "close": 17, "volume": 370, "frgn_ntby_qty": 10},
+        {"open": 18, "high": 20, "low": 17, "close": 19, "volume": 200, "frgn_ntby_qty": 3},
+    ]
+
+
+def test_monthly_aggregation_recomputes_ma_and_rsi_from_aggregated_close() -> None:
+    month_ends = pd.date_range("2025-01-31", periods=15, freq="ME")
+    closes = [10, 12, 11, 13, 15, 14, 16, 18, 17, 19, 18, 20, 22, 21, 23]
+    frame = pd.DataFrame(
+        [
+            {
+                "date": month_end,
+                "open": close - 1,
+                "high": close + 2,
+                "low": close - 3,
+                "close": close,
+                "volume": (index + 1) * 100,
+                "ma_5": 999,
+                "rsi_14": 999,
+            }
+            for index, (month_end, close) in enumerate(zip(month_ends, closes, strict=False))
+        ]
+    )
+
+    aggregated = aggregate_professional_chart_frame(frame, "monthly")
+    expected_rsi = streamlit_charts_module.calculate_rsi(pd.Series(closes), period=14).iloc[-1]
+
+    assert aggregated["close"].tolist() == closes
+    assert aggregated.loc[4, "ma_5"] == pytest.approx(12.2)
+    assert aggregated.loc[14, "rsi_14"] == pytest.approx(expected_rsi)
+    assert aggregated.loc[14, "rsi_14"] != 999
+
+
+def test_calculate_rsi_handles_rising_falling_and_flat_windows() -> None:
+    rising = pd.Series(range(1, 17), dtype="float64")
+    falling = pd.Series(range(16, 0, -1), dtype="float64")
+    flat = pd.Series([10.0] * 16)
+
+    assert streamlit_charts_module.calculate_rsi(rising, period=14).iloc[-1] == pytest.approx(100.0)
+    assert streamlit_charts_module.calculate_rsi(falling, period=14).iloc[-1] == pytest.approx(0.0)
+    assert streamlit_charts_module.calculate_rsi(flat, period=14).iloc[-1] == pytest.approx(50.0)
+
+
 def test_available_chart_presets_detects_investor_flow_chart() -> None:
     frame = pd.DataFrame(
         [
@@ -290,6 +371,17 @@ def test_available_chart_presets_detects_investor_flow_chart() -> None:
 
     assert [preset.key for preset in presets] == ["flow"]
     assert default_chart_preset("investor_daily", presets) == "flow"
+
+
+def test_available_chart_presets_ignores_all_null_flow_columns() -> None:
+    frame = pd.DataFrame(
+        [
+            {"stck_bsop_date": "20260328", "frgn_ntby_qty": None, "orgn_ntby_qty": None, "prsn_ntby_qty": None},
+            {"stck_bsop_date": "20260329", "frgn_ntby_qty": None, "orgn_ntby_qty": None, "prsn_ntby_qty": None},
+        ]
+    )
+
+    assert available_chart_presets("investor_daily", frame) == []
 
 
 def test_resolve_range_state_initializes_preset_and_range_dates() -> None:
@@ -430,6 +522,119 @@ def test_build_chart_uses_plotly_library_for_close_ma_when_available(monkeypatch
     assert len(figure.traces) == 3
     assert figure.layout_updates[-1]["hovermode"] == "x unified"
     assert figure.layout_updates[-1]["xaxis"]["showspikes"] is True
+
+
+def test_build_professional_plotly_chart_creates_multi_panel_shared_hover(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeFigure:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.traces = []
+            self.layout_updates = []
+            self.yaxis_updates = []
+            self.hlines = []
+
+        def add_trace(self, trace, row=None, col=None) -> None:
+            self.traces.append((trace, row, col))
+
+        def update_layout(self, **kwargs) -> None:
+            self.layout_updates.append(kwargs)
+
+        def update_yaxes(self, **kwargs) -> None:
+            self.yaxis_updates.append(kwargs)
+
+        def add_hline(self, **kwargs) -> None:
+            self.hlines.append(kwargs)
+
+    class _FakeGo:
+        @staticmethod
+        def Scatter(**kwargs):
+            return ("scatter", kwargs)
+
+        @staticmethod
+        def Bar(**kwargs):
+            return ("bar", kwargs)
+
+        @staticmethod
+        def Candlestick(**kwargs):
+            return ("candlestick", kwargs)
+
+    def _fake_make_subplots(**kwargs):
+        return _FakeFigure(**kwargs)
+
+    monkeypatch.setattr(streamlit_charts_module, "go", _FakeGo)
+    monkeypatch.setattr(streamlit_charts_module, "make_subplots", _fake_make_subplots)
+    frame = aggregate_professional_chart_frame(
+        pd.DataFrame(
+            [
+                {"date": f"2025-{month:02d}-28", "open": month * 10 - 1, "high": month * 10 + 2, "low": month * 10 - 3, "close": month * 10, "volume": month * 100, "frgn_ntby_qty": month}
+                for month in range(1, 16)
+            ]
+        ),
+        "monthly",
+    )
+
+    figure = build_professional_plotly_chart(frame, timeframe="monthly", height=640)
+
+    assert figure.kwargs["shared_xaxes"] is True
+    assert figure.kwargs["rows"] == 4
+    assert figure.layout_updates[-1]["hovermode"] == "x unified"
+    assert figure.layout_updates[-1]["xaxis"]["rangeslider"]["visible"] is False
+    assert any(trace[0][0] == "candlestick" and trace[1] == 1 for trace in figure.traces)
+    assert any(trace[0][0] == "bar" and trace[1] == 2 for trace in figure.traces)
+    assert any(trace[0][0] == "scatter" and trace[1] == 3 for trace in figure.traces)
+    assert any(trace[1] == 4 for trace in figure.traces)
+
+
+def test_build_professional_plotly_chart_skips_fake_zero_volume_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeFigure:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.traces = []
+            self.layout_updates = []
+            self.yaxis_updates = []
+            self.hlines = []
+
+        def add_trace(self, trace, row=None, col=None) -> None:
+            self.traces.append((trace, row, col))
+
+        def update_layout(self, **kwargs) -> None:
+            self.layout_updates.append(kwargs)
+
+        def update_yaxes(self, **kwargs) -> None:
+            self.yaxis_updates.append(kwargs)
+
+        def add_hline(self, **kwargs) -> None:
+            self.hlines.append(kwargs)
+
+    class _FakeGo:
+        @staticmethod
+        def Scatter(**kwargs):
+            return ("scatter", kwargs)
+
+        @staticmethod
+        def Bar(**kwargs):
+            return ("bar", kwargs)
+
+        @staticmethod
+        def Candlestick(**kwargs):
+            return ("candlestick", kwargs)
+
+    monkeypatch.setattr(streamlit_charts_module, "go", _FakeGo)
+    monkeypatch.setattr(streamlit_charts_module, "make_subplots", lambda **kwargs: _FakeFigure(**kwargs))
+
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-06-29", "open": 98, "high": 101, "low": 96, "close": 100, "rsi_14": 55.0},
+            {"date": "2026-06-30", "open": 105, "high": 112, "low": 104, "close": 110, "rsi_14": 60.0},
+        ]
+    )
+
+    figure = build_professional_plotly_chart(frame, timeframe="daily", height=560)
+
+    assert figure is not None
+    assert not any(trace[0][0] == "bar" and trace[1] == 2 for trace in figure.traces)
+    assert figure.kwargs["subplot_titles"][1] == "거래량 없음"
+    assert any(update["title_text"] == "거래량 없음" and update["row"] == 2 for update in figure.yaxis_updates)
 
 
 def test_build_chart_preserves_full_filtered_range_instead_of_retruncating() -> None:
@@ -753,14 +958,15 @@ def test_render_chart_selector_adds_period_controls_and_uses_plotly_renderer(mon
     fake_st = _FakeStreamlit()
     monkeypatch.setattr(streamlit_charts_module, "st", fake_st)
     monkeypatch.setattr(streamlit_charts_module, "go", object())
+    monkeypatch.setattr(streamlit_charts_module, "make_subplots", object())
     monkeypatch.setattr(streamlit_charts_module, "preferred_chart_library", lambda: "plotly")
-    monkeypatch.setattr(streamlit_charts_module, "build_chart", lambda *args, **kwargs: {"engine": "plotly"})
+    monkeypatch.setattr(streamlit_charts_module, "build_professional_plotly_chart", lambda *args, **kwargs: {"engine": "plotly"})
 
     frame = pd.DataFrame(
         [
-            {"date": "2026-01-01", "close": 10, "ma_5": 9, "ma_20": 8},
-            {"date": "2026-02-15", "close": 20, "ma_5": 19, "ma_20": 18},
-            {"date": "2026-03-31", "close": 30, "ma_5": 29, "ma_20": 28},
+            {"date": "2026-01-01", "open": 9, "high": 11, "low": 8, "close": 10, "volume": 100},
+            {"date": "2026-02-15", "open": 19, "high": 21, "low": 18, "close": 20, "volume": 120},
+            {"date": "2026-03-31", "open": 29, "high": 31, "low": 28, "close": 30, "volume": 140},
         ]
     )
 
@@ -771,11 +977,85 @@ def test_render_chart_selector_adds_period_controls_and_uses_plotly_renderer(mon
         height=280,
     )
 
-    assert "차트 유형" in fake_st.selectbox_labels
+    assert "차트 유형" not in fake_st.selectbox_labels
     assert "빠른 조회 기간" in fake_st.radio_labels
+    assert "봉 기준" in fake_st.radio_labels
     assert "직접 기간 선택" in fake_st.date_input_labels
     assert fake_st.plotly_chart_calls == [{"engine": "plotly"}]
     assert fake_st.session_state["report_chart_range_dates"] == (date(2026, 1, 1), date(2026, 3, 31))
+
+
+def test_render_chart_selector_shows_no_flow_caption_for_professional_chart_without_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_charts_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_charts_module, "go", object())
+    monkeypatch.setattr(streamlit_charts_module, "make_subplots", object())
+    monkeypatch.setattr(streamlit_charts_module, "preferred_chart_library", lambda: "plotly")
+    monkeypatch.setattr(streamlit_charts_module, "build_professional_plotly_chart", lambda *args, **kwargs: {"engine": "plotly"})
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "open": 9, "high": 11, "low": 8, "close": 10, "volume": 100},
+            {"date": "2026-01-02", "open": 10, "high": 12, "low": 9, "close": 11, "volume": 110},
+        ]
+    )
+
+    streamlit_charts_module.render_chart_selector(
+        frame,
+        dataset_name="daily_prices_indicators",
+        key_prefix="report_chart",
+        height=280,
+    )
+
+    assert "수급 데이터 없음" in fake_st.caption_calls
+
+
+def test_render_chart_selector_treats_all_null_flow_columns_as_no_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_charts_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_charts_module, "go", object())
+    monkeypatch.setattr(streamlit_charts_module, "make_subplots", object())
+    monkeypatch.setattr(streamlit_charts_module, "preferred_chart_library", lambda: "plotly")
+    monkeypatch.setattr(streamlit_charts_module, "build_professional_plotly_chart", lambda *args, **kwargs: {"engine": "plotly"})
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "open": 9, "high": 11, "low": 8, "close": 10, "frgn_ntby_qty": None, "orgn_ntby_qty": None, "prsn_ntby_qty": None},
+            {"date": "2026-01-02", "open": 10, "high": 12, "low": 9, "close": 11, "frgn_ntby_qty": None, "orgn_ntby_qty": None, "prsn_ntby_qty": None},
+        ]
+    )
+
+    streamlit_charts_module.render_chart_selector(
+        frame,
+        dataset_name="daily_prices_indicators",
+        key_prefix="report_chart",
+        height=280,
+    )
+
+    assert "수급 데이터 없음" in fake_st.caption_calls
+
+
+def test_render_chart_selector_keeps_generic_fallback_unchanged_for_non_stock_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_charts_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_charts_module, "go", object())
+    monkeypatch.setattr(streamlit_charts_module, "make_subplots", object())
+    monkeypatch.setattr(streamlit_charts_module, "preferred_chart_library", lambda: "plotly")
+    monkeypatch.setattr(streamlit_charts_module, "build_chart", lambda *args, **kwargs: {"engine": "legacy"})
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "close": 10, "ma_5": 9, "ma_20": 8},
+            {"date": "2026-02-15", "close": 20, "ma_5": 19, "ma_20": 18},
+        ]
+    )
+
+    streamlit_charts_module.render_chart_selector(
+        frame,
+        dataset_name="investor_daily",
+        key_prefix="investor_chart",
+        height=280,
+    )
+
+    assert "차트 유형" in fake_st.selectbox_labels
+    assert "봉 기준" not in fake_st.radio_labels
 
 
 def test_render_range_controls_resets_stale_date_widget_state_when_preset_changes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -943,6 +1223,7 @@ def test_render_market_report_card_toggles_favorite_store(monkeypatch: pytest.Mo
     fake_st = _FakeStreamlit(button_values={"favorite_report_005930_005930_20260624.csv": True})
     monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
     monkeypatch.setattr(streamlit_reports_module, "render_chart_selector", lambda *args, **kwargs: None)
+    monkeypatch.setattr(streamlit_reports_module, "load_professional_chart_frame_for_symbol", lambda *_args, **_kwargs: None)
     preview = _make_report_preview("005930", "삼성전자", "005930_20260624.csv")
     frame = pd.DataFrame([{
         "date": "2026-06-24",
@@ -985,6 +1266,7 @@ def test_render_market_report_card_keeps_chart_for_selected_symbol(monkeypatch: 
         chart_calls.append((dataset_name, key_prefix))
 
     monkeypatch.setattr(streamlit_reports_module, "render_chart_selector", fake_render_chart_selector)
+    professional_calls: list[str] = []
 
     preview = _make_report_preview("005930", "삼성전자", "005930_20260624.csv")
     frame = pd.DataFrame([{
@@ -1002,11 +1284,18 @@ def test_render_market_report_card_keeps_chart_for_selected_symbol(monkeypatch: 
         "rsi_14": 60,
         "golden_cross_reason": "ma_5 crossed above ma_20.",
     }])
-    loaded_symbols: list[str] = []
+    professional_frame = pd.DataFrame(
+        [{"date": "2026-06-24", "open": 90, "high": 110, "low": 85, "close": 100, "ma_5": 90, "ma_20": 80, "rsi_14": 60}]
+    )
 
     def fake_load_indicator(symbol: str):
-        loaded_symbols.append(symbol)
         return pd.DataFrame([{"date": "2026-06-24", "close": 100, "ma_5": 90, "ma_20": 80, "rsi_14": 60}])
+
+    def fake_load_professional(_service, symbol: str):
+        professional_calls.append(symbol)
+        return professional_frame
+
+    monkeypatch.setattr(streamlit_reports_module, "load_professional_chart_frame_for_symbol", fake_load_professional)
 
     streamlit_reports_module.render_market_report_card(
         preview,
@@ -1016,9 +1305,251 @@ def test_render_market_report_card_keeps_chart_for_selected_symbol(monkeypatch: 
         load_indicator_frame_for_symbol=fake_load_indicator,
     )
 
-    assert loaded_symbols == ["005930"]
+    assert professional_calls == ["005930"]
     assert chart_calls == [("daily_prices_indicators", "report_005930_005930_20260624.csv")]
 
+
+def test_render_dataset_detail_uses_professional_chart_frame_for_stock_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
+    preview = _make_dataset_preview("daily_prices", "005930", "삼성전자", "005930_prices.csv")
+    fallback_frame = pd.DataFrame([{"date": "2026-06-24", "symbol_name": "삼성전자", "close": 100}])
+    professional_frame = pd.DataFrame(
+        [{"date": "2026-06-24", "open": 90, "high": 110, "low": 85, "close": 100, "volume": 1000}]
+    )
+    fake_st = _FakeStreamlit(toggle_values={f"toggle_chart_{preview.name}_{preview.symbol}_{preview.path.name}": True})
+    monkeypatch.setattr(streamlit_data_module, "st", fake_st)
+
+    professional_calls: list[str] = []
+    rendered_frames: list[pd.DataFrame] = []
+
+    monkeypatch.setattr(
+        streamlit_data_module,
+        "load_professional_chart_frame_for_symbol",
+        lambda _service, symbol: professional_calls.append(symbol) or professional_frame,
+    )
+    monkeypatch.setattr(
+        streamlit_data_module,
+        "render_chart_selector",
+        lambda frame, dataset_name, key_prefix, height: rendered_frames.append(frame),
+    )
+
+    streamlit_data_module.render_dataset_detail(preview, fallback_frame, DashboardDataService())
+
+    assert professional_calls == ["005930"]
+    assert rendered_frames == [professional_frame]
+
+
+def test_render_dataset_detail_keeps_investor_daily_generic_and_skips_professional_helper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preview = _make_dataset_preview("investor_daily", "005930", "삼성전자", "005930_investor.csv")
+    frame = pd.DataFrame([{"date": "2026-06-24", "frgn_ntby_qty": 100, "orgn_ntby_qty": -20}])
+    fake_st = _FakeStreamlit(toggle_values={f"toggle_chart_{preview.name}_{preview.symbol}_{preview.path.name}": True})
+    monkeypatch.setattr(streamlit_data_module, "st", fake_st)
+
+    helper_calls: list[str] = []
+    rendered_frames: list[pd.DataFrame] = []
+
+    monkeypatch.setattr(
+        streamlit_data_module,
+        "load_professional_chart_frame_for_symbol",
+        lambda _service, symbol: helper_calls.append(symbol) or frame,
+    )
+    monkeypatch.setattr(
+        streamlit_data_module,
+        "render_chart_selector",
+        lambda frame, dataset_name, key_prefix, height: rendered_frames.append(frame),
+    )
+
+    streamlit_data_module.render_dataset_detail(preview, frame, DashboardDataService())
+
+    assert helper_calls == []
+    assert rendered_frames == [frame]
+
+
+
+def test_load_professional_chart_frame_for_symbol_prefers_indicators_and_merges_investor_flow() -> None:
+    service = DashboardDataService(
+        dataset_storage=_FakeDatasetStorage(
+            {
+                ("daily_prices_indicators", "005930"): (
+                    "005930_20260630.csv",
+                    pd.DataFrame(
+                        [
+                            {"date": "2026-06-29", "open": 98, "high": 101, "low": 96, "close": 100, "ma_5": 95},
+                            {"date": "2026-06-30", "open": 105, "high": 112, "low": 104, "close": 110, "ma_5": 97},
+                        ]
+                    ),
+                ),
+                ("investor_daily", "005930"): (
+                    "005930_20260630.csv",
+                    pd.DataFrame(
+                        [
+                            {"stck_bsop_date": "20260629", "frgn_ntby_qty": 10, "orgn_ntby_qty": -3, "prsn_ntby_qty": -7},
+                            {"stck_bsop_date": "20260630", "frgn_ntby_qty": 12, "orgn_ntby_qty": -4, "prsn_ntby_qty": -8},
+                        ]
+                    ),
+                ),
+            }
+        )
+    )
+
+    frame = load_professional_chart_frame_for_symbol(service, "005930")
+
+    assert frame is not None
+    assert frame["date"].dt.strftime("%Y-%m-%d").tolist() == ["2026-06-29", "2026-06-30"]
+    assert frame[["frgn_ntby_qty", "orgn_ntby_qty", "prsn_ntby_qty"]].to_dict("records") == [
+        {"frgn_ntby_qty": 10, "orgn_ntby_qty": -3, "prsn_ntby_qty": -7},
+        {"frgn_ntby_qty": 12, "orgn_ntby_qty": -4, "prsn_ntby_qty": -8},
+    ]
+
+
+def test_load_professional_chart_frame_for_symbol_backfills_volume_from_daily_prices_when_indicator_base_lacks_it() -> None:
+    service = DashboardDataService(
+        dataset_storage=_FakeDatasetStorage(
+            {
+                ("daily_prices_indicators", "005930"): (
+                    "005930_20260630.csv",
+                    pd.DataFrame(
+                        [
+                            {"date": "2026-06-29", "open": 98, "high": 101, "low": 96, "close": 100, "ma_5": 95},
+                            {"date": "2026-06-30", "open": 105, "high": 112, "low": 104, "close": 110, "ma_5": 97},
+                        ]
+                    ),
+                ),
+                ("daily_prices", "005930"): (
+                    "005930_20260601_20260630.csv",
+                    pd.DataFrame(
+                        [
+                            {
+                                "stck_bsop_date": "20260629",
+                                "stck_oprc": "98",
+                                "stck_hgpr": "101",
+                                "stck_lwpr": "96",
+                                "stck_clpr": "100",
+                                "acml_vol": "12345",
+                            },
+                            {
+                                "stck_bsop_date": "20260630",
+                                "stck_oprc": "105",
+                                "stck_hgpr": "112",
+                                "stck_lwpr": "104",
+                                "stck_clpr": "110",
+                                "acml_vol": "23456",
+                            },
+                        ]
+                    ),
+                ),
+            }
+        )
+    )
+
+    frame = load_professional_chart_frame_for_symbol(service, "005930")
+
+    assert frame is not None
+    assert frame["volume"].tolist() == [12345, 23456]
+
+
+def test_load_professional_chart_frame_for_symbol_falls_back_to_normalized_daily_prices_when_indicator_base_lacks_ohlc() -> None:
+    service = DashboardDataService(
+        dataset_storage=_FakeDatasetStorage(
+            {
+                ("daily_prices_indicators", "005930"): (
+                    "005930_20260630.csv",
+                    pd.DataFrame([{"date": "2026-06-30", "close": 110, "ma_5": 97}]),
+                ),
+                ("daily_prices", "005930"): (
+                    "005930_20260601_20260630.csv",
+                    pd.DataFrame(
+                        [
+                            {
+                                "stck_bsop_date": "20260630",
+                                "stck_oprc": "101",
+                                "stck_hgpr": "115",
+                                "stck_lwpr": "99",
+                                "stck_clpr": "110",
+                                "acml_vol": "12345",
+                            }
+                        ]
+                    ),
+                ),
+                ("investor_daily", "005930"): (
+                    "005930_20260630.csv",
+                    pd.DataFrame([{"stck_bsop_date": "20260630", "foreign_net": 25}]),
+                ),
+            }
+        )
+    )
+
+    frame = load_professional_chart_frame_for_symbol(service, "005930")
+
+    assert frame is not None
+    assert frame["date"].dt.strftime("%Y-%m-%d").tolist() == ["2026-06-30"]
+    assert frame.loc[0, "open"] == 101
+    assert frame.loc[0, "high"] == 115
+    assert frame.loc[0, "low"] == 99
+    assert frame.loc[0, "close"] == 110
+    assert frame.loc[0, "volume"] == 12345
+    assert frame.loc[0, "foreign_net"] == 25
+
+
+def test_load_professional_chart_frame_for_symbol_returns_base_without_flow_columns_when_investor_missing() -> None:
+    service = DashboardDataService(
+        dataset_storage=_FakeDatasetStorage(
+            {
+                ("daily_prices_indicators", "005930"): (
+                    "005930_20260630.csv",
+                    pd.DataFrame([{"date": "2026-06-30", "open": 105, "high": 112, "low": 104, "close": 110, "ma_5": 97}]),
+                ),
+            }
+        )
+    )
+
+    frame = load_professional_chart_frame_for_symbol(service, "005930")
+
+    assert frame is not None
+    assert "frgn_ntby_qty" not in frame.columns
+    assert "orgn_ntby_qty" not in frame.columns
+    assert "prsn_ntby_qty" not in frame.columns
+    assert frame.columns.tolist() == ["date", "open", "high", "low", "close", "ma_5"]
+
+
+def test_load_professional_chart_frame_for_symbol_treats_all_null_flow_columns_as_absent() -> None:
+    service = DashboardDataService(
+        dataset_storage=_FakeDatasetStorage(
+            {
+                ("daily_prices_indicators", "005930"): (
+                    "005930_20260630.csv",
+                    pd.DataFrame([{"date": "2026-06-30", "open": 105, "high": 112, "low": 104, "close": 110, "ma_5": 97}]),
+                ),
+                ("investor_daily", "005930"): (
+                    "005930_20260630.csv",
+                    pd.DataFrame([{"stck_bsop_date": "20260630", "frgn_ntby_qty": None, "orgn_ntby_qty": None, "prsn_ntby_qty": None}]),
+                ),
+            }
+        )
+    )
+
+    frame = load_professional_chart_frame_for_symbol(service, "005930")
+
+    assert frame is not None
+    assert "frgn_ntby_qty" not in frame.columns
+    assert "orgn_ntby_qty" not in frame.columns
+    assert "prsn_ntby_qty" not in frame.columns
+
+
+def test_load_professional_chart_frame_for_symbol_returns_none_when_indicator_lacks_ohlc_and_daily_prices_missing() -> None:
+    service = DashboardDataService(
+        dataset_storage=_FakeDatasetStorage(
+            {
+                ("daily_prices_indicators", "005930"): (
+                    "005930_20260630.csv",
+                    pd.DataFrame([{"date": "2026-06-30", "close": 110, "ma_5": 97}]),
+                ),
+            }
+        )
+    )
+
+    assert load_professional_chart_frame_for_symbol(service, "005930") is None
 
 
 def test_refresh_favorite_symbols_bootstraps_missing_data_and_runs_pipeline() -> None:
@@ -1259,6 +1790,7 @@ def test_render_actions_tab_removes_actions_guide_and_keeps_primary_controls_vis
 def test_render_reports_tab_removes_top_metrics_strip_and_keeps_single_report_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_st = _FakeStreamlit()
     monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_reports_module, "load_professional_chart_frame_for_symbol", lambda *_args, **_kwargs: None)
 
     previews = [_make_report_preview("005930", "삼성전자", "005930_20260624.csv")]
     frame = pd.DataFrame([{
@@ -1375,6 +1907,7 @@ def test_streamlit_apptest_smoke_for_actions_reports_and_data_tabs() -> None:
         from pathlib import Path
         from invest_bot.dashboard.service import DashboardDataService
         from invest_bot.dashboard.report_favorites import ReportFavoritesStore
+        import invest_bot.dashboard.streamlit_reports as streamlit_reports_module
         from invest_bot.dashboard.streamlit_reports import render_reports_tab
         from invest_bot.dashboard.service import DatasetPreview
         from invest_bot.db.engine import build_engine, build_session_factory
@@ -1415,6 +1948,7 @@ def test_streamlit_apptest_smoke_for_actions_reports_and_data_tabs() -> None:
         favorites_store = ReportFavoritesStore(
             SqlAlchemyReportFavoriteSymbolRepository(build_session_factory(build_engine(database_url)))
         )
+        streamlit_reports_module.load_professional_chart_frame_for_symbol = lambda *_args, **_kwargs: None
         render_reports_tab(
             SimpleNamespace(processed_previews=[preview]),
             DashboardDataService(),

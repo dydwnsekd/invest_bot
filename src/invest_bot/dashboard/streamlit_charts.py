@@ -12,6 +12,11 @@ try:
 except ImportError:  # pragma: no cover - exercised via fallback path when dependency is absent.
     go = None
 
+try:
+    from plotly.subplots import make_subplots
+except ImportError:  # pragma: no cover - exercised via fallback path when dependency is absent.
+    make_subplots = None
+
 
 @dataclass(frozen=True, slots=True)
 class ChartPreset:
@@ -105,6 +110,23 @@ RANGE_PRESET_OPTIONS = (
     RangePresetOption("all", "전체"),
 )
 
+TIMEFRAME_OPTIONS = (
+    ("daily", "일봉"),
+    ("weekly", "주봉"),
+    ("monthly", "월봉"),
+)
+TIMEFRAME_LABELS = dict(TIMEFRAME_OPTIONS)
+PROFESSIONAL_STOCK_DATASETS = {"daily_prices", "daily_prices_indicators"}
+NORMALIZED_STOCK_COLUMN_MAP = {
+    "stck_bsop_date": "date",
+    "stck_oprc": "open",
+    "stck_hgpr": "high",
+    "stck_lwpr": "low",
+    "stck_clpr": "close",
+    "acml_vol": "volume",
+}
+FLOW_ROW_TITLE = "수급"
+
 
 def available_chart_presets(dataset_name: str, frame: pd.DataFrame) -> list[ChartPreset]:
     normalized = prepare_time_series_frame(frame)
@@ -154,7 +176,7 @@ def chart_priority_for_dataset(dataset_name: str) -> list[str]:
 
 
 def prepare_time_series_frame(frame: pd.DataFrame, max_points: int = 90) -> pd.DataFrame:
-    working = frame.copy()
+    working = frame.copy().rename(columns=NORMALIZED_STOCK_COLUMN_MAP)
     date_column = infer_date_column(working)
     if date_column is None:
         return pd.DataFrame()
@@ -172,6 +194,73 @@ def prepare_time_series_frame(frame: pd.DataFrame, max_points: int = 90) -> pd.D
         except (TypeError, ValueError):
             continue
     return working.tail(max_points).reset_index(drop=True)
+
+
+def is_professional_stock_dataset(dataset_name: str, frame: pd.DataFrame) -> bool:
+    if dataset_name not in PROFESSIONAL_STOCK_DATASETS:
+        return False
+    normalized = prepare_time_series_frame(frame, max_points=len(frame))
+    return not normalized.empty and {"open", "high", "low", "close"}.issubset(normalized.columns)
+
+
+def normalize_timeframe_key(timeframe: str | None) -> str:
+    candidate = str(timeframe or "daily")
+    if candidate in TIMEFRAME_LABELS:
+        return candidate
+    return "daily"
+
+
+def aggregate_professional_chart_frame(frame: pd.DataFrame, timeframe: str) -> pd.DataFrame:
+    normalized = prepare_time_series_frame(frame, max_points=len(frame))
+    if normalized.empty:
+        return normalized
+
+    resolved_timeframe = normalize_timeframe_key(timeframe)
+    if resolved_timeframe == "daily":
+        aggregated = normalized.copy()
+    else:
+        period = normalized["date"].dt.to_period("W-FRI" if resolved_timeframe == "weekly" else "M")
+        group_keys = period.astype(str)
+        aggregations: dict[str, str] = {"date": "last", "open": "first", "high": "max", "low": "min", "close": "last"}
+        if "volume" in normalized.columns:
+            aggregations["volume"] = "sum"
+        for column in flow_series_columns(normalized):
+            aggregations[column] = "sum"
+        aggregated = (
+            normalized.assign(_period_key=group_keys)
+            .groupby("_period_key", sort=True, as_index=False)
+            .agg(aggregations)
+        )
+    return recompute_technical_indicators(aggregated)
+
+
+def recompute_technical_indicators(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy()
+    if result.empty or "close" not in result.columns:
+        return result
+    result["close"] = pd.to_numeric(result["close"], errors="coerce")
+    for column in ("open", "high", "low", "volume", *flow_series_columns(result)):
+        if column in result.columns:
+            result[column] = pd.to_numeric(result[column], errors="coerce")
+    result["ma_5"] = result["close"].rolling(window=5, min_periods=5).mean()
+    result["ma_20"] = result["close"].rolling(window=20, min_periods=20).mean()
+    result["ma_60"] = result["close"].rolling(window=60, min_periods=60).mean()
+    result["rsi_14"] = calculate_rsi(result["close"], period=14)
+    return result.sort_values("date").reset_index(drop=True)
+
+
+def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=period, min_periods=period).mean()
+    avg_loss = loss.rolling(window=period, min_periods=period).mean()
+    relative_strength = avg_gain / avg_loss.replace(0, pd.NA)
+    rsi = 100 - (100 / (1 + relative_strength))
+    rsi = rsi.mask((avg_gain > 0) & (avg_loss == 0), 100.0)
+    rsi = rsi.mask((avg_gain == 0) & (avg_loss > 0), 0.0)
+    rsi = rsi.mask((avg_gain == 0) & (avg_loss == 0), 50.0)
+    return rsi
 
 
 def preset_days(preset: str) -> int | None:
@@ -302,7 +391,7 @@ def infer_date_column(frame: pd.DataFrame) -> str | None:
 def flow_series_columns(frame: pd.DataFrame) -> list[str]:
     columns: list[str] = []
     for column in ("foreign_net", "institutional_net", "personal_net", "frgn_ntby_qty", "orgn_ntby_qty", "prsn_ntby_qty"):
-        if column in frame.columns:
+        if column in frame.columns and pd.to_numeric(frame[column], errors="coerce").notna().any():
             columns.append(column)
     return columns
 
@@ -314,6 +403,12 @@ def render_chart_selector(
     key_prefix: str,
     height: int = 280,
 ) -> None:
+    if is_professional_stock_dataset(dataset_name, frame):
+        if preferred_chart_library() == "plotly" and go is not None and make_subplots is not None:
+            _render_professional_chart_selector(frame, key_prefix=key_prefix, height=height)
+            return
+        st.info("전문가용 주가 차트를 그리려면 Plotly가 필요해 기본 차트로 대신 보여드립니다.")
+
     presets = available_chart_presets(dataset_name, frame)
     if not presets:
         st.caption("이 데이터셋은 현재 차트로 해석할 수 있는 날짜·수치 컬럼이 충분하지 않습니다.")
@@ -343,6 +438,43 @@ def render_chart_selector(
     chart = build_chart(filtered_frame, selected_key, height=height, library=preferred_chart_library())
     if chart is None:
         st.info("선택한 차트를 그리기 위한 컬럼이 부족합니다.")
+        return
+    render_chart(chart, key_prefix=key_prefix)
+
+
+def _render_professional_chart_selector(
+    frame: pd.DataFrame,
+    *,
+    key_prefix: str,
+    height: int,
+) -> None:
+    selected_preset, selected_dates = render_range_controls(frame, key_prefix=key_prefix)
+    timeframe_keys = [key for key, _label in TIMEFRAME_OPTIONS]
+    timeframe_key = st.radio(
+        "봉 기준",
+        options=timeframe_keys,
+        index=0,
+        format_func=lambda key: TIMEFRAME_LABELS[key],
+        horizontal=True,
+        key=f"{key_prefix}_timeframe",
+    )
+    range_state = resolve_range_state(
+        frame,
+        key_prefix=key_prefix,
+        selected_preset=selected_preset,
+        selected_dates=selected_dates,
+    )
+    filtered_frame = apply_time_window(frame, range_state.dates)
+    aggregated = aggregate_professional_chart_frame(filtered_frame, timeframe_key)
+    st.caption(f"조회 기간: {range_state.dates[0].isoformat()} ~ {range_state.dates[1].isoformat()}")
+    if aggregated.empty:
+        st.info("선택한 기간에 표시할 차트 데이터가 없습니다.")
+        return
+    if not flow_series_columns(aggregated):
+        st.caption("수급 데이터 없음")
+    chart = build_professional_plotly_chart(aggregated, timeframe=timeframe_key, height=height)
+    if chart is None:
+        st.info("전문가용 차트를 그리기 위한 컬럼이 부족합니다.")
         return
     render_chart(chart, key_prefix=key_prefix)
 
@@ -419,6 +551,123 @@ def build_chart(frame: pd.DataFrame, chart_type: str, *, height: int = 280, libr
     if chart_type == "flow":
         return build_flow_chart(normalized, height=height)
     return None
+
+
+def build_professional_plotly_chart(frame: pd.DataFrame, *, timeframe: str = "daily", height: int = 560):
+    if go is None or make_subplots is None:
+        return None
+    required = {"date", "open", "high", "low", "close", "rsi_14"}
+    if not required.issubset(frame.columns):
+        return None
+
+    chart_data = frame.sort_values("date").reset_index(drop=True)
+    flow_columns = flow_series_columns(chart_data)
+    has_volume = "volume" in chart_data.columns and pd.to_numeric(chart_data["volume"], errors="coerce").notna().any()
+    row_titles = [
+        f"가격 ({TIMEFRAME_LABELS[normalize_timeframe_key(timeframe)]})",
+        "거래량" if has_volume else "거래량 없음",
+        "RSI 14",
+    ]
+    if flow_columns:
+        row_titles.append(FLOW_ROW_TITLE)
+    row_count = 4 if flow_columns else 3
+    row_heights = [0.5, 0.18, 0.18] + ([0.14] if flow_columns else [])
+    figure = make_subplots(
+        rows=row_count,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.03,
+        row_heights=row_heights,
+        subplot_titles=row_titles,
+    )
+    figure.add_trace(
+        go.Candlestick(
+            x=chart_data["date"],
+            open=chart_data["open"],
+            high=chart_data["high"],
+            low=chart_data["low"],
+            close=chart_data["close"],
+            name="캔들",
+            increasing_line_color="#dc2626",
+            decreasing_line_color="#2563eb",
+            hovertemplate=None,
+        ),
+        row=1,
+        col=1,
+    )
+    palette = dict(zip(PRICE_COLOR_DOMAIN, PRICE_COLOR_RANGE, strict=False))
+    for column in ("ma_5", "ma_20", "ma_60"):
+        if column not in chart_data.columns:
+            continue
+        figure.add_trace(
+            go.Scatter(
+                x=chart_data["date"],
+                y=chart_data[column],
+                mode="lines",
+                name=SERIES_LABELS.get(column, column),
+                line=dict(width=2, color=palette.get(SERIES_LABELS.get(column, column))),
+                hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:,.0f}<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
+    if has_volume:
+        figure.add_trace(
+            go.Bar(
+                x=chart_data["date"],
+                y=pd.to_numeric(chart_data["volume"], errors="coerce"),
+                name="거래량",
+                marker_color="#2563eb",
+                hovertemplate="%{x|%Y-%m-%d}<br>거래량: %{y:,.0f}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
+    figure.add_trace(
+        go.Scatter(
+            x=chart_data["date"],
+            y=chart_data["rsi_14"],
+            mode="lines",
+            name="RSI 14",
+            line=dict(width=2, color="#7c3aed"),
+            hovertemplate="%{x|%Y-%m-%d}<br>RSI 14: %{y:.2f}<extra></extra>",
+        ),
+        row=3,
+        col=1,
+    )
+    figure.add_hline(y=30, line_dash="dash", line_color="#9ca3af", row=3, col=1)
+    figure.add_hline(y=70, line_dash="dash", line_color="#9ca3af", row=3, col=1)
+    if flow_columns:
+        palette = dict(zip(FLOW_COLOR_DOMAIN, FLOW_COLOR_RANGE, strict=False))
+        for column in flow_columns:
+            label = SERIES_LABELS.get(column, column)
+            figure.add_trace(
+                go.Scatter(
+                    x=chart_data["date"],
+                    y=chart_data[column],
+                    mode="lines",
+                    name=label,
+                    line=dict(width=2, color=palette.get(label)),
+                    hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:,.0f}<extra></extra>",
+                ),
+                row=4,
+                col=1,
+            )
+        figure.add_hline(y=0, line_dash="dot", line_color="#9ca3af", row=4, col=1)
+
+    figure.update_layout(
+        height=height,
+        hovermode="x unified",
+        margin=dict(l=20, r=20, t=24, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis=dict(showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikethickness=1, rangeslider=dict(visible=False)),
+    )
+    figure.update_yaxes(title_text="가격", row=1, col=1)
+    figure.update_yaxes(title_text="거래량" if has_volume else "거래량 없음", row=2, col=1)
+    figure.update_yaxes(title_text="RSI 14", range=[0, 100], row=3, col=1)
+    if flow_columns:
+        figure.update_yaxes(title_text="순매수", row=4, col=1)
+    return figure
 
 
 def build_plotly_chart(frame: pd.DataFrame, chart_type: str, *, height: int = 280):

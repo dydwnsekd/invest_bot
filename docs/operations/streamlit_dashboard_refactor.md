@@ -11,6 +11,8 @@
 - 현재 파일 크기: 72 lines
 - 현재 전략: 동작 변경 없이 안전한 분리부터 순차 진행
 - 후속 기능 반영: `streamlit_reports.py`가 단일 리포트 본문 흐름과 전략별 판단 요약 렌더링까지 담당
+- 현재 공용 차트 경계: `streamlit_charts.py` / `streamlit_state.py`가 리포트 해석·데이터 탐색 공용 전문가형 주가 차트와 데이터 조합(`daily_prices_indicators` / `daily_prices` / `investor_daily`)을 담당
+- 현재 관심종목 경계: Watchlist는 별도 차트 구현을 두지 않고 report-card 경로를 재사용해 같은 전문가형 차트를 상속
 - 현재 테마/폰트 소유 경계: `.streamlit/config.toml`과 `src/invest_bot/dashboard/streamlit_styles.py`가 A+ dark terminal theme/font를 함께 관리
 
 ## 진행 원칙
@@ -103,12 +105,20 @@
   - sidebar / hero / card / summary box / tabs / semantic badge 대비를 dark terminal 기준으로 더 선명하게 재조정
   - 한글 가독성 우선 폰트 스택(`Pretendard`, `Noto Sans KR`, `Apple SD Gothic Neo`, `Malgun Gothic`)과 보조 numeric/label fallback(`Inter`, `IBM Plex Sans`)을 반영
   - Material Symbols override는 그대로 유지
+  - 문서 기준 동작도 현재 구현에 맞춰 재정리
+    - stock dataset 공용 차트는 Plotly 기반 전문가형 주가 차트 경로를 우선 사용
+    - 구성: 캔들 + 이동평균선, 거래량, RSI 14, 선택적 수급 panel, `일봉` / `주봉` / `월봉`, shared x-axis hover / zoom
+    - 데이터 소스는 기존 저장 `daily_prices_indicators` / `daily_prices` / `investor_daily`만 사용
+    - 수급이 비어도 차트는 유지하고 `수급 데이터 없음`만 표시
+    - Watchlist는 report-card 렌더링 경로 재사용으로 같은 차트를 상속
 - 범위 메모
   - 데이터 / 전략 / 리포트 로직은 변경하지 않음
   - 새로운 기능은 추가하지 않음
 - 검증 결과
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_charts.py src/invest_bot/dashboard/streamlit_state.py src/invest_bot/dashboard/streamlit_reports.py src/invest_bot/dashboard/streamlit_data.py src/invest_bot/dashboard/streamlit_watchlist.py tests/test_streamlit_dashboard.py`
+  - 결과: `PASS`
   - `PYTHONPATH=src:. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
-  - 결과: `60 passed in 1.32s`
+  - 결과: `78 passed in 0.70s`
   - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_styles.py tests/test_streamlit_dashboard.py`
   - 결과: `PASS`
   - `git diff --check -- .streamlit/config.toml src/invest_bot/dashboard/streamlit_styles.py tests/test_streamlit_dashboard.py docs/tasks/04_dashboard.md docs/operations/streamlit_dashboard_refactor.md`

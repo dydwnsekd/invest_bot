@@ -9,6 +9,7 @@ import streamlit as st
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
 from invest_bot.dashboard.streamlit_charts import render_chart_selector
 from invest_bot.dashboard.streamlit_formatters import format_frame_for_display, format_symbol_display
+from invest_bot.dashboard.streamlit_state import load_professional_chart_frame_for_symbol
 
 DATASET_DISPLAY_ORDER = {
     "stock_info": 0,
@@ -132,8 +133,16 @@ def render_dataset_summary_card(preview: DatasetPreview, service: DashboardDataS
 
 def render_dataset_detail(preview: DatasetPreview, frame, service: DashboardDataService) -> None:
     if st.toggle("차트 보기", key=f"toggle_chart_{preview.name}_{preview.symbol}_{preview.path.name}"):
+        chart_frame = frame
+        if (
+            preview.name in {"daily_prices", "daily_prices_indicators"}
+            and str(preview.symbol).strip()
+        ):
+            professional_frame = load_professional_chart_frame_for_symbol(service, preview.symbol)
+            if professional_frame is not None:
+                chart_frame = professional_frame
         render_chart_selector(
-            frame,
+            chart_frame,
             dataset_name=preview.name,
             key_prefix=f"{preview.name}_{preview.symbol}_{preview.path.name}",
             height=260,

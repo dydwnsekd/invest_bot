@@ -18,6 +18,7 @@ from invest_bot.dashboard.streamlit_formatters import (
     state_label,
     state_text_color,
 )
+from invest_bot.dashboard.streamlit_state import load_professional_chart_frame_for_symbol
 
 REPORT_SELECTION_KEY = "report_selected_entry_key"
 REPORT_FAVORITES_ONLY_KEY = "report_favorites_only"
@@ -372,10 +373,14 @@ def render_market_report_card(
         if reason:
             st.caption(f"판단 근거: {reason}")
 
-        indicator_frame = load_indicator_frame_for_symbol(preview.symbol)
-        if indicator_frame is not None:
+        # Shared report-card path is also used by Watchlist, so professional chart
+        # assembly here intentionally lets Watchlist inherit the upgraded stock frame.
+        chart_frame = load_professional_chart_frame_for_symbol(service, preview.symbol)
+        if chart_frame is None:
+            chart_frame = load_indicator_frame_for_symbol(preview.symbol)
+        if chart_frame is not None:
             render_chart_selector(
-                indicator_frame,
+                chart_frame,
                 dataset_name="daily_prices_indicators",
                 key_prefix=f"report_{preview.symbol}_{preview.path.name}",
                 height=280,
