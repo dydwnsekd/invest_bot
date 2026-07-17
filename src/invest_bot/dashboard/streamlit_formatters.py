@@ -69,7 +69,13 @@ def format_display_value(service: DashboardDataService, column: str, value: obje
         return state_label(service, str(value))
     if column in {"summary"}:
         return localize_report_summary(service, str(value))
-    if column in {"signal_reason", "golden_cross_reason"}:
+    if column in {
+        "signal_reason",
+        "golden_cross_reason",
+        "rsi_strategy_reason",
+        "trend_filter_reason",
+        "mean_reversion_reason",
+    }:
         return localize_reason(str(value))
     if column in NUMERIC_COLUMNS:
         return format_number(value)
@@ -143,6 +149,85 @@ def localize_reason(reason: str) -> str:
         flags=re.IGNORECASE,
     ):
         return f"{humanize_indicator_name(match.group('short'))}과 {humanize_indicator_name(match.group('long'))}의 교차는 아직 확인되지 않았습니다."
+
+    if match := re.fullmatch(
+        r"(?P<indicator>[\w_]+)\s+is\s+(?P<value>-?\d+(?:\.\d+)?),\s+at or below buy threshold\s+(?P<threshold>-?\d+(?:\.\d+)?)\.",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return f"{humanize_indicator_name(match.group('indicator'))}가 {match.group('value')}로 매수 기준 {match.group('threshold')} 이하입니다."
+    if match := re.fullmatch(
+        r"(?P<indicator>[\w_]+)\s+is\s+(?P<value>-?\d+(?:\.\d+)?),\s+at or above sell threshold\s+(?P<threshold>-?\d+(?:\.\d+)?)\.",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return f"{humanize_indicator_name(match.group('indicator'))}가 {match.group('value')}로 매도 기준 {match.group('threshold')} 이상입니다."
+    if match := re.fullmatch(
+        r"(?P<indicator>[\w_]+)\s+is\s+(?P<value>-?\d+(?:\.\d+)?),\s+between buy threshold\s+(?P<buy>-?\d+(?:\.\d+)?)\s+and sell threshold\s+(?P<sell>-?\d+(?:\.\d+)?)\.",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return f"{humanize_indicator_name(match.group('indicator'))}가 {match.group('value')}로 매수 기준 {match.group('buy')}과 매도 기준 {match.group('sell')} 사이입니다."
+    if match := re.fullmatch(
+        r"(?P<close>[\w_]+)\s+is\s+(?P<close_value>-?\d+(?:\.\d+)?),\s+above\s+(?P<baseline>[\w_]+)\s+(?P<baseline_value>-?\d+(?:\.\d+)?)\s+and above\s+(?P<previous>[\w_]+)\s+(?P<previous_value>-?\d+(?:\.\d+)?)\.",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return (
+            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')}와 "
+            f"{humanize_indicator_name(match.group('previous'))} {match.group('previous_value')}보다 높습니다."
+        )
+    if match := re.fullmatch(
+        r"(?P<close>[\w_]+)\s+is\s+(?P<close_value>-?\d+(?:\.\d+)?),\s+below\s+(?P<baseline>[\w_]+)\s+(?P<baseline_value>-?\d+(?:\.\d+)?)\s+and below\s+(?P<previous>[\w_]+)\s+(?P<previous_value>-?\d+(?:\.\d+)?)\.",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return (
+            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')}와 "
+            f"{humanize_indicator_name(match.group('previous'))} {match.group('previous_value')}보다 낮습니다."
+        )
+    if match := re.fullmatch(
+        r"(?P<close>[\w_]+)\s+is\s+(?P<close_value>-?\d+(?:\.\d+)?),\s+showing a mixed signal versus\s+(?P<baseline>[\w_]+)\s+(?P<baseline_value>-?\d+(?:\.\d+)?)\s+and\s+(?P<previous>[\w_]+)\s+(?P<previous_value>-?\d+(?:\.\d+)?)\.",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return (
+            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')} 및 "
+            f"{humanize_indicator_name(match.group('previous'))} {match.group('previous_value')} 대비 혼조 신호입니다."
+        )
+    if match := re.fullmatch(
+        r"(?P<close>[\w_]+)\s+is\s+(?P<close_value>-?\d+(?:\.\d+)?),\s+at\s+(?P<ratio>-?\d+(?:\.\d+)?)\s+of\s+(?P<baseline>[\w_]+)\s+(?P<baseline_value>-?\d+(?:\.\d+)?),\s+at or below buy ratio\s+(?P<threshold>-?\d+(?:\.\d+)?)\.",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return (
+            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')} 대비 {match.group('ratio')}배이며, "
+            f"매수 비율 기준 {match.group('threshold')} 이하입니다."
+        )
+    if match := re.fullmatch(
+        r"(?P<close>[\w_]+)\s+is\s+(?P<close_value>-?\d+(?:\.\d+)?),\s+at\s+(?P<ratio>-?\d+(?:\.\d+)?)\s+of\s+(?P<baseline>[\w_]+)\s+(?P<baseline_value>-?\d+(?:\.\d+)?),\s+at or above sell ratio\s+(?P<threshold>-?\d+(?:\.\d+)?)\.",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return (
+            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')} 대비 {match.group('ratio')}배이며, "
+            f"매도 비율 기준 {match.group('threshold')} 이상입니다."
+        )
+    if match := re.fullmatch(
+        r"(?P<close>[\w_]+)\s+is\s+(?P<close_value>-?\d+(?:\.\d+)?),\s+at\s+(?P<ratio>-?\d+(?:\.\d+)?)\s+of\s+(?P<baseline>[\w_]+)\s+(?P<baseline_value>-?\d+(?:\.\d+)?),\s+inside the mean-reversion band\.",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return (
+            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')} 대비 {match.group('ratio')}배이며, "
+            "평균회귀 기준 범위 안에 있습니다."
+        )
     replacements = {
         "Not enough data to detect a crossover.": "교차 여부를 판단할 데이터가 아직 충분하지 않습니다.",
         "At least two rows are required to detect a crossover.": "교차 여부를 판단하려면 최소 두 시점의 데이터가 필요합니다.",
@@ -215,6 +300,9 @@ def humanize_indicator_name(value: str) -> str:
         "ma_5": "5일 이동평균선",
         "ma_20": "20일 이동평균선",
         "ma_60": "60일 이동평균선",
+        "close": "종가",
+        "prev_close": "직전 종가",
+        "rsi_14": "RSI 14",
     }
     return mapping.get(value.strip().lower(), value.strip())
 

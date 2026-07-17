@@ -726,6 +726,23 @@ def test_format_report_selection_option_marks_favorite_entries() -> None:
     assert format_report_selection_option(entries, "005930:a.csv") == "★ 삼성전자 (005930) · 매수 관점 · 2026-06-24"
 
 
+def test_localize_reason_formats_strategy_reason_patterns() -> None:
+    assert _localize_reason("rsi_14 is 25.00, at or below buy threshold 30.00.") == "RSI 14가 25.00로 매수 기준 30.00 이하입니다."
+    assert _localize_reason("rsi_14 is 75.00, at or above sell threshold 70.00.") == "RSI 14가 75.00로 매도 기준 70.00 이상입니다."
+    assert _localize_reason("close is 65000.00, below ma_60 68900.00 and below prev_close 66000.00.") == (
+        "종가가 65000.00로 60일 이동평균선 68900.00와 직전 종가 66000.00보다 낮습니다."
+    )
+    assert _localize_reason("close is 70000.00, showing a mixed signal versus ma_60 68900.00 and prev_close 71500.00.") == (
+        "종가가 70000.00로 60일 이동평균선 68900.00 및 직전 종가 71500.00 대비 혼조 신호입니다."
+    )
+    assert _localize_reason("close is 68000.00, at 0.9600 of ma_20 70800.00, at or below buy ratio 0.9700.") == (
+        "종가가 68000.00로 20일 이동평균선 70800.00 대비 0.9600배이며, 매수 비율 기준 0.9700 이하입니다."
+    )
+    assert _localize_reason("close is 74000.00, at 1.0400 of ma_20 71150.00, at or above sell ratio 1.0300.") == (
+        "종가가 74000.00로 20일 이동평균선 71150.00 대비 1.0400배이며, 매도 비율 기준 1.0300 이상입니다."
+    )
+
+
 def test_build_strategy_summary_items_formats_three_strategy_rows() -> None:
     service = DashboardDataService()
     row = pd.Series(
@@ -741,9 +758,11 @@ def test_build_strategy_summary_items_formats_three_strategy_rows() -> None:
 
     items = build_strategy_summary_items(service, row)
 
-    assert [item["label"] for item in items] == ["RSI", "Trend Filter", "Mean Reversion"]
+    assert [item["label"] for item in items] == ["RSI 전략", "추세 필터 전략", "평균회귀 전략"]
     assert [item["signal_label"] for item in items] == ["관망", "매수 관점", "관망"]
-    assert items[1]["reason"].startswith("close is 72000.00")
+    assert items[0]["reason"] == "RSI 14가 58.00로 매수 기준 30.00과 매도 기준 70.00 사이입니다."
+    assert items[1]["reason"] == "종가가 72000.00로 60일 이동평균선 68900.00와 직전 종가 71500.00보다 높습니다."
+    assert items[2]["reason"] == "종가가 72000.00로 20일 이동평균선 70200.00 대비 1.0256배이며, 평균회귀 기준 범위 안에 있습니다."
 
 
 class _FakeMetricColumn:

@@ -236,9 +236,9 @@ def format_report_selection_option(report_entries: list[dict[str, object]], entr
 
 def build_strategy_summary_items(service: DashboardDataService, row: pd.Series) -> list[dict[str, str]]:
     strategies = [
-        ("RSI", "rsi_strategy_signal", "rsi_strategy_reason"),
-        ("Trend Filter", "trend_filter_signal", "trend_filter_reason"),
-        ("Mean Reversion", "mean_reversion_signal", "mean_reversion_reason"),
+        ("RSI 전략", "rsi_strategy_signal", "rsi_strategy_reason"),
+        ("추세 필터 전략", "trend_filter_signal", "trend_filter_reason"),
+        ("평균회귀 전략", "mean_reversion_signal", "mean_reversion_reason"),
     ]
     items: list[dict[str, str]] = []
     for label, signal_key, reason_key in strategies:
@@ -249,7 +249,7 @@ def build_strategy_summary_items(service: DashboardDataService, row: pd.Series) 
                 "label": label,
                 "signal": signal,
                 "signal_label": state_label(service, signal),
-                "reason": reason or "판단 근거가 아직 없습니다.",
+                "reason": localize_reason(reason) if reason else "판단 근거가 아직 없습니다.",
             }
         )
     return items
