@@ -487,34 +487,53 @@ def render_range_controls(
     current_state = resolve_range_state(frame, key_prefix=key_prefix)
     preset_options = [option.key for option in RANGE_PRESET_OPTIONS]
     preset_labels = {option.key: option.label for option in RANGE_PRESET_OPTIONS}
+    mode_options = ["preset", "custom"]
+    mode_labels = {"preset": "빠른 선택", "custom": "직접 지정"}
+    mode_widget_key = f"{key_prefix}_range_mode_widget"
     preset_widget_key = f"{key_prefix}_range_preset_widget"
     date_widget_key = f"{key_prefix}_range_dates_widget"
 
-    selected_preset = st.radio(
-        "빠른 조회 기간",
-        options=preset_options,
-        index=preset_options.index(current_state.preset),
-        format_func=lambda key: preset_labels[key],
+    selected_mode = st.radio(
+        "조회 기간 방식",
+        options=mode_options,
+        index=mode_options.index(current_state.mode) if current_state.mode in mode_options else 0,
+        format_func=lambda key: mode_labels[key],
         horizontal=True,
-        key=preset_widget_key,
+        key=mode_widget_key,
     )
+
+    if selected_mode == "preset":
+        selected_preset = st.radio(
+            "빠른 조회 기간",
+            options=preset_options,
+            index=preset_options.index(current_state.preset),
+            format_func=lambda key: preset_labels[key],
+            horizontal=True,
+            key=preset_widget_key,
+        )
+        preset_dates = range_dates_for_preset(
+            selected_preset,
+            min_date=current_state.min_date,
+            max_date=current_state.max_date,
+        )
+        st.session_state[date_widget_key] = preset_dates
+        if selected_preset != current_state.preset or current_state.mode != "preset":
+            return (selected_preset, None)
+        return (None, None)
+
     selected_dates = st.date_input(
-        "직접 기간 선택",
+        "직접 조회 기간",
         value=current_state.dates,
         min_value=current_state.min_date,
         max_value=current_state.max_date,
         key=date_widget_key,
     )
-
-    normalized_selected_dates = tuple(selected_dates) if isinstance(selected_dates, (list, tuple)) and len(selected_dates) == 2 else current_state.dates
-    if selected_preset != current_state.preset:
-        st.session_state[date_widget_key] = range_dates_for_preset(
-            selected_preset,
-            min_date=current_state.min_date,
-            max_date=current_state.max_date,
-        )
-        return (selected_preset, None)
-    if normalized_selected_dates != current_state.dates:
+    normalized_selected_dates = (
+        tuple(selected_dates)
+        if isinstance(selected_dates, (list, tuple)) and len(selected_dates) == 2
+        else current_state.dates
+    )
+    if normalized_selected_dates != current_state.dates or current_state.mode != "custom":
         return (None, normalized_selected_dates)
     return (None, None)
 

@@ -997,9 +997,10 @@ def test_render_chart_selector_adds_period_controls_and_uses_plotly_renderer(mon
     )
 
     assert "차트 유형" not in fake_st.selectbox_labels
+    assert "조회 기간 방식" in fake_st.radio_labels
     assert "빠른 조회 기간" in fake_st.radio_labels
     assert "봉 기준" in fake_st.radio_labels
-    assert "직접 기간 선택" in fake_st.date_input_labels
+    assert "직접 조회 기간" not in fake_st.date_input_labels
     assert fake_st.plotly_chart_calls == [{"engine": "plotly"}]
     assert fake_st.session_state["report_chart_range_dates"] == (date(2026, 1, 1), date(2026, 3, 31))
 
@@ -1084,6 +1085,7 @@ def test_render_range_controls_resets_stale_date_widget_state_when_preset_change
             "report_chart_range_mode": "custom",
             "report_chart_range_preset": "90d",
             "report_chart_range_dates": (date(2026, 1, 15), date(2026, 2, 10)),
+            "report_chart_range_mode_widget": "preset",
             "report_chart_range_preset_widget": "30d",
             "report_chart_range_dates_widget": (date(2026, 1, 15), date(2026, 2, 10)),
         }
@@ -1112,6 +1114,41 @@ def test_render_range_controls_resets_stale_date_widget_state_when_preset_change
 
     assert (second_selected_preset, second_selected_dates) == (None, None)
     assert fake_st.session_state["report_chart_range_dates"] == (date(2026, 3, 2), date(2026, 3, 31))
+
+
+def test_render_range_controls_allows_direct_custom_date_range(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    fake_st.session_state.update(
+        {
+            "report_chart_range_mode_widget": "custom",
+            "report_chart_range_dates_widget": (date(2026, 1, 15), date(2026, 2, 10)),
+        }
+    )
+    monkeypatch.setattr(streamlit_charts_module, "st", fake_st)
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-01-01", "close": 10},
+            {"date": "2026-02-15", "close": 20},
+            {"date": "2026-03-31", "close": 30},
+        ]
+    )
+
+    selected_preset, selected_dates = streamlit_charts_module.render_range_controls(frame, key_prefix="report_chart")
+
+    assert (selected_preset, selected_dates) == (None, (date(2026, 1, 15), date(2026, 2, 10)))
+    assert "조회 기간 방식" in fake_st.radio_labels
+    assert "빠른 조회 기간" not in fake_st.radio_labels
+    assert "직접 조회 기간" in fake_st.date_input_labels
+
+    range_state = streamlit_charts_module.resolve_range_state(
+        frame,
+        key_prefix="report_chart",
+        selected_preset=selected_preset,
+        selected_dates=selected_dates,
+    )
+
+    assert range_state.mode == "custom"
+    assert range_state.dates == (date(2026, 1, 15), date(2026, 2, 10))
 
 
 def _make_report_preview(symbol: str, symbol_name: str, filename: str) -> DatasetPreview:
