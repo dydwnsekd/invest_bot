@@ -78,6 +78,8 @@ PRICE_COLOR_RANGE = ["#0f766e", "#f59e0b", "#dc2626", "#7c3aed"]
 FLOW_COLOR_DOMAIN = ["외국인 순매수", "기관 순매수", "개인 순매수"]
 FLOW_COLOR_RANGE = ["#2563eb", "#059669", "#f97316"]
 DEFAULT_RANGE_PRESET = "90d"
+PROFESSIONAL_CHART_MIN_HEIGHT = 640
+PROFESSIONAL_CHART_VERTICAL_SPACING = 0.09
 RANGE_PRESET_DAYS = {
     "30d": 30,
     "90d": 90,
@@ -472,7 +474,11 @@ def _render_professional_chart_selector(
         return
     if not flow_series_columns(aggregated):
         st.caption("수급 데이터 없음")
-    chart = build_professional_plotly_chart(aggregated, timeframe=timeframe_key, height=height)
+    chart = build_professional_plotly_chart(
+        aggregated,
+        timeframe=timeframe_key,
+        height=max(height, PROFESSIONAL_CHART_MIN_HEIGHT),
+    )
     if chart is None:
         st.info("전문가용 차트를 그리기 위한 컬럼이 부족합니다.")
         return
@@ -501,33 +507,36 @@ def render_range_controls(
         horizontal=True,
         key=mode_widget_key,
     )
+    selected_preset = st.radio(
+        "빠른 조회 기간",
+        options=preset_options,
+        index=preset_options.index(current_state.preset),
+        format_func=lambda key: preset_labels[key],
+        horizontal=True,
+        key=preset_widget_key,
+    )
+
+    preset_dates = range_dates_for_preset(
+        selected_preset,
+        min_date=current_state.min_date,
+        max_date=current_state.max_date,
+    )
+    display_dates = preset_dates if selected_mode == "preset" else current_state.dates
+    synced_date_widget_key = build_range_dates_widget_key(date_widget_key, display_dates)
+    selected_dates = st.date_input(
+        "직접 조회 기간",
+        value=display_dates,
+        min_value=current_state.min_date,
+        max_value=current_state.max_date,
+        key=synced_date_widget_key,
+        disabled=selected_mode == "preset",
+    )
 
     if selected_mode == "preset":
-        selected_preset = st.radio(
-            "빠른 조회 기간",
-            options=preset_options,
-            index=preset_options.index(current_state.preset),
-            format_func=lambda key: preset_labels[key],
-            horizontal=True,
-            key=preset_widget_key,
-        )
-        preset_dates = range_dates_for_preset(
-            selected_preset,
-            min_date=current_state.min_date,
-            max_date=current_state.max_date,
-        )
-        st.session_state[date_widget_key] = preset_dates
         if selected_preset != current_state.preset or current_state.mode != "preset":
             return (selected_preset, None)
         return (None, None)
 
-    selected_dates = st.date_input(
-        "직접 조회 기간",
-        value=current_state.dates,
-        min_value=current_state.min_date,
-        max_value=current_state.max_date,
-        key=date_widget_key,
-    )
     normalized_selected_dates = (
         tuple(selected_dates)
         if isinstance(selected_dates, (list, tuple)) and len(selected_dates) == 2
@@ -536,6 +545,10 @@ def render_range_controls(
     if normalized_selected_dates != current_state.dates or current_state.mode != "custom":
         return (None, normalized_selected_dates)
     return (None, None)
+
+
+def build_range_dates_widget_key(base_key: str, dates: tuple[date, date]) -> str:
+    return f"{base_key}_{dates[0].isoformat()}_{dates[1].isoformat()}"
 
 
 def preferred_chart_library() -> str:
@@ -590,15 +603,37 @@ def build_professional_plotly_chart(frame: pd.DataFrame, *, timeframe: str = "da
     if flow_columns:
         row_titles.append(FLOW_ROW_TITLE)
     row_count = 4 if flow_columns else 3
-    row_heights = [0.5, 0.18, 0.18] + ([0.14] if flow_columns else [])
+    row_heights = [0.68, 0.32, 0.32] + ([0.26] if flow_columns else [])
     figure = make_subplots(
         rows=row_count,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.03,
+        vertical_spacing=PROFESSIONAL_CHART_VERTICAL_SPACING,
         row_heights=row_heights,
         subplot_titles=row_titles,
     )
+    add_professional_price_panel(figure, chart_data)
+    add_professional_volume_panel(figure, chart_data, has_volume=has_volume)
+    add_professional_rsi_panel(figure, chart_data)
+    if flow_columns:
+        add_professional_flow_panel(figure, chart_data, flow_columns)
+
+    figure.update_layout(
+        height=height,
+        hovermode="x unified",
+        margin=dict(l=20, r=20, t=28, b=24),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis=dict(showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikethickness=1, rangeslider=dict(visible=False)),
+    )
+    figure.update_yaxes(title_text="가격", tickformat=",", row=1, col=1)
+    figure.update_yaxes(title_text="거래량" if has_volume else "거래량 없음", row=2, col=1)
+    figure.update_yaxes(title_text="RSI 14", range=[0, 100], row=3, col=1)
+    if flow_columns:
+        figure.update_yaxes(title_text="순매수", row=4, col=1)
+    return figure
+
+
+def add_professional_price_panel(figure, chart_data: pd.DataFrame) -> None:
     figure.add_trace(
         go.Candlestick(
             x=chart_data["date"],
@@ -609,7 +644,14 @@ def build_professional_plotly_chart(frame: pd.DataFrame, *, timeframe: str = "da
             name="캔들",
             increasing_line_color="#dc2626",
             decreasing_line_color="#2563eb",
-            hovertemplate=None,
+            customdata=chart_data[["open", "high", "low", "close"]],
+            hovertemplate=(
+                "%{x|%Y-%m-%d}<br>"
+                "시가: %{customdata[0]:,.0f}<br>"
+                "고가: %{customdata[1]:,.0f}<br>"
+                "저가: %{customdata[2]:,.0f}<br>"
+                "종가: %{customdata[3]:,.0f}<extra></extra>"
+            ),
         ),
         row=1,
         col=1,
@@ -630,18 +672,25 @@ def build_professional_plotly_chart(frame: pd.DataFrame, *, timeframe: str = "da
             row=1,
             col=1,
         )
-    if has_volume:
-        figure.add_trace(
-            go.Bar(
-                x=chart_data["date"],
-                y=pd.to_numeric(chart_data["volume"], errors="coerce"),
-                name="거래량",
-                marker_color="#2563eb",
-                hovertemplate="%{x|%Y-%m-%d}<br>거래량: %{y:,.0f}<extra></extra>",
-            ),
-            row=2,
-            col=1,
-        )
+
+
+def add_professional_volume_panel(figure, chart_data: pd.DataFrame, *, has_volume: bool) -> None:
+    if not has_volume:
+        return
+    figure.add_trace(
+        go.Bar(
+            x=chart_data["date"],
+            y=pd.to_numeric(chart_data["volume"], errors="coerce"),
+            name="거래량",
+            marker_color="#2563eb",
+            hovertemplate="%{x|%Y-%m-%d}<br>거래량: %{y:,.0f}<extra></extra>",
+        ),
+        row=2,
+        col=1,
+    )
+
+
+def add_professional_rsi_panel(figure, chart_data: pd.DataFrame) -> None:
     figure.add_trace(
         go.Scatter(
             x=chart_data["date"],
@@ -656,37 +705,26 @@ def build_professional_plotly_chart(frame: pd.DataFrame, *, timeframe: str = "da
     )
     figure.add_hline(y=30, line_dash="dash", line_color="#9ca3af", row=3, col=1)
     figure.add_hline(y=70, line_dash="dash", line_color="#9ca3af", row=3, col=1)
-    if flow_columns:
-        palette = dict(zip(FLOW_COLOR_DOMAIN, FLOW_COLOR_RANGE, strict=False))
-        for column in flow_columns:
-            label = SERIES_LABELS.get(column, column)
-            figure.add_trace(
-                go.Scatter(
-                    x=chart_data["date"],
-                    y=chart_data[column],
-                    mode="lines",
-                    name=label,
-                    line=dict(width=2, color=palette.get(label)),
-                    hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:,.0f}<extra></extra>",
-                ),
-                row=4,
-                col=1,
-            )
-        figure.add_hline(y=0, line_dash="dot", line_color="#9ca3af", row=4, col=1)
 
-    figure.update_layout(
-        height=height,
-        hovermode="x unified",
-        margin=dict(l=20, r=20, t=24, b=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        xaxis=dict(showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikethickness=1, rangeslider=dict(visible=False)),
-    )
-    figure.update_yaxes(title_text="가격", row=1, col=1)
-    figure.update_yaxes(title_text="거래량" if has_volume else "거래량 없음", row=2, col=1)
-    figure.update_yaxes(title_text="RSI 14", range=[0, 100], row=3, col=1)
-    if flow_columns:
-        figure.update_yaxes(title_text="순매수", row=4, col=1)
-    return figure
+
+def add_professional_flow_panel(figure, chart_data: pd.DataFrame, flow_columns: list[str]) -> None:
+    palette = dict(zip(FLOW_COLOR_DOMAIN, FLOW_COLOR_RANGE, strict=False))
+    for column in flow_columns:
+        label = SERIES_LABELS.get(column, column)
+        figure.add_trace(
+            go.Scatter(
+                x=chart_data["date"],
+                y=chart_data[column],
+                mode="lines",
+                name=label,
+                line=dict(width=2, color=palette.get(label)),
+                hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:,.0f}<extra></extra>",
+            ),
+            row=4,
+            col=1,
+        )
+    figure.add_hline(y=0, line_dash="dot", line_color="#9ca3af", row=4, col=1)
+
 
 
 def build_plotly_chart(frame: pd.DataFrame, chart_type: str, *, height: int = 280):
@@ -721,8 +759,15 @@ def apply_plotly_interaction_layout(figure, *, height: int, yaxis_title: str) ->
             spikethickness=1,
             rangeslider=dict(visible=False),
         ),
-        yaxis=dict(title=yaxis_title),
+        yaxis=plotly_yaxis_config(yaxis_title),
     )
+
+
+def plotly_yaxis_config(title: str) -> dict[str, str]:
+    config = {"title": title}
+    if title == "가격":
+        config["tickformat"] = ","
+    return config
 
 
 def build_plotly_price_line_chart(frame: pd.DataFrame, columns: list[str], *, height: int):
@@ -765,7 +810,14 @@ def build_plotly_candlestick_chart(frame: pd.DataFrame, *, height: int):
                 name="캔들",
                 increasing_line_color="#dc2626",
                 decreasing_line_color="#2563eb",
-                hovertemplate=None,
+                customdata=chart_data[["open", "high", "low", "close"]],
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    "시가: %{customdata[0]:,.0f}<br>"
+                    "고가: %{customdata[1]:,.0f}<br>"
+                    "저가: %{customdata[2]:,.0f}<br>"
+                    "종가: %{customdata[3]:,.0f}<extra></extra>"
+                ),
             )
         ]
     )
@@ -854,7 +906,7 @@ def build_price_line_chart(frame: pd.DataFrame, columns: list[str], *, height: i
         .mark_line(point=True, strokeWidth=2)
         .encode(
             x=alt.X("date:T", title="날짜"),
-            y=alt.Y("value:Q", title="가격"),
+            y=alt.Y("value:Q", title="가격", axis=alt.Axis(format=",")),
             color=alt.Color(
                 "series_label:N",
                 title="지표",
@@ -883,7 +935,7 @@ def build_candlestick_chart(frame: pd.DataFrame, *, height: int) -> alt.LayerCha
         .mark_rule()
         .encode(
             x=alt.X("date:T", title="날짜"),
-            y=alt.Y("low:Q", title="가격"),
+            y=alt.Y("low:Q", title="가격", axis=alt.Axis(format=",")),
             y2="high:Q",
             color=alt.Color("direction:N", scale=alt.Scale(domain=["상승", "하락"], range=["#dc2626", "#2563eb"]), title="방향"),
             tooltip=[

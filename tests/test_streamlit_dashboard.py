@@ -522,6 +522,7 @@ def test_build_chart_uses_plotly_library_for_close_ma_when_available(monkeypatch
     assert len(figure.traces) == 3
     assert figure.layout_updates[-1]["hovermode"] == "x unified"
     assert figure.layout_updates[-1]["xaxis"]["showspikes"] is True
+    assert figure.layout_updates[-1]["yaxis"] == {"title": "가격", "tickformat": ","}
 
 
 def test_build_professional_plotly_chart_creates_multi_panel_shared_hover(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -577,12 +578,19 @@ def test_build_professional_plotly_chart_creates_multi_panel_shared_hover(monkey
 
     assert figure.kwargs["shared_xaxes"] is True
     assert figure.kwargs["rows"] == 4
+    assert figure.kwargs["vertical_spacing"] == streamlit_charts_module.PROFESSIONAL_CHART_VERTICAL_SPACING
+    assert figure.kwargs["row_heights"] == [0.68, 0.32, 0.32, 0.26]
     assert figure.layout_updates[-1]["hovermode"] == "x unified"
     assert figure.layout_updates[-1]["xaxis"]["rangeslider"]["visible"] is False
+    assert any(update["title_text"] == "가격" and update["tickformat"] == "," and update["row"] == 1 for update in figure.yaxis_updates)
+    candlestick_trace = next(trace[0][1] for trace in figure.traces if trace[0][0] == "candlestick")
+    assert "시가: %{customdata[0]:,.0f}" in candlestick_trace["hovertemplate"]
+    assert "종가: %{customdata[3]:,.0f}" in candlestick_trace["hovertemplate"]
     assert any(trace[0][0] == "candlestick" and trace[1] == 1 for trace in figure.traces)
     assert any(trace[0][0] == "bar" and trace[1] == 2 for trace in figure.traces)
     assert any(trace[0][0] == "scatter" and trace[1] == 3 for trace in figure.traces)
     assert any(trace[1] == 4 for trace in figure.traces)
+
 
 
 def test_build_professional_plotly_chart_skips_fake_zero_volume_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -730,16 +738,16 @@ def test_localize_reason_formats_strategy_reason_patterns() -> None:
     assert _localize_reason("rsi_14 is 25.00, at or below buy threshold 30.00.") == "RSI 14가 25.00로 매수 기준 30.00 이하입니다."
     assert _localize_reason("rsi_14 is 75.00, at or above sell threshold 70.00.") == "RSI 14가 75.00로 매도 기준 70.00 이상입니다."
     assert _localize_reason("close is 65000.00, below ma_60 68900.00 and below prev_close 66000.00.") == (
-        "종가가 65000.00로 60일 이동평균선 68900.00와 직전 종가 66000.00보다 낮습니다."
+        "종가가 65,000로 60일 이동평균선 68,900와 직전 종가 66,000보다 낮습니다."
     )
     assert _localize_reason("close is 70000.00, showing a mixed signal versus ma_60 68900.00 and prev_close 71500.00.") == (
-        "종가가 70000.00로 60일 이동평균선 68900.00 및 직전 종가 71500.00 대비 혼조 신호입니다."
+        "종가가 70,000로 60일 이동평균선 68,900 및 직전 종가 71,500 대비 혼조 신호입니다."
     )
     assert _localize_reason("close is 68000.00, at 0.9600 of ma_20 70800.00, at or below buy ratio 0.9700.") == (
-        "종가가 68000.00로 20일 이동평균선 70800.00 대비 0.9600배이며, 매수 비율 기준 0.9700 이하입니다."
+        "종가가 68,000로 20일 이동평균선 70,800 대비 0.9600배이며, 매수 비율 기준 0.9700 이하입니다."
     )
     assert _localize_reason("close is 74000.00, at 1.0400 of ma_20 71150.00, at or above sell ratio 1.0300.") == (
-        "종가가 74000.00로 20일 이동평균선 71150.00 대비 1.0400배이며, 매도 비율 기준 1.0300 이상입니다."
+        "종가가 74,000로 20일 이동평균선 71,150 대비 1.0400배이며, 매도 비율 기준 1.0300 이상입니다."
     )
 
 
@@ -761,8 +769,8 @@ def test_build_strategy_summary_items_formats_three_strategy_rows() -> None:
     assert [item["label"] for item in items] == ["RSI 전략", "추세 필터 전략", "평균회귀 전략"]
     assert [item["signal_label"] for item in items] == ["관망", "매수 관점", "관망"]
     assert items[0]["reason"] == "RSI 14가 58.00로 매수 기준 30.00과 매도 기준 70.00 사이입니다."
-    assert items[1]["reason"] == "종가가 72000.00로 60일 이동평균선 68900.00와 직전 종가 71500.00보다 높습니다."
-    assert items[2]["reason"] == "종가가 72000.00로 20일 이동평균선 70200.00 대비 1.0256배이며, 평균회귀 기준 범위 안에 있습니다."
+    assert items[1]["reason"] == "종가가 72,000로 60일 이동평균선 68,900와 직전 종가 71,500보다 높습니다."
+    assert items[2]["reason"] == "종가가 72,000로 20일 이동평균선 70,200 대비 1.0256배이며, 평균회귀 기준 범위 안에 있습니다."
 
 
 class _FakeMetricColumn:
@@ -979,7 +987,13 @@ def test_render_chart_selector_adds_period_controls_and_uses_plotly_renderer(mon
     monkeypatch.setattr(streamlit_charts_module, "go", object())
     monkeypatch.setattr(streamlit_charts_module, "make_subplots", object())
     monkeypatch.setattr(streamlit_charts_module, "preferred_chart_library", lambda: "plotly")
-    monkeypatch.setattr(streamlit_charts_module, "build_professional_plotly_chart", lambda *args, **kwargs: {"engine": "plotly"})
+    captured_chart_kwargs: dict[str, object] = {}
+
+    def _fake_build_professional_plotly_chart(*args, **kwargs):
+        captured_chart_kwargs.update(kwargs)
+        return {"engine": "plotly"}
+
+    monkeypatch.setattr(streamlit_charts_module, "build_professional_plotly_chart", _fake_build_professional_plotly_chart)
 
     frame = pd.DataFrame(
         [
@@ -1000,9 +1014,11 @@ def test_render_chart_selector_adds_period_controls_and_uses_plotly_renderer(mon
     assert "조회 기간 방식" in fake_st.radio_labels
     assert "빠른 조회 기간" in fake_st.radio_labels
     assert "봉 기준" in fake_st.radio_labels
-    assert "직접 조회 기간" not in fake_st.date_input_labels
+    assert "직접 조회 기간" in fake_st.date_input_labels
     assert fake_st.plotly_chart_calls == [{"engine": "plotly"}]
+    assert captured_chart_kwargs["height"] == streamlit_charts_module.PROFESSIONAL_CHART_MIN_HEIGHT
     assert fake_st.session_state["report_chart_range_dates"] == (date(2026, 1, 1), date(2026, 3, 31))
+    assert fake_st.session_state["report_chart_range_dates_widget_2026-01-01_2026-03-31"] == (date(2026, 1, 1), date(2026, 3, 31))
 
 
 def test_render_chart_selector_shows_no_flow_caption_for_professional_chart_without_flow(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1102,7 +1118,8 @@ def test_render_range_controls_resets_stale_date_widget_state_when_preset_change
     selected_preset, selected_dates = streamlit_charts_module.render_range_controls(frame, key_prefix="report_chart")
 
     assert (selected_preset, selected_dates) == ("30d", None)
-    assert fake_st.session_state["report_chart_range_dates_widget"] == (date(2026, 3, 2), date(2026, 3, 31))
+    assert fake_st.session_state["report_chart_range_dates_widget"] == (date(2026, 1, 15), date(2026, 2, 10))
+    assert fake_st.session_state["report_chart_range_dates_widget_2026-03-02_2026-03-31"] == (date(2026, 3, 2), date(2026, 3, 31))
 
     streamlit_charts_module.resolve_range_state(
         frame,
@@ -1121,7 +1138,7 @@ def test_render_range_controls_allows_direct_custom_date_range(monkeypatch: pyte
     fake_st.session_state.update(
         {
             "report_chart_range_mode_widget": "custom",
-            "report_chart_range_dates_widget": (date(2026, 1, 15), date(2026, 2, 10)),
+            "report_chart_range_dates_widget_2026-01-01_2026-03-31": (date(2026, 1, 15), date(2026, 2, 10)),
         }
     )
     monkeypatch.setattr(streamlit_charts_module, "st", fake_st)
@@ -1137,7 +1154,7 @@ def test_render_range_controls_allows_direct_custom_date_range(monkeypatch: pyte
 
     assert (selected_preset, selected_dates) == (None, (date(2026, 1, 15), date(2026, 2, 10)))
     assert "조회 기간 방식" in fake_st.radio_labels
-    assert "빠른 조회 기간" not in fake_st.radio_labels
+    assert "빠른 조회 기간" in fake_st.radio_labels
     assert "직접 조회 기간" in fake_st.date_input_labels
 
     range_state = streamlit_charts_module.resolve_range_state(

@@ -174,9 +174,9 @@ def localize_reason(reason: str) -> str:
         flags=re.IGNORECASE,
     ):
         return (
-            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
-            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')}와 "
-            f"{humanize_indicator_name(match.group('previous'))} {match.group('previous_value')}보다 높습니다."
+            f"{humanize_indicator_name(match.group('close'))}가 {format_number(match.group('close_value'))}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {format_number(match.group('baseline_value'))}와 "
+            f"{humanize_indicator_name(match.group('previous'))} {format_number(match.group('previous_value'))}보다 높습니다."
         )
     if match := re.fullmatch(
         r"(?P<close>[\w_]+)\s+is\s+(?P<close_value>-?\d+(?:\.\d+)?),\s+below\s+(?P<baseline>[\w_]+)\s+(?P<baseline_value>-?\d+(?:\.\d+)?)\s+and below\s+(?P<previous>[\w_]+)\s+(?P<previous_value>-?\d+(?:\.\d+)?)\.",
@@ -184,9 +184,9 @@ def localize_reason(reason: str) -> str:
         flags=re.IGNORECASE,
     ):
         return (
-            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
-            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')}와 "
-            f"{humanize_indicator_name(match.group('previous'))} {match.group('previous_value')}보다 낮습니다."
+            f"{humanize_indicator_name(match.group('close'))}가 {format_number(match.group('close_value'))}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {format_number(match.group('baseline_value'))}와 "
+            f"{humanize_indicator_name(match.group('previous'))} {format_number(match.group('previous_value'))}보다 낮습니다."
         )
     if match := re.fullmatch(
         r"(?P<close>[\w_]+)\s+is\s+(?P<close_value>-?\d+(?:\.\d+)?),\s+showing a mixed signal versus\s+(?P<baseline>[\w_]+)\s+(?P<baseline_value>-?\d+(?:\.\d+)?)\s+and\s+(?P<previous>[\w_]+)\s+(?P<previous_value>-?\d+(?:\.\d+)?)\.",
@@ -194,9 +194,9 @@ def localize_reason(reason: str) -> str:
         flags=re.IGNORECASE,
     ):
         return (
-            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
-            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')} 및 "
-            f"{humanize_indicator_name(match.group('previous'))} {match.group('previous_value')} 대비 혼조 신호입니다."
+            f"{humanize_indicator_name(match.group('close'))}가 {format_number(match.group('close_value'))}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {format_number(match.group('baseline_value'))} 및 "
+            f"{humanize_indicator_name(match.group('previous'))} {format_number(match.group('previous_value'))} 대비 혼조 신호입니다."
         )
     if match := re.fullmatch(
         r"(?P<close>[\w_]+)\s+is\s+(?P<close_value>-?\d+(?:\.\d+)?),\s+at\s+(?P<ratio>-?\d+(?:\.\d+)?)\s+of\s+(?P<baseline>[\w_]+)\s+(?P<baseline_value>-?\d+(?:\.\d+)?),\s+at or below buy ratio\s+(?P<threshold>-?\d+(?:\.\d+)?)\.",
@@ -204,8 +204,8 @@ def localize_reason(reason: str) -> str:
         flags=re.IGNORECASE,
     ):
         return (
-            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
-            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')} 대비 {match.group('ratio')}배이며, "
+            f"{humanize_indicator_name(match.group('close'))}가 {format_number(match.group('close_value'))}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {format_number(match.group('baseline_value'))} 대비 {match.group('ratio')}배이며, "
             f"매수 비율 기준 {match.group('threshold')} 이하입니다."
         )
     if match := re.fullmatch(
@@ -214,8 +214,8 @@ def localize_reason(reason: str) -> str:
         flags=re.IGNORECASE,
     ):
         return (
-            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
-            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')} 대비 {match.group('ratio')}배이며, "
+            f"{humanize_indicator_name(match.group('close'))}가 {format_number(match.group('close_value'))}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {format_number(match.group('baseline_value'))} 대비 {match.group('ratio')}배이며, "
             f"매도 비율 기준 {match.group('threshold')} 이상입니다."
         )
     if match := re.fullmatch(
@@ -224,8 +224,8 @@ def localize_reason(reason: str) -> str:
         flags=re.IGNORECASE,
     ):
         return (
-            f"{humanize_indicator_name(match.group('close'))}가 {match.group('close_value')}로 "
-            f"{humanize_indicator_name(match.group('baseline'))} {match.group('baseline_value')} 대비 {match.group('ratio')}배이며, "
+            f"{humanize_indicator_name(match.group('close'))}가 {format_number(match.group('close_value'))}로 "
+            f"{humanize_indicator_name(match.group('baseline'))} {format_number(match.group('baseline_value'))} 대비 {match.group('ratio')}배이며, "
             "평균회귀 기준 범위 안에 있습니다."
         )
     replacements = {
