@@ -14,7 +14,24 @@
 
 ## 현재 구현 범위
 
-### 이번 세션 업데이트 (2026-07-14)
+### 이번 세션 업데이트 (2026-07-19)
+
+- `리포트 해석` 탭의 전략별 판단 표시를 한글 중심으로 정리
+  - `RSI 전략`, `추세 필터 전략`, `평균회귀 전략`으로 표시
+  - 전략별 판단 근거 문장의 가격/이동평균 값은 천 단위 쉼표 형식으로 표시
+- 공용 차트 조회 기간 UX 보강
+  - `조회 기간 방식`에서 빠른 선택과 직접 지정을 명확히 분리
+  - 빠른 선택 기간과 직접 조회 기간 표시가 같은 유효 기간을 보도록 동기화
+  - Streamlit date widget state 충돌을 피하도록 조회 기간별 widget key를 분리
+- 전문가형 Plotly 차트 가독성 조정
+  - 차트 최소 높이와 패널 간격 확대
+  - 가격 y축과 캔들/가격 hover 값은 `1,000` 형식으로 표시
+  - 구분선/가로 y축 범례 실험은 제거하고 기본 y축 제목 방식을 유지
+- 관련 검증 완료
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_charts.py src/invest_bot/dashboard/streamlit_formatters.py src/invest_bot/dashboard/streamlit_reports.py tests/test_streamlit_dashboard.py`
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q` (`80 passed`)
+
+### 이전 세션 업데이트 (2026-07-14)
 
 - `리포트 해석` / `데이터 탐색` 공용 주가 차트가 stock dataset에서 전문가용 차트 경로를 사용
   - 캔들 + 이동평균선, 거래량, RSI 14, 선택적 투자자 수급 panel을 함께 표시
@@ -127,9 +144,12 @@
   - stock dataset에서는 Plotly 기반 전문가용 차트 우선 렌더링
   - 캔들 + 이동평균선, 거래량, RSI 14, 선택적 투자자 수급 panel 지원
   - `일봉` / `주봉` / `월봉` selector와 날짜 기준 shared x-axis hover / zoom 지원
+  - 빠른 조회 기간과 직접 조회 기간을 같은 유효 기간으로 동기화
+  - 가격 y축과 hover 가격은 천 단위 쉼표 형식으로 표시
   - 기존 저장 `daily_prices_indicators` / `daily_prices` / `investor_daily`만 사용하며 새 데이터 수집은 하지 않음
   - Plotly 미사용 환경에서는 Altair fallback 유지
 - 전략별 판단 요약 및 상태별 색상 표시
+  - 전략명과 주요 판단 근거는 한글 표시
 - 리포트 관심종목(즐겨찾기) 저장 및 별도 탭 확인
 - 관심종목 탭도 리포트 카드와 동일한 전문가용 주가 차트 경로 사용
 - 여러 종목 기준 배치 실행

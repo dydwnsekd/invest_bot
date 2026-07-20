@@ -388,3 +388,25 @@
   - user/account ownership을 가진 shared watchlist 확장 필요성 재검토
   - 필요 시 `streamlit_layout.py` 내부 UI 조각을 더 세분화
   - 탭별 시각 회귀 검증을 추가할지 검토
+
+### 2026-07-19 / Report chart and strategy display follow-up
+
+- 목표
+  - `리포트 해석` 탭의 전략별 판단을 한글 중심으로 표시
+  - 공용 차트 조회 기간 UX와 전문가형 차트 가독성을 보강
+- 변경 사항
+  - `streamlit_reports.py` / `streamlit_formatters.py`
+    - 전략명: `RSI 전략`, `추세 필터 전략`, `평균회귀 전략`
+    - 전략 판단 근거의 가격/이동평균 숫자를 천 단위 쉼표 형식으로 표시
+  - `streamlit_charts.py`
+    - 빠른 조회 기간과 직접 조회 기간 표시를 같은 최종 유효 기간으로 동기화
+    - Streamlit date widget state 충돌 방지를 위해 기간별 widget key 사용
+    - 전문가형 Plotly 차트 최소 높이와 패널 간격 확대
+    - 가격 y축 및 캔들/가격 hover 값을 천 단위 쉼표 형식으로 표시
+    - 구분선/가로 y축 범례 실험은 제거하고 기본 y축 제목 방식을 유지
+    - 전문가형 차트 trace 구성을 가격/거래량/RSI/수급 패널 helper로 분리
+- 검증
+  - `PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile src/invest_bot/dashboard/streamlit_charts.py src/invest_bot/dashboard/streamlit_formatters.py src/invest_bot/dashboard/streamlit_reports.py tests/test_streamlit_dashboard.py`
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `80 passed`
+
