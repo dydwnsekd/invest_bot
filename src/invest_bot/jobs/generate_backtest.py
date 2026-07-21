@@ -1,9 +1,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Callable
 
 import pandas as pd
+from pandas.errors import EmptyDataError
 
+from invest_bot.backtest import DEFAULT_BACKTEST_RUNNER, GOLDEN_CROSS_SIGNALS, build_strategy_signal_rows
+from invest_bot.backtest.persistence import (
+    BACKTEST_SUMMARY_OUTPUT,
+    BACKTEST_TRADES_OUTPUT,
+    BacktestInputSources,
+    DAILY_PRICES,
+    BacktestPersistenceContext,
+    attach_input_sources,
+    build_context,
+    build_output_filename,
+    enrich_summary,
+    enrich_trades,
+    input_sources_from_frame,
+)
+from invest_bot.backtest.runner import BacktestResult
+from invest_bot.backtest.strategy_registry import DAILY_PRICES_INDICATORS, INVESTOR_DAILY
 from invest_bot.config.settings import AppSettings
 from invest_bot.db.frame_storage import DbFrameStorage
 from invest_bot.market.repositories import DatasetStorage
@@ -14,162 +33,123 @@ from invest_bot.market.storage import SavedDataset
 class BacktestRequest:
     symbol: str
     source_filename: str
-
-
-@dataclass(slots=True)
-class BacktestResult:
-    trades: pd.DataFrame
-    summary: pd.DataFrame
+    indicator_filename: str | None = None
+    investor_filename: str | None = None
+    price_filename: str | None = None
 
 
 class GoldenCrossBacktestGenerator:
     """Draft backtest runner for golden cross signals."""
 
-    def __init__(self, processed_storage: DatasetStorage | None = None, settings: AppSettings | None = None) -> None:
+    def __init__(
+        self,
+        processed_storage: DatasetStorage | None = None,
+        settings: AppSettings | None = None,
+        now_fn: Callable[[], datetime] | None = None,
+    ) -> None:
         self.processed_storage = processed_storage or DbFrameStorage.from_settings(settings)
+        self.now_fn = now_fn or (lambda: datetime.now(UTC))
+        self._contexts_by_key: dict[tuple[str, str, str], BacktestPersistenceContext] = {}
 
     def load_signal_frame(self, request: BacktestRequest) -> pd.DataFrame:
-        frame = self.processed_storage.load("golden_cross_signals", request.source_filename)
-        if "date" in frame.columns:
-            frame["date"] = pd.to_datetime(frame["date"])
-        return frame.sort_values("date").reset_index(drop=True)
+        try:
+            frame = self.processed_storage.load(GOLDEN_CROSS_SIGNALS, request.source_filename)
+        except EmptyDataError:
+            frame = pd.DataFrame(columns=["date", "close", "signal"])
+        signal_rows = build_strategy_signal_rows("golden-cross", {GOLDEN_CROSS_SIGNALS: frame})
+        return attach_input_sources(
+            signal_rows,
+            BacktestInputSources(
+                indicator_source_dataset=DAILY_PRICES_INDICATORS if request.indicator_filename else None,
+                indicator_source_filename=request.indicator_filename,
+                signal_source_dataset=GOLDEN_CROSS_SIGNALS,
+                signal_source_filename=request.source_filename,
+                investor_source_dataset=INVESTOR_DAILY if request.investor_filename else None,
+                investor_source_filename=request.investor_filename,
+                price_source_dataset=DAILY_PRICES if request.price_filename else None,
+                price_source_filename=request.price_filename,
+            ),
+        )
 
     def run_backtest(self, symbol: str, signal_frame: pd.DataFrame) -> BacktestResult:
-        if signal_frame.empty:
-            return BacktestResult(
-                trades=pd.DataFrame(
-                    columns=[
-                        "symbol",
-                        "entry_signal_date",
-                        "entry_date",
-                        "entry_price",
-                        "exit_signal_date",
-                        "exit_date",
-                        "exit_price",
-                        "return_pct",
-                        "holding_days",
-                        "exit_reason",
-                    ]
-                ),
-                summary=self._build_summary(symbol, pd.DataFrame(), signal_frame),
-            )
-
-        frame = signal_frame.sort_values("date").reset_index(drop=True).copy()
-        trades: list[dict[str, object]] = []
-        open_position: dict[str, object] | None = None
-
-        for index, row in frame.iterrows():
-            signal = str(row.get("signal", "hold")).lower()
-
-            if signal == "buy" and open_position is None:
-                entry_index = index + 1
-                if entry_index >= len(frame):
-                    continue
-                entry_row = frame.iloc[entry_index]
-                open_position = {
-                    "symbol": symbol,
-                    "entry_signal_date": row["date"],
-                    "entry_date": entry_row["date"],
-                    "entry_price": float(entry_row["close"]),
-                }
-                continue
-
-            if signal == "sell" and open_position is not None:
-                exit_index = index + 1
-                if exit_index >= len(frame):
-                    exit_index = len(frame) - 1
-                    exit_reason = "sell_signal_final_close"
-                else:
-                    exit_reason = "sell_signal"
-                exit_row = frame.iloc[exit_index]
-                trades.append(self._close_position(open_position, row["date"], exit_row, exit_reason))
-                open_position = None
-
-        if open_position is not None:
-            final_row = frame.iloc[-1]
-            trades.append(self._close_position(open_position, final_row["date"], final_row, "final_close"))
-
-        trades_frame = pd.DataFrame(trades)
-        summary_frame = self._build_summary(symbol, trades_frame, frame)
-        return BacktestResult(trades=trades_frame, summary=summary_frame)
+        result = DEFAULT_BACKTEST_RUNNER.run(symbol, signal_frame)
+        context = self._context_for_run(symbol, signal_frame, result.summary)
+        return BacktestResult(
+            trades=enrich_trades(result.trades, context),
+            summary=enrich_summary(result.summary, context),
+        )
 
     def save_trades(self, source_filename: str, trades: pd.DataFrame) -> SavedDataset:
-        return self.processed_storage.save("backtest_trades", source_filename, trades)
+        trades_to_save = self._ensure_output_frame(trades, source_filename, BACKTEST_TRADES_OUTPUT)
+        filename = build_output_filename(trades_to_save, BACKTEST_TRADES_OUTPUT, source_filename)
+        return self.processed_storage.save("backtest_trades", filename, trades_to_save)
 
     def save_summary(self, source_filename: str, summary: pd.DataFrame) -> SavedDataset:
-        return self.processed_storage.save("backtest_summaries", source_filename, summary)
+        summary_to_save = self._ensure_output_frame(summary, source_filename, BACKTEST_SUMMARY_OUTPUT)
+        filename = build_output_filename(summary_to_save, BACKTEST_SUMMARY_OUTPUT, source_filename)
+        return self.processed_storage.save("backtest_summaries", filename, summary_to_save)
 
-    def _close_position(
-        self,
-        position: dict[str, object],
-        exit_signal_date: pd.Timestamp,
-        exit_row: pd.Series,
-        exit_reason: str,
-    ) -> dict[str, object]:
-        entry_price = float(position["entry_price"])
-        exit_price = float(exit_row["close"])
-        entry_date = pd.Timestamp(position["entry_date"])
-        exit_date = pd.Timestamp(exit_row["date"])
-        return {
-            "symbol": position["symbol"],
-            "entry_signal_date": pd.Timestamp(position["entry_signal_date"]),
-            "entry_date": entry_date,
-            "entry_price": entry_price,
-            "exit_signal_date": pd.Timestamp(exit_signal_date),
-            "exit_date": exit_date,
-            "exit_price": exit_price,
-            "return_pct": ((exit_price / entry_price) - 1.0) * 100.0,
-            "holding_days": max((exit_date - entry_date).days, 0),
-            "exit_reason": exit_reason,
-        }
+    def _ensure_output_frame(self, frame: pd.DataFrame, source_filename: str, output_type: str) -> pd.DataFrame:
+        if {"run_group_id", "run_id", "symbol", "strategy_id", "strategy_name", "output_type"}.issubset(frame.columns):
+            return frame.copy()
 
-    def _build_summary(
-        self,
-        symbol: str,
-        trades_frame: pd.DataFrame,
-        signal_frame: pd.DataFrame,
-    ) -> pd.DataFrame:
-        buy_signal_count = int((signal_frame.get("signal") == "buy").sum()) if "signal" in signal_frame else 0
-        sell_signal_count = int((signal_frame.get("signal") == "sell").sum()) if "signal" in signal_frame else 0
-
-        if trades_frame.empty:
-            return pd.DataFrame(
-                [
-                    {
-                        "symbol": symbol,
-                        "source_rows": len(signal_frame),
-                        "buy_signal_count": buy_signal_count,
-                        "sell_signal_count": sell_signal_count,
-                        "trade_count": 0,
-                        "win_rate_pct": 0.0,
-                        "average_return_pct": 0.0,
-                        "total_return_pct": 0.0,
-                        "max_drawdown_pct": 0.0,
-                        "final_equity": 1.0,
-                    }
-                ]
-            )
-
-        trade_returns = trades_frame["return_pct"].astype(float) / 100.0
-        equity_curve = (1.0 + trade_returns).cumprod()
-        rolling_peak = equity_curve.cummax()
-        drawdowns = ((equity_curve / rolling_peak) - 1.0) * 100.0
-        winning_trades = int((trades_frame["return_pct"].astype(float) > 0).sum())
-        trade_count = len(trades_frame)
-
-        return pd.DataFrame(
-            [
-                {
-                    "symbol": symbol,
-                    "source_rows": len(signal_frame),
-                    "buy_signal_count": buy_signal_count,
-                    "sell_signal_count": sell_signal_count,
-                    "trade_count": trade_count,
-                    "win_rate_pct": (winning_trades / trade_count) * 100.0,
-                    "average_return_pct": float(trades_frame["return_pct"].mean()),
-                    "total_return_pct": (float(equity_curve.iloc[-1]) - 1.0) * 100.0,
-                    "max_drawdown_pct": abs(float(drawdowns.min())) if not drawdowns.empty else 0.0,
-                    "final_equity": float(equity_curve.iloc[-1]),
-                }
-            ]
+        symbol = _first_value(frame, "symbol") or request_symbol_from_filename(source_filename)
+        strategy_id = _first_value(frame, "strategy_id") or "golden-cross"
+        strategy_name = _first_value(frame, "strategy_name") or "Golden Cross"
+        context = self._context_for_parts(
+            source_filename=source_filename,
+            symbol=symbol,
+            strategy_id=strategy_id,
+            strategy_name=strategy_name,
+            input_sources=input_sources_from_frame(frame),
         )
+        return enrich_summary(frame, context) if output_type == BACKTEST_SUMMARY_OUTPUT else enrich_trades(frame, context)
+
+    def _context_for_run(self, symbol: str, signal_frame: pd.DataFrame, summary_frame: pd.DataFrame) -> BacktestPersistenceContext:
+        strategy_id = _first_value(summary_frame, "strategy_id") or _first_value(signal_frame, "strategy_id") or "golden-cross"
+        strategy_name = _first_value(summary_frame, "strategy_name") or _first_value(signal_frame, "strategy_name") or "Golden Cross"
+        source_filename = input_sources_from_frame(signal_frame).signal_source_filename or f"{symbol}.csv"
+        return self._context_for_parts(
+            source_filename=source_filename,
+            symbol=symbol,
+            strategy_id=strategy_id,
+            strategy_name=strategy_name,
+            input_sources=input_sources_from_frame(signal_frame),
+        )
+
+    def _context_for_parts(
+        self,
+        *,
+        source_filename: str,
+        symbol: str,
+        strategy_id: str,
+        strategy_name: str,
+        input_sources: BacktestInputSources,
+    ) -> BacktestPersistenceContext:
+        key = (source_filename, symbol, strategy_id)
+        existing = self._contexts_by_key.get(key)
+        if existing is not None:
+            return existing
+        context = build_context(
+            symbol=symbol,
+            strategy_id=strategy_id,
+            strategy_name=strategy_name,
+            input_sources=input_sources,
+            now=self.now_fn(),
+        )
+        self._contexts_by_key[key] = context
+        return context
+
+
+def request_symbol_from_filename(source_filename: str) -> str:
+    return source_filename.split("_", 1)[0]
+
+
+def _first_value(frame: pd.DataFrame, column: str) -> str | None:
+    if column not in frame.columns:
+        return None
+    non_null = frame[column].dropna()
+    if non_null.empty:
+        return None
+    value = str(non_null.iloc[0]).strip()
+    return value or None

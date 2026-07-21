@@ -7,6 +7,7 @@ import streamlit as st
 from invest_bot.config.settings import AppSettings
 from invest_bot.dashboard.service import DashboardDataService
 from invest_bot.dashboard.streamlit_actions import render_actions_tab as _render_actions_tab
+from invest_bot.dashboard.streamlit_backtest import render_backtest_tab as _render_backtest_tab
 from invest_bot.dashboard.streamlit_data import render_data_tab as _render_data_tab
 from invest_bot.dashboard.streamlit_layout import (
     render_action_feedback as _render_action_feedback,
@@ -84,6 +85,12 @@ def main() -> None:
             service,
             read_preview_frame=read_preview_frame,
             load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
+        )
+    elif tab == "백테스트":
+        _render_backtest_tab(
+            snapshot,
+            service,
+            symbol_lookup=symbol_lookup,
         )
     elif tab == "데이터 탐색":
         _render_data_tab(snapshot, service, read_preview_frame=read_preview_frame)

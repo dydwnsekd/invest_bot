@@ -66,6 +66,52 @@ def test_backtest_generator_closes_open_position_at_final_row():
     assert result.summary.iloc[0]["trade_count"] == 1
 
 
+def test_backtest_generator_accepts_empty_signal_file_and_returns_zero_trade_summary():
+    test_dir = make_test_dir("backtest_generator_empty_signal")
+    processed_storage = CsvStorage(test_dir / "processed")
+    generator = GoldenCrossBacktestGenerator(processed_storage=processed_storage)
+
+    processed_storage.save(
+        "golden_cross_signals",
+        "005930_empty.csv",
+        pd.DataFrame(columns=["date", "close", "signal"]),
+    )
+
+    loaded = generator.load_signal_frame(
+        BacktestRequest(symbol="005930", source_filename="005930_empty.csv")
+    )
+    result = generator.run_backtest("005930", loaded)
+
+    assert loaded.empty
+    assert result.trades.empty
+    assert result.summary.iloc[0]["trade_count"] == 0
+    assert result.summary.iloc[0]["source_rows"] == 0
+    assert result.summary.iloc[0]["total_return_pct"] == 0.0
+
+
+def test_backtest_generator_treats_true_zero_byte_signal_file_as_empty_frame() -> None:
+    test_dir = make_test_dir("backtest_generator_zero_byte_signal")
+    processed_storage = CsvStorage(test_dir / "processed")
+    generator = GoldenCrossBacktestGenerator(processed_storage=processed_storage)
+
+    zero_byte_file = processed_storage.root_dir / "golden_cross_signals" / "005930_zero_byte.csv"
+    zero_byte_file.parent.mkdir(parents=True, exist_ok=True)
+    zero_byte_file.write_bytes(b"")
+
+    loaded = generator.load_signal_frame(
+        BacktestRequest(symbol="005930", source_filename="005930_zero_byte.csv")
+    )
+    result = generator.run_backtest("005930", loaded)
+
+    assert loaded.empty
+    assert list(loaded.columns) == ["date", "close", "signal", "strategy_id", "strategy_name", "signal_reason"]
+    assert loaded.attrs["backtest_input_sources"].signal_source_filename == "005930_zero_byte.csv"
+    assert result.trades.empty
+    assert result.summary.iloc[0]["trade_count"] == 0
+    assert result.summary.iloc[0]["source_rows"] == 0
+    assert result.summary.iloc[0]["total_return_pct"] == 0.0
+
+
 def test_run_backtest_for_symbol_uses_latest_signal_file():
     test_dir = make_test_dir("backtest_runner")
     processed_storage = CsvStorage(test_dir / "processed")
