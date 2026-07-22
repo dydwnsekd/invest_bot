@@ -6,9 +6,9 @@
 
 새 세션에서는 먼저 아래 문서를 읽고 시작하는 것을 권장합니다.
 
-1. [`README.md`](/C:/Users/user/PycharmProjects/invest_bot/README.md)
-2. [`agent.md`](/C:/Users/user/PycharmProjects/invest_bot/agent.md)
-3. [`docs/tasks/00_summary.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/00_summary.md)
+1. [`README.md`](../../README.md)
+2. [`agent.md`](../../agent.md)
+3. [`docs/tasks/00_summary.md`](../tasks/00_summary.md)
 4. 자신의 작업 범위와 관련된 task 문서
 
 공통적으로 요청하면 좋은 항목:

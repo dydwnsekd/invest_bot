@@ -24,7 +24,7 @@
 - [ ] 로깅 정책 정리
 
 관련 문서:
-- [`01_environment.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/01_environment.md)
+- [`01_environment.md`](01_environment.md)
 
 ## 2. 국내주식 데이터 수집
 
@@ -40,7 +40,7 @@
 - [ ] 공매도/프로그램 매매/뉴스 수집
 
 관련 문서:
-- [`02_data_collection.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/02_data_collection.md)
+- [`02_data_collection.md`](02_data_collection.md)
 
 ## 3. 데이터 분석 및 지표
 
@@ -54,8 +54,8 @@
 - [ ] 수급/가격 결합 분석
 
 관련 문서:
-- [`03_analysis.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/03_analysis.md)
-- [`indicator_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/indicator_guide.md)
+- [`03_analysis.md`](03_analysis.md)
+- [`indicator_guide.md`](../analysis/indicator_guide.md)
 
 ## 4. 대시보드 및 시각화
 
@@ -76,7 +76,7 @@
 - [ ] 백테스트 결과 시각화
 
 관련 문서:
-- [`04_dashboard.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/04_dashboard.md)
+- [`04_dashboard.md`](04_dashboard.md)
 
 ## 5. 전략 및 백테스트
 
@@ -96,7 +96,7 @@
 - [ ] 백테스트 결과 대시보드 표시
 
 관련 문서:
-- [`05_strategy_backtest.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/05_strategy_backtest.md)
+- [`05_strategy_backtest.md`](05_strategy_backtest.md)
 
 ## 6. 주문 및 리스크 관리
 
@@ -108,7 +108,7 @@
 - [ ] 시간 필터링
 
 관련 문서:
-- [`06_trading_risk.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/06_trading_risk.md)
+- [`06_trading_risk.md`](06_trading_risk.md)
 
 ## 7. 문서 및 운영
 
@@ -123,5 +123,5 @@
 - [ ] 운영 로그 확인 가이드
 
 관련 문서:
-- [`07_operations_docs.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/07_operations_docs.md)
-- [`db_migration_plan.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/operations/db_migration_plan.md)
+- [`07_operations_docs.md`](07_operations_docs.md)
+- [`db_migration_plan.md`](../operations/db_migration_plan.md)

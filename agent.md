@@ -209,7 +209,7 @@ invest_bot/
 
 ## 10. 새 세션용 프롬프트 예시
 
-자세한 예시는 [`codex_session_prompts.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/operations/codex_session_prompts.md) 문서를 참고합니다.
+자세한 예시는 [`codex_session_prompts.md`](docs/operations/codex_session_prompts.md) 문서를 참고합니다.
 
 짧은 예시:
 

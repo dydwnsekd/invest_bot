@@ -42,15 +42,15 @@ data/raw/domestic_stock/
 
 ## 스케줄링 관련 파일
 
-- [`scheduled_collection.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/scheduled_collection.py)
-- [`run_scheduled_collection.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_scheduled_collection.py)
-- [`collection_schedule.yaml.example`](/C:/Users/user/PycharmProjects/invest_bot/config/collection_schedule.yaml.example)
+- [`scheduled_collection.py`](../../src/invest_bot/jobs/scheduled_collection.py)
+- [`run_scheduled_collection.py`](../../scripts/run_scheduled_collection.py)
+- [`collection_schedule.yaml.example`](../../config/collection_schedule.yaml.example)
 
 ## 관련 파일
 
-- [`kis_client.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/clients/kis_client.py)
-- [`domestic_stock.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/domestic_stock.py)
-- [`collector.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/collector.py)
-- [`storage.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/storage.py)
-- [`collect_market_data.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/collect_market_data.py)
-- [`run_collection.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_collection.py)
+- [`kis_client.py`](../../src/invest_bot/clients/kis_client.py)
+- [`domestic_stock.py`](../../src/invest_bot/market/domestic_stock.py)
+- [`collector.py`](../../src/invest_bot/market/collector.py)
+- [`storage.py`](../../src/invest_bot/market/storage.py)
+- [`collect_market_data.py`](../../src/invest_bot/jobs/collect_market_data.py)
+- [`run_collection.py`](../../scripts/run_collection.py)

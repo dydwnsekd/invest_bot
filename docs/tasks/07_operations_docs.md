@@ -37,10 +37,10 @@
 
 ## 관련 파일
 
-- [`README.md`](/C:/Users/user/PycharmProjects/invest_bot/README.md)
-- [`agent.md`](/C:/Users/user/PycharmProjects/invest_bot/agent.md)
-- [`codex_session_prompts.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/operations/codex_session_prompts.md)
-- [`SKILL.md`](/C:/Users/user/PycharmProjects/invest_bot/skills/invest-bot-reference-reader/SKILL.md)
-- [`indicator_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/indicator_guide.md)
-- [`market_report_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/market_report_guide.md)
-- [`db_migration_plan.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/operations/db_migration_plan.md)
+- [`README.md`](../../README.md)
+- [`agent.md`](../../agent.md)
+- [`codex_session_prompts.md`](../operations/codex_session_prompts.md)
+- [`SKILL.md`](../../skills/invest-bot-reference-reader/SKILL.md)
+- [`indicator_guide.md`](../analysis/indicator_guide.md)
+- [`market_report_guide.md`](../analysis/market_report_guide.md)
+- [`db_migration_plan.md`](../operations/db_migration_plan.md)

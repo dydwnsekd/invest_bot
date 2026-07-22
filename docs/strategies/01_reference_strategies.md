@@ -133,13 +133,13 @@ reference 기본 전략 10개와 별개로, 현재 프로젝트는 투자자 수
 
 ## 참고 파일
 
-- [strategy_01_golden_cross.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_01_golden_cross.py)
-- [strategy_02_momentum.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_02_momentum.py)
-- [strategy_03_week52_high.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_03_week52_high.py)
-- [strategy_04_consecutive.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_04_consecutive.py)
-- [strategy_05_disparity.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_05_disparity.py)
-- [strategy_06_breakout_fail.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_06_breakout_fail.py)
-- [strategy_07_strong_close.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_07_strong_close.py)
-- [strategy_08_volatility.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_08_volatility.py)
-- [strategy_09_mean_reversion.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_09_mean_reversion.py)
-- [strategy_10_trend_filter.py](/C:/Users/user/PycharmProjects/invest_bot/reference/open-trading-api/strategy_builder/strategy/strategy_10_trend_filter.py)
+- [strategy_01_golden_cross.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_01_golden_cross.py)
+- [strategy_02_momentum.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_02_momentum.py)
+- [strategy_03_week52_high.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_03_week52_high.py)
+- [strategy_04_consecutive.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_04_consecutive.py)
+- [strategy_05_disparity.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_05_disparity.py)
+- [strategy_06_breakout_fail.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_06_breakout_fail.py)
+- [strategy_07_strong_close.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_07_strong_close.py)
+- [strategy_08_volatility.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_08_volatility.py)
+- [strategy_09_mean_reversion.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_09_mean_reversion.py)
+- [strategy_10_trend_filter.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_10_trend_filter.py)

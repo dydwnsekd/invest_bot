@@ -23,8 +23,8 @@
 
 ## 관련 파일
 
-- [settings.py](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/config/settings.py)
-- [requirements.txt](/C:/Users/user/PycharmProjects/invest_bot/requirements.txt)
-- [requirements-dev.txt](/C:/Users/user/PycharmProjects/invest_bot/requirements-dev.txt)
-- [pytest.ini](/C:/Users/user/PycharmProjects/invest_bot/pytest.ini)
-- [app.yaml.example](/C:/Users/user/PycharmProjects/invest_bot/config/app.yaml.example)
+- [settings.py](../../src/invest_bot/config/settings.py)
+- [requirements.txt](../../requirements.txt)
+- [requirements-dev.txt](../../requirements-dev.txt)
+- [pytest.ini](../../pytest.ini)
+- [app.yaml.example](../../config/app.yaml.example)

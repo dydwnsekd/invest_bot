@@ -36,7 +36,7 @@ data/processed/domestic_stock/
 
 ## 관련 파일
 
-- [`analysis.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/analysis.py)
-- [`analyze_daily_prices.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/analyze_daily_prices.py)
-- [`run_daily_analysis.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_daily_analysis.py)
-- [`indicator_guide.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/analysis/indicator_guide.md)
+- [`analysis.py`](../../src/invest_bot/market/analysis.py)
+- [`analyze_daily_prices.py`](../../src/invest_bot/jobs/analyze_daily_prices.py)
+- [`run_daily_analysis.py`](../../scripts/run_daily_analysis.py)
+- [`indicator_guide.md`](../analysis/indicator_guide.md)

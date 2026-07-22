@@ -14,6 +14,28 @@
 
 ## 현재 구현 범위
 
+### 이번 세션 업데이트 (2026-07-20)
+
+- 대시보드에 전용 `백테스트` 탭 추가
+  - `준비 확인 -> 준비 실행 -> 백테스트 실행 -> 결과 확인` 흐름으로 분리
+  - 준비 상태 panel이 선택한 종목/전략 조합별 실행 가능 여부와 차단 사유를 바로 표시
+  - 실행 결과는 전략 요약 카드, 비교표, 거래 순서 누적 수익률 차트, 거래 로그로 확인
+- 백테스트 전략 adapter/registry를 7개 전략 기준으로 고정
+  - `golden-cross`
+  - `rsi`
+  - `trend-filter`
+  - `mean-reversion`
+  - `disparity`
+  - `momentum`
+  - `investor-flow-custom`
+- 백테스트 persistence identity 정리
+  - 산출물 파일명은 `symbol` 우선 규칙으로 저장
+  - 공통 실행 식별자는 `run_group_id`, `run_id`
+  - summary에는 input provenance 필드와 `input_sources_json`을 함께 기록
+- `데이터 탐색` 탭은 구조를 바꾸지 않음
+  - generic Data tab은 종목별 최신 artifact 1건만 보일 수 있음
+  - 같은 세션 안 여러 전략 비교는 `백테스트` 탭 결과를 source of truth로 사용
+
 ### 이번 세션 업데이트 (2026-07-19)
 
 - `리포트 해석` 탭의 전략별 판단 표시를 한글 중심으로 정리
@@ -129,11 +151,15 @@
 - 골든크로스 신호 생성
 - 현재 장 상황 요약 리포트 생성
 - 시장 리포트 전략별 직접 판단 필드 생성
+- 백테스트 전략 adapter/registry 7종
+  - `golden-cross`, `rsi`, `trend-filter`, `mean-reversion`, `disparity`, `momentum`, `investor-flow-custom`
+- 백테스트 readiness gate
+- symbol-first 백테스트 산출물 persistence
 - 시장 리포트 생성 후 Discord plain-text delivery 지원
   - batch/full-pipeline opt-in only
   - `sent` / `skipped` / `failed` delivery status
   - delivery failure non-blocking
-- 골든크로스 백테스트 초안
+- 골든크로스 단건 CLI 백테스트 초안
 
 ### 대시보드
 
@@ -158,6 +184,11 @@
   - 골든크로스 신호 생성
   - 시장 리포트 생성
   - 전체 파이프라인 실행
+- 전용 `백테스트` 탭
+  - 준비 상태 확인 -> `준비 실행` -> `백테스트 실행` -> 결과 확인
+  - 선택한 미준비 전략은 차단 사유와 함께 실행이 막힘
+  - 결과는 전략 요약 카드, 비교표, 거래 순서 누적 수익률 차트, 거래 로그로 표시
+  - `데이터 탐색` 탭은 그대로 유지되며, 세션 내 비교 기준은 `백테스트` 탭 결과를 우선 사용
 - 리포트/전체 파이프라인 Discord delivery warning 노출
 - 정기 수집 상태와 최근 로그 표시
 
@@ -212,8 +243,8 @@ invest_bot/
 
 실제 실행 전 아래 예시 파일을 복사해서 사용합니다.
 
-- [`config/app.yaml.example`](/C:/Users/user/PycharmProjects/invest_bot/config/app.yaml.example) -> `config/app.yaml`
-- [`config/collection_schedule.yaml.example`](/C:/Users/user/PycharmProjects/invest_bot/config/collection_schedule.yaml.example) -> `config/collection_schedule.yaml`
+- [`config/app.yaml.example`](config/app.yaml.example) -> `config/app.yaml`
+- [`config/collection_schedule.yaml.example`](config/collection_schedule.yaml.example) -> `config/collection_schedule.yaml`
 
 실제 설정 파일은 `.gitignore`에 포함되어 있습니다.
 
@@ -403,17 +434,74 @@ python scripts/run_market_report.py 005930
 
 필수 지표가 부족하면 각 전략 필드는 `hold`와 `Missing indicators: ...` 형식으로 기록됩니다.
 
-### 8. 백테스트 초안 실행
+### 8. 백테스트 실행
 
 ```powershell
 python scripts/run_backtest.py 005930
 ```
 
-기본 규칙:
+빠른 단건 CLI 확인 경로는 유지되지만, 여러 전략 비교와 현재 운영 흐름의 기준 화면은 대시보드 `백테스트` 탭입니다.
+
+대시보드 `백테스트` 탭 흐름:
+
+- 준비 확인
+  - 종목과 전략을 고른 뒤 준비 상태 panel에서 실행 가능 여부를 먼저 확인
+  - 미준비 전략은 종목별/전략별 차단 사유와 함께 표시
+- 준비 실행
+  - 버튼을 눌렀을 때만 `데이터 수집 -> 지표 계산 -> 골든크로스 신호 생성`을 수행
+  - 자동 background 실행은 하지 않음
+- 백테스트 실행
+  - 준비 완료된 조합만 실행
+  - 세션 안 비교 결과는 `백테스트` 탭에 유지
+- 결과 확인
+  - 전략 요약 카드
+  - 전략 비교표
+  - 거래 순서 누적 수익률 차트
+  - 거래 로그
+
+포함 전략 adapter/registry 7종:
+
+- `golden-cross`
+- `rsi`
+- `trend-filter`
+- `mean-reversion`
+- `disparity`
+- `momentum`
+- `investor-flow-custom`
+
+현재 체결/청산 규칙:
 
 - `buy` 신호 발생 시 다음 거래일 종가 진입
 - `sell` 신호 발생 시 다음 거래일 종가 청산
 - 미청산 포지션은 마지막 거래일 종가로 강제 종료
+
+산출물 persistence identity:
+
+- 파일명은 `symbol` 우선 규칙으로 저장
+  - `005930_golden-cross_20260720T010203Z_backtest_trades.csv`
+  - `005930_golden-cross_20260720T010203Z_backtest_summary.csv`
+- 공통 실행 식별자
+  - `run_group_id`: `backtest_group_<UTC timestamp>`
+  - `run_id`: `<symbol>_<strategy_id>_<UTC timestamp>`
+- summary provenance
+  - `indicator_source_*`
+  - `signal_source_*`
+  - `investor_source_*`
+  - `price_source_*`
+  - `input_sources_json`
+
+주의:
+
+- `데이터 탐색` 탭은 generic preview를 유지하므로 종목별 최신 artifact 1건만 보일 수 있습니다.
+- 같은 세션 안 여러 전략 비교는 `백테스트` 탭 결과를 source of truth로 봅니다.
+- 이번 범위는 실거래/주문/리스크 관리, 새 DB schema, 새 dependency 추가를 포함하지 않습니다.
+
+후속 후보:
+
+- 일별 mark-to-market equity curve
+- 백테스트 artifact history / reload
+- 전략 파라미터 튜닝
+- 포트폴리오 / multi-symbol aggregation
 
 ### 9. 대시보드 실행
 
@@ -484,29 +572,29 @@ data/processed/test_reports/
 
 ### 데이터 수집
 
-- [`kis_client.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/clients/kis_client.py)
-- [`domestic_stock.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/domestic_stock.py)
-- [`collector.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/collector.py)
-- [`collect_market_data.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/collect_market_data.py)
-- [`scheduled_collection.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/scheduled_collection.py)
+- [`kis_client.py`](src/invest_bot/clients/kis_client.py)
+- [`domestic_stock.py`](src/invest_bot/market/domestic_stock.py)
+- [`collector.py`](src/invest_bot/market/collector.py)
+- [`collect_market_data.py`](src/invest_bot/jobs/collect_market_data.py)
+- [`scheduled_collection.py`](src/invest_bot/jobs/scheduled_collection.py)
 
 ### 분석 및 전략
 
-- [`analysis.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/market/analysis.py)
-- [`analyze_daily_prices.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/analyze_daily_prices.py)
-- [`golden_cross.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/strategy/golden_cross.py)
-- [`generate_golden_cross_signals.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/generate_golden_cross_signals.py)
-- [`generate_market_report.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/generate_market_report.py)
-- [`generate_backtest.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/jobs/generate_backtest.py)
+- [`analysis.py`](src/invest_bot/market/analysis.py)
+- [`analyze_daily_prices.py`](src/invest_bot/jobs/analyze_daily_prices.py)
+- [`golden_cross.py`](src/invest_bot/strategy/golden_cross.py)
+- [`generate_golden_cross_signals.py`](src/invest_bot/jobs/generate_golden_cross_signals.py)
+- [`generate_market_report.py`](src/invest_bot/jobs/generate_market_report.py)
+- [`generate_backtest.py`](src/invest_bot/jobs/generate_backtest.py)
 
 ### 대시보드
 
-- [`service.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/service.py)
-- [`streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_dashboard.py)
-- [`streamlit_charts.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_charts.py)
-- [`streamlit_reports.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_reports.py)
-- [`streamlit_watchlist.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_watchlist.py)
-- [`report_favorites.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/report_favorites.py)
+- [`service.py`](src/invest_bot/dashboard/service.py)
+- [`streamlit_dashboard.py`](src/invest_bot/dashboard/streamlit_dashboard.py)
+- [`streamlit_charts.py`](src/invest_bot/dashboard/streamlit_charts.py)
+- [`streamlit_reports.py`](src/invest_bot/dashboard/streamlit_reports.py)
+- [`streamlit_watchlist.py`](src/invest_bot/dashboard/streamlit_watchlist.py)
+- [`report_favorites.py`](src/invest_bot/dashboard/report_favorites.py)
 
 ## 현재 진행 상태
 
@@ -516,7 +604,8 @@ data/processed/test_reports/
 - [x] 골든크로스 전략 구현
 - [x] 골든크로스 신호 생성
 - [x] 시장 리포트 생성
-- [x] 골든크로스 백테스트 초안
+- [x] 백테스트 전략 adapter/registry 7종
+- [x] 전용 `백테스트` 탭과 in-session 비교 결과 표시
 - [x] Streamlit 대시보드
 - [x] 리포트 해석 탭 단일 리포트 본문 표시
 - [x] 리포트 해석 탭 전략별 판단 요약 표시
@@ -524,15 +613,18 @@ data/processed/test_reports/
 - [x] 리포트 관심종목(즐겨찾기) 저장 및 관심종목 탭
 - [x] 다중 종목 배치 수집
 - [x] 정기 수집 스케줄링 초안
-- [ ] 백테스트 결과 시각화
+- [ ] 일별 mark-to-market equity curve
+- [ ] 백테스트 artifact history / reload
+- [ ] 전략 파라미터 튜닝
+- [ ] 포트폴리오 / multi-symbol aggregation
 - [ ] 모의투자 주문 실행
 - [ ] 실거래 주문 실행
 - [ ] 리스크 관리 정책 자동화
 
 전체 작업 현황은 아래 문서를 참고합니다.
 
-- [`docs/tasks/00_summary.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/00_summary.md)
-- [`docs/strategies/00_summary.md`](/C:/Users/user/PycharmProjects/invest_bot/docs/strategies/00_summary.md)
+- [`docs/tasks/00_summary.md`](docs/tasks/00_summary.md)
+- [`docs/strategies/00_summary.md`](docs/strategies/00_summary.md)
 
 ## 참고 자산
 

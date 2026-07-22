@@ -15,6 +15,10 @@
 - [x] stock dataset용 전문가형 주가 차트(일봉/주봉/월봉, 수급 panel fallback 포함)
 - [x] 리포트 즐겨찾기 저장
 - [x] 관심종목 전용 탭 추가
+- [x] 전용 `백테스트` 탭 추가
+- [x] `준비 확인 -> 준비 실행 -> 백테스트 실행 -> 결과 확인` 흐름 추가
+- [x] 준비 상태 panel과 전략별 차단 사유 표시
+- [x] 백테스트 결과 요약 카드 / 비교표 / 거래 순서 누적 수익률 차트 / 거래 로그 표시
 - [x] 테스트 결과 표시
 - [x] 데이터 수집 실행
 - [x] 지표 계산 실행
@@ -29,7 +33,10 @@
 
 - [ ] 종목 비교 차트
 - [ ] 최신 수집/분석 시각 강조
-- [ ] 백테스트 결과 시각화
+- [ ] 일별 mark-to-market equity curve
+- [ ] 백테스트 artifact history / reload
+- [ ] 전략 파라미터 튜닝 진입 UX
+- [ ] 포트폴리오 / multi-symbol aggregation view
 - [ ] 대시보드 설정 저장 고도화
 
 ## 현재 작업 실행 탭 동작
@@ -79,6 +86,38 @@
 - hover 시 날짜 기준으로 visible series 값을 함께 확인하고 shared x-axis zoom을 사용함
 - 빠른 기간 선택과 직접 date range 선택을 모두 지원하고 두 기간 표시는 같은 최종 유효 기간으로 동기화되며, Plotly 사용이 불가능한 환경에서는 Altair fallback으로 표시함
 - 가격 y축과 hover 가격은 천 단위 쉼표 형식으로 표시함
+- generic Data tab은 종목별 최신 artifact 1건만 보일 수 있으므로, 같은 세션 안 여러 전략 비교 기준 화면은 `백테스트` 탭으로 본다
+
+## 현재 백테스트 탭 동작
+
+- sidebar 탭 목록에 전용 `백테스트` 탭이 포함됨
+- 흐름은 `준비 확인 -> 준비 실행 -> 백테스트 실행 -> 결과 확인`으로 고정
+- `준비 실행`은 버튼을 눌렀을 때만 아래 순서를 수행함
+  - 데이터 수집
+  - 지표 계산
+  - 골든크로스 신호 생성
+- 준비 상태 panel은 선택한 종목/전략 조합별로 아래를 표시함
+  - 준비 완료 여부
+  - 차단 사유
+  - 전체 실행 가능 여부
+- 선택한 미준비 전략은 실행 직전 warning과 함께 차단됨
+- 현재 포함된 전략 adapter/registry는 정확히 7개
+  - `golden-cross`
+  - `rsi`
+  - `trend-filter`
+  - `mean-reversion`
+  - `disparity`
+  - `momentum`
+  - `investor-flow-custom`
+- 결과 화면은 아래 4개 섹션으로 고정
+  - 전략 요약 카드
+  - 전략 비교표
+  - 거래 순서 누적 수익률 차트
+  - 거래 로그
+- 이번 범위는 아래를 포함하지 않음
+  - 주문/체결/리스크 관리
+  - 새 DB schema
+  - 새 dependency 추가
 
 ## 현재 대시보드 테마 / 폰트 동작
 
@@ -212,7 +251,10 @@
 - 사용자/account ownership이 필요한 shared watchlist 확장 여부 결정
 - 종목 비교 차트
 - 최신 수집/분석 시각 강조
-- 백테스트 결과 시각화
+- 일별 mark-to-market equity curve
+- 백테스트 artifact history / reload
+- 전략 파라미터 튜닝 진입 UX
+- 포트폴리오 / multi-symbol aggregation view
 - 대시보드 설정 저장 고도화
 
 ## 접속 정보
@@ -225,10 +267,10 @@ http://127.0.0.1:8000
 
 ## 관련 파일
 
-- [`service.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/service.py)
-- [`streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_dashboard.py)
-- [`streamlit_reports.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_reports.py)
-- [`streamlit_watchlist.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/streamlit_watchlist.py)
-- [`report_favorites.py`](/C:/Users/user/PycharmProjects/invest_bot/src/invest_bot/dashboard/report_favorites.py)
-- [`run_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_dashboard.py)
-- [`run_streamlit_dashboard.py`](/C:/Users/user/PycharmProjects/invest_bot/scripts/run_streamlit_dashboard.py)
+- [`service.py`](src/invest_bot/dashboard/service.py)
+- [`streamlit_dashboard.py`](src/invest_bot/dashboard/streamlit_dashboard.py)
+- [`streamlit_reports.py`](src/invest_bot/dashboard/streamlit_reports.py)
+- [`streamlit_watchlist.py`](src/invest_bot/dashboard/streamlit_watchlist.py)
+- [`report_favorites.py`](src/invest_bot/dashboard/report_favorites.py)
+- [`run_dashboard.py`](scripts/run_dashboard.py)
+- [`run_streamlit_dashboard.py`](scripts/run_streamlit_dashboard.py)

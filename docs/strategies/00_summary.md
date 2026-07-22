@@ -74,5 +74,5 @@
 
 ## 관련 문서
 
-- [01_reference_strategies.md](/C:/Users/user/PycharmProjects/invest_bot/docs/strategies/01_reference_strategies.md)
-- [05_strategy_backtest.md](/C:/Users/user/PycharmProjects/invest_bot/docs/tasks/05_strategy_backtest.md)
+- [01_reference_strategies.md](01_reference_strategies.md)
+- [05_strategy_backtest.md](../tasks/05_strategy_backtest.md)
