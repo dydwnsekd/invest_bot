@@ -9,6 +9,7 @@ from invest_bot.dashboard.service import DashboardDataService
 from invest_bot.dashboard.streamlit_actions import render_actions_tab as _render_actions_tab
 from invest_bot.dashboard.streamlit_backtest import render_backtest_tab as _render_backtest_tab
 from invest_bot.dashboard.streamlit_data import render_data_tab as _render_data_tab
+from invest_bot.dashboard.streamlit_interpretations import render_interpretations_tab as _render_interpretations_tab
 from invest_bot.dashboard.streamlit_layout import (
     render_action_feedback as _render_action_feedback,
     render_header as _render_header,
@@ -71,6 +72,12 @@ def main() -> None:
             schedule_status,
             settings=settings,
             render_schedule_status_panel=_render_schedule_status_panel,
+        )
+    elif tab == "해석 모아보기":
+        _render_interpretations_tab(
+            snapshot,
+            service,
+            read_preview_frame=read_preview_frame,
         )
     elif tab == "리포트 해석":
         _render_reports_tab(

@@ -44,6 +44,9 @@ STATE_COLUMNS = {
     "rsi_state",
     "volume_state",
     "investor_flow",
+    "rsi_strategy_signal",
+    "trend_filter_signal",
+    "mean_reversion_signal",
 }
 
 POSITIVE_STATE_VALUES = {"buy", "bullish", "supportive", "active", "strong"}

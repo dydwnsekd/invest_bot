@@ -27,8 +27,15 @@ import invest_bot.dashboard.streamlit_charts as streamlit_charts_module
 import invest_bot.dashboard.streamlit_actions as streamlit_actions_module
 import invest_bot.dashboard.streamlit_dashboard as streamlit_dashboard_module
 import invest_bot.dashboard.streamlit_data as streamlit_data_module
+import invest_bot.dashboard.streamlit_interpretations as streamlit_interpretations_module
 import invest_bot.dashboard.streamlit_layout as streamlit_layout_module
 import invest_bot.dashboard.streamlit_styles as streamlit_styles_module
+from invest_bot.dashboard.streamlit_interpretations import (
+    build_interpretation_rows,
+    build_strategy_reason_rows,
+    count_buy_strategy_signals,
+    filter_interpretation_entries,
+)
 from invest_bot.dashboard.streamlit_actions import (
     describe_delivery_problems,
     normalize_delivery_detail,
@@ -210,6 +217,7 @@ def test_format_display_value_formats_state_text_and_numbers() -> None:
     service = DashboardDataService()
 
     assert _format_display_value(service, "final_opinion", "buy") == "매수 관점"
+    assert _format_display_value(service, "rsi_strategy_signal", "hold") == "관망"
     assert _format_display_value(service, "close", 100000) == "100,000"
     assert _format_display_value(service, "summary", "Trend is bullish, golden cross signal is buy, RSI state is strong, volume is active, and investor flow is supportive.") == (
         "추세는 상승 우세이고, 골든크로스 신호는 매수 관점이며, RSI 상태는 강한 흐름, 거래량은 거래 활발, 수급은 수급 우호적입니다."
@@ -2273,3 +2281,128 @@ def test_streamlit_dashboard_main_builds_settings_once_and_injects_them(monkeypa
 
     assert captured["service_settings"] is settings
     assert captured["actions_settings"] is settings
+
+
+def test_interpretation_rows_show_stock_and_strategy_labels() -> None:
+    service = DashboardDataService()
+    entries = [
+        {
+            "symbol": "005930",
+            "symbol_name": "삼성전자",
+            "frame": pd.DataFrame(
+                [
+                    {
+                        "date": "2026-06-24",
+                        "final_opinion": "buy",
+                        "trend_state": "bullish",
+                        "golden_cross_signal": "buy",
+                        "rsi_strategy_signal": "hold",
+                        "trend_filter_signal": "buy",
+                        "mean_reversion_signal": "hold",
+                        "rsi_state": "strong",
+                        "volume_state": "active",
+                        "investor_flow": "supportive",
+                        "summary": "raw summary",
+                    }
+                ]
+            ),
+        }
+    ]
+
+    rows = build_interpretation_rows(entries, service)
+
+    assert rows == [
+        {
+            "종목": "삼성전자 (005930)",
+            "날짜": "2026-06-24",
+            "최종 의견": "매수 관점",
+            "추세": "상승 우세",
+            "골든크로스": "매수 관점",
+            "RSI 전략": "관망",
+            "추세필터": "매수 관점",
+            "평균회귀": "관망",
+            "수급": "수급 우호적",
+            "한 줄 해석": "추세는 상승 우세이고, 골든크로스 신호는 매수 관점이며, RSI 상태는 강한 흐름, 거래량은 거래 활발, 수급은 수급 우호적입니다.",
+        }
+    ]
+    assert count_buy_strategy_signals(rows[0]) == 2
+
+
+def test_interpretation_filter_matches_any_strategy_signal_label() -> None:
+    entries = [
+        {
+            "display_opinion": "관망",
+            "frame": pd.DataFrame([{"golden_cross_signal": "hold", "rsi_strategy_signal": "buy"}]),
+        },
+        {
+            "display_opinion": "매수 관점",
+            "frame": pd.DataFrame([{"golden_cross_signal": "hold", "rsi_strategy_signal": "hold"}]),
+        },
+    ]
+
+    by_strategy = filter_interpretation_entries(entries, strategy_filter="매수 관점")
+    by_opinion = filter_interpretation_entries(entries, opinion_filter="매수 관점")
+
+    assert by_strategy == [entries[0]]
+    assert by_opinion == [entries[1]]
+
+
+def test_strategy_reason_rows_include_localized_reason() -> None:
+    service = DashboardDataService()
+    entries = [
+        {
+            "symbol": "005930",
+            "symbol_name": "삼성전자",
+            "frame": pd.DataFrame(
+                [
+                    {
+                        "golden_cross_signal": "buy",
+                        "golden_cross_reason": "ma_5 crossed above ma_20.",
+                    }
+                ]
+            ),
+        }
+    ]
+
+    rows = build_strategy_reason_rows(entries, service)
+
+    assert rows[0] == {
+        "종목": "삼성전자 (005930)",
+        "전략": "골든크로스",
+        "판단": "매수 관점",
+        "근거": "5일 이동평균선이 20일 이동평균선을 상향 돌파했습니다.",
+    }
+
+
+def test_render_interpretations_tab_renders_overview_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_interpretations_module, "st", fake_st)
+    previews = [_make_report_preview("005930", "삼성전자", "005930_20260624.csv")]
+    frame = pd.DataFrame(
+        [
+            {
+                "date": "2026-06-24",
+                "symbol_name": "삼성전자",
+                "final_opinion": "buy",
+                "trend_state": "bullish",
+                "golden_cross_signal": "buy",
+                "rsi_strategy_signal": "hold",
+                "trend_filter_signal": "buy",
+                "mean_reversion_signal": "hold",
+                "rsi_state": "strong",
+                "volume_state": "active",
+                "investor_flow": "supportive",
+                "summary": "a",
+            }
+        ]
+    )
+
+    streamlit_interpretations_module.render_interpretations_tab(
+        SimpleNamespace(processed_previews=previews),
+        DashboardDataService(),
+        read_preview_frame=lambda preview: frame,
+    )
+
+    assert "해석 모아보기" in "".join(fake_st.markdown_calls)
+    assert "표시 종목" in [label for label, _ in fake_st.metric_calls]
+    assert fake_st.dataframe_calls == 2

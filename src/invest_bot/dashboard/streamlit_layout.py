@@ -7,7 +7,7 @@ import streamlit as st
 from invest_bot.dashboard.service import DashboardDataService
 
 
-TAB_NAMES = ("상태판", "작업 실행", "리포트 해석", "관심종목", "백테스트", "데이터 탐색", "검증")
+TAB_NAMES = ("상태판", "작업 실행", "해석 모아보기", "리포트 해석", "관심종목", "백테스트", "데이터 탐색", "검증")
 
 
 def render_sidebar(service: DashboardDataService, schedule_status) -> None:
