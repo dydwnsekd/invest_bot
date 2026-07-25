@@ -123,7 +123,7 @@ def render_backtest_tab(
             step=1,
             key=BACKTEST_LOOKBACK_DAYS_KEY,
         )
-        st.caption("준비 실행은 자동으로 돌지 않습니다. 버튼을 눌렀을 때만 수집 → 지표 계산 → 골든크로스 신호 생성을 수행합니다.")
+        st.caption("준비 실행은 자동으로 돌지 않습니다. 버튼을 눌렀을 때만 수집, 지표 계산, 골든크로스 신호 생성을 순서대로 수행합니다.")
 
         selected_items = [
             ResolvedSymbol(raw_input=symbol, symbol=symbol, symbol_name=selection_map[symbol].symbol_name)

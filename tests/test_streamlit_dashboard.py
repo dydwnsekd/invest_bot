@@ -27,14 +27,23 @@ import invest_bot.dashboard.streamlit_charts as streamlit_charts_module
 import invest_bot.dashboard.streamlit_actions as streamlit_actions_module
 import invest_bot.dashboard.streamlit_dashboard as streamlit_dashboard_module
 import invest_bot.dashboard.streamlit_data as streamlit_data_module
+import invest_bot.dashboard.streamlit_glossary as streamlit_glossary_module
 import invest_bot.dashboard.streamlit_interpretations as streamlit_interpretations_module
 import invest_bot.dashboard.streamlit_layout as streamlit_layout_module
+from invest_bot.dashboard.streamlit_layout import TAB_NAMES
 import invest_bot.dashboard.streamlit_styles as streamlit_styles_module
+from invest_bot.dashboard.streamlit_glossary import (
+    build_glossary_terms,
+    filter_glossary_terms,
+    glossary_terms_to_frame,
+)
 from invest_bot.dashboard.streamlit_interpretations import (
     build_interpretation_rows,
     build_strategy_reason_rows,
     count_buy_strategy_signals,
     filter_interpretation_entries,
+    render_interpretation_cards,
+    render_strategy_reason_cards,
 )
 from invest_bot.dashboard.streamlit_actions import (
     describe_delivery_problems,
@@ -1193,7 +1202,7 @@ def _make_report_preview(symbol: str, symbol_name: str, filename: str) -> Datase
 
 
 def test_render_reports_tab_renders_only_one_selected_report(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_st = _FakeStreamlit()
+    fake_st = _FakeStreamlit(toggle_values={"report_interpretation_overview_open": True})
     monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
 
     captured: list[str] = []
@@ -1223,6 +1232,49 @@ def test_render_reports_tab_renders_only_one_selected_report(monkeypatch: pytest
 
     assert captured == ["005930"]
 
+
+
+def test_render_reports_tab_places_interpretation_overview_behind_top_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(toggle_values={"report_interpretation_overview_open": True})
+    monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(streamlit_reports_module, "render_market_report_card", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        streamlit_interpretations_module,
+        "render_interpretations_panel",
+        lambda entries, service, *, show_reason_expander: captured.update(
+            {"entry_count": len(entries), "show_reason_expander": show_reason_expander}
+        ),
+    )
+
+    previews = [_make_report_preview("005930", "삼성전자", "005930_20260624.csv")]
+    frame = pd.DataFrame(
+        [
+            {
+                "date": "2026-06-24",
+                "symbol_name": "삼성전자",
+                "final_opinion": "buy",
+                "summary": "a",
+                "trend_state": "bullish",
+                "golden_cross_signal": "buy",
+                "rsi_state": "strong",
+                "investor_flow": "supportive",
+            }
+        ]
+    )
+
+    streamlit_reports_module.render_reports_tab(
+        SimpleNamespace(processed_previews=previews),
+        DashboardDataService(),
+        read_preview_frame=lambda preview: frame,
+        load_indicator_frame_for_symbol=lambda symbol: frame,
+        favorites_store=_make_favorites_store("reports_embedded_interpretations"),
+    )
+
+    assert fake_st.session_state["report_interpretation_overview_open"] is True
+    assert fake_st.expander_labels == []
+    assert captured == {"entry_count": 1, "show_reason_expander": False}
 
 def test_build_report_entries_marks_favorite_symbols() -> None:
     previews = [_make_report_preview("005930", "삼성전자", "005930_20260624.csv")]
@@ -1744,7 +1796,7 @@ def test_render_watchlist_tab_shows_info_when_no_favorites(monkeypatch: pytest.M
         favorites_store=store,
     )
 
-    assert fake_st.info_messages == ["아직 저장된 관심종목이 없습니다. `리포트 해석` 탭에서 관심종목을 추가해 보세요."]
+    assert fake_st.info_messages == ["아직 저장된 관심종목이 없습니다. 리포트 해석 탭에서 관심종목을 추가해 보세요."]
 
 
 def test_render_watchlist_tab_renders_only_one_selected_favorite(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2374,35 +2426,97 @@ def test_strategy_reason_rows_include_localized_reason() -> None:
     }
 
 
-def test_render_interpretations_tab_renders_overview_table(monkeypatch: pytest.MonkeyPatch) -> None:
+
+def test_render_interpretations_panel_renders_cards_and_inline_reasons(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_st = _FakeStreamlit()
     monkeypatch.setattr(streamlit_interpretations_module, "st", fake_st)
-    previews = [_make_report_preview("005930", "삼성전자", "005930_20260624.csv")]
-    frame = pd.DataFrame(
+    entries = [
+        {
+            "symbol": "005930",
+            "symbol_name": "삼성전자",
+            "date": "2026-06-24",
+            "final_opinion": "buy",
+            "display_opinion": "매수 관점",
+            "frame": pd.DataFrame(
+                [
+                    {
+                        "date": "2026-06-24",
+                        "final_opinion": "buy",
+                        "trend_state": "bullish",
+                        "golden_cross_signal": "buy",
+                        "golden_cross_reason": "ma_5 crossed above ma_20.",
+                        "rsi_strategy_signal": "hold",
+                        "trend_filter_signal": "buy",
+                        "mean_reversion_signal": "hold",
+                        "rsi_state": "strong",
+                        "volume_state": "active",
+                        "investor_flow": "supportive",
+                    }
+                ]
+            ),
+        }
+    ]
+
+    streamlit_interpretations_module.render_interpretations_panel(
+        entries,
+        DashboardDataService(),
+        show_reason_expander=False,
+    )
+
+    rendered = "".join(fake_st.markdown_calls)
+    assert "interpretation-card" in rendered
+    assert "전략 판단 근거" in rendered
+    assert fake_st.expander_labels == []
+
+def test_render_interpretation_cards_wraps_content_without_table_layout() -> None:
+    html = render_interpretation_cards(
         [
             {
-                "date": "2026-06-24",
-                "symbol_name": "삼성전자",
-                "final_opinion": "buy",
-                "trend_state": "bullish",
-                "golden_cross_signal": "buy",
-                "rsi_strategy_signal": "hold",
-                "trend_filter_signal": "buy",
-                "mean_reversion_signal": "hold",
-                "rsi_state": "strong",
-                "volume_state": "active",
-                "investor_flow": "supportive",
-                "summary": "a",
+                "종목": "삼성전자 (005930)",
+                "날짜": "2026-06-24",
+                "최종 의견": "매수 관점",
+                "추세": "상승 우세",
+                "골든크로스": "매수 관점",
+                "RSI 전략": "관망",
+                "추세필터": "매수 관점",
+                "평균회귀": "관망",
+                "수급": "수급 우호적",
+                "한 줄 해석": "아주 긴 설명도 카드 안에서 줄바꿈되어 겹치지 않아야 합니다.",
             }
         ]
     )
 
-    streamlit_interpretations_module.render_interpretations_tab(
-        SimpleNamespace(processed_previews=previews),
-        DashboardDataService(),
-        read_preview_frame=lambda preview: frame,
+    assert "interpretation-grid" in html
+    assert "interpretation-card" in html
+    assert "<table" not in html.lower()
+    assert "아주 긴 설명" in html
+
+
+def test_render_strategy_reason_cards_wraps_reason_text_without_table_layout() -> None:
+    html = render_strategy_reason_cards(
+        [
+            {
+                "종목": "삼성전자 (005930)",
+                "전략": "골든크로스",
+                "판단": "매수 관점",
+                "근거": "5일 이동평균선이 20일 이동평균선을 상향 돌파했습니다.",
+            }
+        ]
     )
 
-    assert "해석 모아보기" in "".join(fake_st.markdown_calls)
-    assert "표시 종목" in [label for label, _ in fake_st.metric_calls]
-    assert fake_st.dataframe_calls == 2
+    assert "interpretation-reason-list" in html
+    assert "interpretation-reason-card" in html
+    assert "<table" not in html.lower()
+
+def test_render_glossary_tab_renders_terms_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(query="RSI")
+    monkeypatch.setattr(streamlit_glossary_module, "st", fake_st)
+
+    streamlit_glossary_module.render_glossary_tab(DashboardDataService())
+
+    rendered = "".join(fake_st.markdown_calls)
+    assert "용어 해설" in rendered
+    assert "glossary-guide-box" in rendered
+    assert fake_st.expander_labels == []
+    assert "전체 용어" in [label for label, _ in fake_st.metric_calls]
+    assert fake_st.dataframe_calls == 1

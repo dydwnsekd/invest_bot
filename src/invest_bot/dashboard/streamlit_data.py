@@ -59,7 +59,7 @@ def render_data_tab(snapshot, service: DashboardDataService, *, read_preview_fra
         )
     with overview_right:
         st.markdown(
-            "<div class=\"summary-box\"><div class=\"muted-label\">보는 순서</div><div><strong>요약 → 해석 포인트 → 상세 표/차트</strong></div><div class=\"section-copy\">표는 꼭 필요할 때만 펼쳐 확인하도록 배치했습니다.</div></div>",
+            "<div class=\"summary-box\"><div class=\"muted-label\">보는 순서</div><div><strong>요약, 해석 포인트, 상세 표/차트 순서로 확인</strong></div><div class=\"section-copy\">표는 꼭 필요할 때만 펼쳐 확인하도록 배치했습니다.</div></div>",
             unsafe_allow_html=True,
         )
 

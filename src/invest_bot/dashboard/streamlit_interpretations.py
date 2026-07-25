@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from html import escape
 
 import pandas as pd
 import streamlit as st
@@ -12,7 +12,7 @@ from invest_bot.dashboard.streamlit_formatters import (
     localize_report_summary_from_row,
     state_label,
 )
-from invest_bot.dashboard.streamlit_reports import build_report_entries, query_report_previews, sort_report_entries
+from invest_bot.dashboard.streamlit_reports import sort_report_entries
 
 INTERPRETATION_SORT_OPTION_KEY = "interpretation_sort_option"
 INTERPRETATION_OPINION_FILTER_KEY = "interpretation_opinion_filter"
@@ -26,31 +26,12 @@ STRATEGY_COLUMNS = (
 )
 
 
-def render_interpretations_tab(
-    snapshot,
+def render_interpretations_panel(
+    entries: list[dict[str, object]],
     service: DashboardDataService,
     *,
-    read_preview_frame: Callable[[object], pd.DataFrame],
+    show_reason_expander: bool = False,
 ) -> None:
-    st.markdown('<h3 class="section-title">해석 모아보기</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">종목별 최종 의견과 전략별 판단을 한 화면에서 비교할 수 있도록 최신 시장 리포트를 표로 모았습니다.</div>',
-        unsafe_allow_html=True,
-    )
-
-    report_previews = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
-    if not report_previews:
-        st.info("표시할 시장 리포트가 아직 없습니다. 전체 파이프라인이나 리포트 생성을 먼저 실행해 주세요.")
-        return
-
-    query = st.text_input(
-        "종목/전략 해석 검색",
-        placeholder="종목코드 또는 종목명으로 찾기",
-        key="interpretation_query",
-    ).strip().lower()
-    visible_previews = query_report_previews(report_previews, query)
-    entries = build_report_entries(visible_previews, service, read_preview_frame=read_preview_frame)
-
     control_columns = st.columns(3)
     opinion_filter = control_columns[0].selectbox(
         "최종 의견",
@@ -82,15 +63,84 @@ def render_interpretations_tab(
         st.warning("현재 조건에 맞는 종목/전략 해석이 없습니다.")
         return
 
-    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    st.markdown(render_interpretation_cards(rows), unsafe_allow_html=True)
+    render_strategy_reasons(visible_entries, service, show_expander=show_reason_expander)
 
-    with st.expander("전략 판단 근거 보기"):
-        reason_rows = build_strategy_reason_rows(visible_entries, service)
-        if reason_rows:
-            st.dataframe(pd.DataFrame(reason_rows), width="stretch", hide_index=True)
-        else:
-            st.caption("표시할 전략 판단 근거가 없습니다.")
 
+def render_strategy_reasons(
+    entries: list[dict[str, object]],
+    service: DashboardDataService,
+    *,
+    show_expander: bool,
+) -> None:
+    reason_rows = build_strategy_reason_rows(entries, service)
+    if show_expander:
+        with st.expander("전략 판단 근거 보기"):
+            render_strategy_reason_content(reason_rows)
+        return
+
+    st.markdown("#### 전략 판단 근거")
+    render_strategy_reason_content(reason_rows)
+
+
+def render_strategy_reason_content(reason_rows: list[dict[str, object]]) -> None:
+    if reason_rows:
+        st.markdown(render_strategy_reason_cards(reason_rows), unsafe_allow_html=True)
+    else:
+        st.caption("표시할 전략 판단 근거가 없습니다.")
+
+def render_interpretation_cards(rows: list[dict[str, object]]) -> str:
+    cards = []
+    for row in rows:
+        cards.append(
+            f"""
+            <article class="interpretation-card">
+              <div class="interpretation-card-header">
+                <div>
+                  <div class="muted-label">{escape(str(row.get('날짜', '')))}</div>
+                  <h4>{escape(str(row.get('종목', '')))}</h4>
+                </div>
+                <span class="interpretation-pill">{escape(str(row.get('최종 의견', '')))}</span>
+              </div>
+              <div class="interpretation-signal-grid">
+                {render_signal_cell('추세', row.get('추세', ''))}
+                {render_signal_cell('골든크로스', row.get('골든크로스', ''))}
+                {render_signal_cell('RSI 전략', row.get('RSI 전략', ''))}
+                {render_signal_cell('추세필터', row.get('추세필터', ''))}
+                {render_signal_cell('평균회귀', row.get('평균회귀', ''))}
+                {render_signal_cell('수급', row.get('수급', ''))}
+              </div>
+              <p class="interpretation-summary">{escape(str(row.get('한 줄 해석', '')))}</p>
+            </article>
+            """
+        )
+    return f"<div class='interpretation-grid'>{''.join(cards)}</div>"
+
+
+def render_signal_cell(label: str, value: object) -> str:
+    return (
+        "<div class='interpretation-signal-cell'>"
+        f"<span>{escape(label)}</span>"
+        f"<strong>{escape(str(value))}</strong>"
+        "</div>"
+    )
+
+
+def render_strategy_reason_cards(rows: list[dict[str, object]]) -> str:
+    items = []
+    for row in rows:
+        items.append(
+            f"""
+            <article class="interpretation-reason-card">
+              <div class="interpretation-reason-title">
+                <strong>{escape(str(row.get('종목', '')))}</strong>
+                <span>{escape(str(row.get('전략', '')))} · {escape(str(row.get('판단', '')))}</span>
+              </div>
+              <p>{escape(str(row.get('근거', '')))}</p>
+            </article>
+            """
+        )
+    return f"<div class='interpretation-reason-list'>{''.join(items)}</div>"
 
 def filter_interpretation_entries(
     entries: list[dict[str, object]],

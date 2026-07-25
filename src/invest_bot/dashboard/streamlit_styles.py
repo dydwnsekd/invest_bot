@@ -315,6 +315,142 @@ def apply_custom_style() -> None:
         button[data-baseweb="tab"]::after {
             background: transparent !important;
         }
+
+        .interpretation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+            gap: 0.9rem;
+            align-items: stretch;
+            margin-top: 0.75rem;
+        }
+
+        .interpretation-card,
+        .interpretation-reason-card {
+            min-width: 0;
+            padding: 1rem;
+            border-radius: 1rem;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid var(--app-border);
+            box-shadow: 0 10px 24px rgba(2, 6, 23, 0.20);
+            overflow-wrap: anywhere;
+            word-break: keep-all;
+            line-height: 1.5;
+        }
+
+        .interpretation-card-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.75rem;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .interpretation-card h4 {
+            margin: 0.18rem 0 0 0;
+            font-size: 1rem;
+            line-height: 1.35;
+            color: var(--app-text);
+            overflow-wrap: anywhere;
+        }
+
+        .interpretation-pill {
+            flex: 0 0 auto;
+            max-width: 8rem;
+            padding: 0.28rem 0.55rem;
+            border-radius: 999px;
+            background: rgba(56, 189, 248, 0.18);
+            border: 1px solid rgba(56, 189, 248, 0.38);
+            color: var(--app-text);
+            font-size: 0.78rem;
+            font-weight: 800;
+            line-height: 1.35;
+            text-align: center;
+            white-space: normal;
+        }
+
+        .interpretation-signal-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.45rem;
+        }
+
+        .interpretation-signal-cell {
+            min-width: 0;
+            padding: 0.58rem 0.62rem;
+            border-radius: 0.75rem;
+            background: rgba(2, 6, 23, 0.52);
+            border: 1px solid rgba(203, 213, 225, 0.20);
+        }
+
+        .interpretation-signal-cell span {
+            display: block;
+            color: var(--app-text-muted);
+            font-size: 0.74rem;
+            line-height: 1.3;
+        }
+
+        .interpretation-signal-cell strong {
+            display: block;
+            margin-top: 0.14rem;
+            color: var(--app-text);
+            font-size: 0.86rem;
+            line-height: 1.35;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .interpretation-summary,
+        .interpretation-reason-card p {
+            margin: 0.75rem 0 0 0;
+            color: var(--app-text-soft);
+            font-size: 0.9rem;
+            line-height: 1.55;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: keep-all;
+        }
+
+        .interpretation-reason-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+            gap: 0.7rem;
+        }
+
+        .interpretation-reason-title {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem 0.55rem;
+            align-items: baseline;
+            line-height: 1.4;
+        }
+
+        .interpretation-reason-title strong {
+            color: var(--app-text);
+        }
+
+        .interpretation-reason-title span {
+            color: var(--app-text-muted);
+            font-size: 0.85rem;
+        }
+
+        .glossary-guide-box {
+            margin-top: 0.9rem;
+        }
+
+        .glossary-guide-box ol {
+            margin: 0.55rem 0 0 1.15rem;
+            padding: 0;
+        }
+
+        .glossary-guide-box li {
+            margin: 0.38rem 0;
+            color: var(--app-text-soft);
+            line-height: 1.55;
+            word-break: keep-all;
+            overflow-wrap: anywhere;
+        }
+
+
         </style>
         """,
         unsafe_allow_html=True,

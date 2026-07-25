@@ -59,6 +59,13 @@ def render_reports_tab(
         favorite_symbols=favorite_symbols,
     )
 
+    show_overview = st.toggle("해석 모아보기 열기", value=False, key="report_interpretation_overview_open")
+    if show_overview:
+        st.caption("현재 리포트 검색 조건에 맞는 종목들의 최종 의견과 전략별 판단을 한 번에 비교합니다.")
+        from invest_bot.dashboard.streamlit_interpretations import render_interpretations_panel
+
+        render_interpretations_panel(report_entries, service, show_reason_expander=False)
+
     filter_columns = st.columns(2)
     favorites_only = filter_columns[0].toggle(
         "즐겨찾기만 보기",
