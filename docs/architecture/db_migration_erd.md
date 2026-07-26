@@ -4,7 +4,11 @@
 
 이 문서는 **현재 코드 기준 실제 테이블 관계를 간략히 보여주는 보조 문서**다. 세부 책임과 사용자 변경 경계는 [`db_schema.md`](./db_schema.md)를 canonical source로 본다.
 
-## Current relational shape
+## Tables
+
+관리 대상 테이블은 `symbols`, `daily_prices`, `investor_daily`, `dataset_frames`, `stock_info_snapshots`다. 아래 ERD는 각 테이블의 주요 컬럼과 현재 관계를 요약한다.
+
+## Relationships
 
 ```mermaid
 erDiagram
@@ -70,6 +74,14 @@ erDiagram
         string source_filename
     }
 ```
+
+## Constraints
+
+- `symbols.symbol`은 종목 기준 primary key다.
+- `daily_prices`는 `symbol + trade_date` unique constraint로 일별 가격 중복을 막는다.
+- `investor_daily`는 `symbol + trade_date` unique constraint로 일별 수급 중복을 막는다.
+- `dataset_frames`는 `dataset + filename` unique constraint로 snapshot 중복을 막는다.
+- fact/snapshot table의 `symbol`은 `symbols.symbol`을 참조하는 관계로 해석한다.
 
 ## Ownership notes
 

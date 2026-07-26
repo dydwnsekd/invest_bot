@@ -21,7 +21,7 @@ Align the DB/runtime implementation with the ownership rules below:
 | Raw/processed previews and outputs | `dataset_frames` | Yes, execution output only |
 | Raw stock info history | `stock_info_snapshots` | No; removal candidate |
 
-## Implementation phases
+## Phases
 
 ### 1. Canonical lookup enforcement
 

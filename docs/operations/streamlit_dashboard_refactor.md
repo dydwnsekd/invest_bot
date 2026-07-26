@@ -10,9 +10,11 @@
 - 기준 시점 파일 크기: 약 1,282 lines
 - 현재 파일 크기: 72 lines
 - 현재 전략: 동작 변경 없이 안전한 분리부터 순차 진행
-- 후속 기능 반영: `streamlit_reports.py`가 단일 리포트 본문 흐름과 전략별 판단 요약 렌더링까지 담당
+- 후속 기능 반영: `streamlit_reports.py`가 단일 리포트 본문 흐름, 리포트 해석 상단 해석 모아보기 토글, 전략별 판단 요약 렌더링까지 담당
 - 현재 공용 차트 경계: `streamlit_charts.py` / `streamlit_state.py`가 리포트 해석·데이터 탐색 공용 전문가형 주가 차트와 데이터 조합(`daily_prices_indicators` / `daily_prices` / `investor_daily`)을 담당
 - 현재 관심종목 경계: Watchlist는 별도 차트 구현을 두지 않고 report-card 경로를 재사용해 같은 전문가형 차트를 상속
+- 현재 용어 해설 경계: `streamlit_glossary.py`가 리포트/전략/지표/수급/데이터 용어집과 추천 순서 안내 카드를 담당
+- 현재 해석 모아보기 경계: 독립 메뉴가 아니라 `리포트 해석` 상단 토글 내부에서 `streamlit_interpretations.py` 카드 UI를 호출
 - 현재 테마/폰트 소유 경계: `.streamlit/config.toml`과 `src/invest_bot/dashboard/streamlit_styles.py`가 A+ dark terminal theme/font를 함께 관리
 
 ## 진행 원칙
@@ -410,3 +412,23 @@
   - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_streamlit_dashboard.py -q`
   - 결과: `80 passed`
 
+### 2026-07-25 / Report glossary and embedded interpretation overview
+
+- 목표
+  - 사용자가 말한 “해석”을 용어 해설 의미로 재정의하고, 종목/전략 판단 비교는 리포트 해석의 하위 기능으로 정리
+- 변경 사항
+  - `streamlit_glossary.py` 추가
+    - 리포트, 전략, 지표, 수급, 데이터 용어를 검색·분류 조회
+    - `DashboardDataService.COLUMN_META` 기반 컬럼 설명도 용어집에 포함
+    - 처음 볼 때 추천 순서는 expander가 아닌 안내 카드로 표시
+  - `streamlit_reports.py` / `streamlit_interpretations.py`
+    - `해석 모아보기` 독립 메뉴 제거
+    - `리포트 해석` 상단의 `해석 모아보기 열기` 토글로 종목/전략 판단 비교 제공
+    - 긴 텍스트 겹침 방지를 위해 카드 UI와 줄바꿈 CSS 적용
+  - `streamlit_styles.py`
+    - 해석 카드, 전략 근거 카드, 용어 안내 카드 스타일 추가
+    - 화면 안내에서 화살표/아이콘 문자가 텍스트처럼 노출되는 패턴 제거
+- 검증
+  - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py -q`
+  - 결과: `94 passed`
+  - 전체 테스트는 기존 DB migration schema revision 판정 1건 실패 외 대시보드/문서 변경으로 인한 추가 실패 없음

@@ -1,4 +1,4 @@
-# invest_bot DB schema and ownership
+# invest_bot DB-first schema
 
 ## Purpose
 

@@ -1,10 +1,10 @@
-# invest_bot repository interfaces for DB ownership
+# invest_bot repository interfaces for DB migration
 
 ## Purpose
 
 이 문서는 현재 코드 기준 repository contract를 **reference / facts / artifacts** 책임 관점에서 정리한다. 구체적인 메서드 시그니처는 `src/invest_bot/db/contracts.py`를 canonical source로 본다.
 
-## Repository classes
+## Repository contracts
 
 ### `StockRepository`
 
@@ -83,7 +83,7 @@
 - Missing data path는 low-level DB exception 대신 empty result 또는 domain error로 반환한다.
 - 사용자 조회 경로와 write path는 분리한다.
 
-## Recommended direction
+## Initial adapter strategy
 
 1. 사용자 종목 검색/선택/표시는 `StockRepository`만 사용한다.
 2. `DatasetFrameRepository`는 raw/derived snapshot 용도로만 유지한다.
