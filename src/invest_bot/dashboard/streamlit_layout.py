@@ -14,7 +14,6 @@ def render_sidebar(service: DashboardDataService, schedule_status) -> None:
     with st.sidebar:
         st.markdown("## invest_bot")
         st.caption("수집, 분석, 신호, 리포트를 하나의 운영 화면에서 확인합니다.")
-        st.markdown('<div class="sidebar-nav-title">화면 이동</div>', unsafe_allow_html=True)
         for tab_name in TAB_NAMES:
             button_type = "primary" if st.session_state.selected_tab == tab_name else "secondary"
             if st.button(tab_name, width="stretch", type=button_type, key=f"nav_{tab_name}"):
