@@ -109,6 +109,11 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     assert 'background: var(--app-success-bg);' in style
     assert 'background: var(--app-danger-bg);' in style
     assert 'background: var(--app-neutral-bg);' in style
+    assert '[data-testid="stSidebar"] .stButton > button {' in style
+    assert 'border-radius: 0;' in style
+    assert 'border-left: 2px solid transparent;' in style
+    assert 'background: transparent;' in style
+    assert 'border-left-color: rgba(56, 189, 248, 0.92);' in style
 
 
 def test_streamlit_config_uses_dark_theme_tokens() -> None:

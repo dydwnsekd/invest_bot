@@ -101,30 +101,34 @@ def apply_custom_style() -> None:
 
         [data-testid="stSidebar"] .stButton > button {
             width: 100%;
-            border-radius: 0.95rem;
-            border: 1px solid var(--app-border-strong);
-            background: rgba(17, 24, 39, 0.98);
-            color: var(--app-text);
+            justify-content: flex-start;
+            padding: 0.34rem 0.1rem 0.34rem 0.72rem;
+            border-radius: 0;
+            border: 0;
+            border-left: 2px solid transparent;
+            background: transparent;
+            color: var(--app-text-muted);
             font-family: var(--font-label);
             font-weight: 700;
             box-shadow: none;
-            transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+            transition: border-color 0.16s ease, color 0.16s ease, padding-left 0.16s ease;
         }
 
         [data-testid="stSidebar"] .stButton > button:hover {
-            border-color: rgba(56, 189, 248, 0.72);
-            background: rgba(30, 41, 59, 0.98);
+            border-left-color: rgba(56, 189, 248, 0.52);
+            background: transparent;
             color: #f8fafc;
+            padding-left: 0.86rem;
         }
 
         [data-testid="stSidebar"] .stButton > button[kind="primary"] {
-            background: linear-gradient(135deg, rgba(14, 165, 233, 0.34), rgba(56, 189, 248, 0.22));
-            border-color: rgba(56, 189, 248, 0.78);
+            background: transparent;
+            border-left-color: rgba(56, 189, 248, 0.92);
             color: #f8fafc;
         }
 
         [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-            background: linear-gradient(135deg, rgba(14, 165, 233, 0.44), rgba(56, 189, 248, 0.30));
+            background: transparent;
             color: #ffffff;
         }
 
