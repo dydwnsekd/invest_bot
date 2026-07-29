@@ -12,13 +12,13 @@ import yaml
 
 from invest_bot.config.settings import CONFIG_DIR
 from invest_bot.market.master_sync import sync_stock_master
-from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
+from invest_bot.jobs.collect_market_data import DEFAULT_COLLECTION_LOOKBACK_DAYS, collect_market_data_for_symbols
 
 
 @dataclass(slots=True)
 class CollectionScheduleConfig:
     symbols: list[str]
-    days: int = 30
+    days: int = DEFAULT_COLLECTION_LOOKBACK_DAYS
     interval_minutes: int = 1440
     run_on_startup: bool = True
     log_path: Path = Path("logs/collection_scheduler.log")
@@ -50,7 +50,7 @@ class CollectionScheduleConfig:
 
         return cls(
             symbols=symbols,
-            days=max(int(payload.get("days", 30)), 1),
+            days=max(int(payload.get("days", DEFAULT_COLLECTION_LOOKBACK_DAYS)), 1),
             interval_minutes=max(int(payload.get("interval_minutes", 1440)), 1),
             run_on_startup=bool(payload.get("run_on_startup", True)),
             log_path=log_path,

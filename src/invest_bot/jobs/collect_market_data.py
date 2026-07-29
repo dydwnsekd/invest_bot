@@ -8,7 +8,7 @@ from invest_bot.config.settings import AppSettings
 from invest_bot.market.collector import MarketDataCollector
 
 MIN_REQUIRED_TRADING_DAYS = 60
-DEFAULT_COLLECTION_LOOKBACK_DAYS = 90
+DEFAULT_COLLECTION_LOOKBACK_DAYS = 365
 
 
 def _parse_args() -> argparse.Namespace:
@@ -50,7 +50,7 @@ def _load_symbols(args: argparse.Namespace) -> list[str]:
 
 def collect_market_data_for_symbols(
     symbols: list[str],
-    days: int = 30,
+    days: int = DEFAULT_COLLECTION_LOOKBACK_DAYS,
     settings: AppSettings | None = None,
     collector: MarketDataCollector | None = None,
 ) -> dict[str, object]:

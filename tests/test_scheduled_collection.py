@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
+from invest_bot.jobs.collect_market_data import DEFAULT_COLLECTION_LOOKBACK_DAYS
 from invest_bot.jobs.scheduled_collection import CollectionScheduleConfig, ScheduledCollectionRunner, load_schedule_status
 from tests.helpers import make_test_dir
 
@@ -36,6 +37,17 @@ def test_collection_schedule_config_loads_symbols_and_symbols_file():
     assert config.run_on_startup is False
     assert config.log_path.name == "custom_collection.log"
 
+
+
+def test_collection_schedule_config_defaults_to_365_days_when_omitted():
+    test_dir = make_test_dir("scheduled_collection_default_days")
+    config_file = test_dir / "collection_schedule.yaml"
+    config_file.write_text("symbols:\n  - '005930'\n", encoding="utf-8")
+
+    config = CollectionScheduleConfig.from_file(config_file)
+
+    assert DEFAULT_COLLECTION_LOOKBACK_DAYS == 365
+    assert config.days == 365
 
 def test_scheduled_collection_runner_runs_once_and_writes_logs():
     test_dir = make_test_dir("scheduled_collection_once")

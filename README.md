@@ -394,11 +394,11 @@ python scripts/run_collection.py 005930 000660 035420
 종목 파일 사용:
 
 ```powershell
-python scripts/run_collection.py --symbols-file symbols.txt --days 90
+python scripts/run_collection.py --symbols-file symbols.txt --days 365
 ```
 
 현재 전략 세트를 안정적으로 돌리려면 최소 60거래일이 필요합니다.  
-기본 수집값은 이를 확보하기 쉽도록 90일 조회 기준으로 맞춰져 있습니다.
+기본 수집값은 이를 확보하기 쉽도록 365일 조회 기준으로 맞춰져 있습니다.
 
 ### 4. 정기 다중 종목 수집
 

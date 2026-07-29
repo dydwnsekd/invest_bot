@@ -5,7 +5,7 @@ from datetime import date
 import pandas as pd
 
 from invest_bot.config.settings import AppSettings
-from invest_bot.jobs.collect_market_data import collect_market_data_for_symbols
+from invest_bot.jobs.collect_market_data import DEFAULT_COLLECTION_LOOKBACK_DAYS, collect_market_data_for_symbols
 from invest_bot.market.collector import BatchCollectionResult, MarketDataCollector, MIN_REQUIRED_DAILY_PRICE_ROWS
 from invest_bot.market.domestic_stock import DailyPriceRequest, DomesticStockDataCollector, InvestorDailyRequest, StockInfoRequest
 from invest_bot.market.storage import CsvStorage
@@ -158,6 +158,27 @@ def test_collect_symbol_bundle_fails_when_daily_price_history_is_too_short(monke
     assert result.daily_price_rows == MIN_REQUIRED_DAILY_PRICE_ROWS - 1
     assert "At least 60 daily price rows are required" in result.error
 
+
+
+def test_collect_market_data_for_symbols_defaults_to_365_days():
+    settings = AppSettings()
+    captured: dict[str, object] = {}
+
+    class StubCollector:
+        def collect_symbols_batch(self, symbols, start_date, end_date):
+            captured["symbols"] = symbols
+            captured["span_days"] = (end_date - start_date).days
+            return []
+
+    summary = collect_market_data_for_symbols(
+        symbols=["005930"],
+        settings=settings,
+        collector=StubCollector(),
+    )
+
+    assert DEFAULT_COLLECTION_LOOKBACK_DAYS == 365
+    assert summary["days"] == 365
+    assert captured["span_days"] == 365
 
 def test_collect_market_data_for_symbols_summarizes_batch_results():
     settings = AppSettings()
