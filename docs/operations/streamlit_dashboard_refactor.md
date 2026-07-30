@@ -432,3 +432,24 @@
   - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py -q`
   - 결과: `94 passed`
   - 전체 테스트는 기존 DB migration schema revision 판정 1건 실패 외 대시보드/문서 변경으로 인한 추가 실패 없음
+
+### 2026-07-29 / Sidebar text navigation and collection default
+
+- 목표
+  - 좌측 메뉴를 둥근 박스형 버튼이 아니라 텍스트 중심 내비게이션처럼 보이도록 정리
+  - 데이터 수집 기본 조회일수를 365일로 통일
+- 변경 사항
+  - `streamlit_styles.py`
+    - sidebar 메뉴 버튼의 배경, 테두리, 둥근 박스 스타일 제거
+    - 선택 메뉴는 왼쪽 얇은 강조선과 밝은 텍스트로만 구분
+  - `streamlit_layout.py`
+    - sidebar의 `화면 이동` 라벨 제거
+  - `collect_market_data.py` / `scheduled_collection.py`
+    - 기본 수집일수 `DEFAULT_COLLECTION_LOOKBACK_DAYS`를 365일로 변경
+    - 정기 수집 설정에서 `days` 생략 시 365일 사용
+  - `config/collection_schedule.yaml.example` / `README.md`
+    - 예시 기본 수집일수를 365일로 갱신
+- 검증
+  - `PYTHONPATH=. .venv/bin/pytest tests/test_domestic_stock_collector.py tests/test_scheduled_collection.py tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py tests/test_db_migration_artifacts.py -q`
+  - 결과: `115 passed`
+  - 전체 테스트는 기존 DB migration schema revision 판정 1건 실패 외 추가 실패 없음

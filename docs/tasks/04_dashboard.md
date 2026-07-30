@@ -24,6 +24,7 @@
 - [x] 백테스트 결과 요약 카드 / 비교표 / 거래 순서 누적 수익률 차트 / 거래 로그 표시
 - [x] 테스트 결과 표시
 - [x] 데이터 수집 실행
+- [x] 작업 실행 / 백테스트 준비 / CLI / 스케줄러 수집 기본일수 365일 통일
 - [x] 지표 계산 실행
 - [x] 골든크로스 신호 생성 실행
 - [x] 시장 리포트 생성 실행
@@ -31,6 +32,7 @@
 - [x] 시장 리포트 Discord warning/success 분리 노출
 - [x] 정기 수집 상태와 최근 실행 로그 표시
 - [x] A+ dark terminal theme/font 적용 (고대비 팔레트 반영)
+- [x] 좌측 메뉴를 박스 없는 텍스트형 내비게이션으로 정리
 
 ## 남은 항목
 
@@ -53,6 +55,7 @@
   - 리포트 생성
   - 전체 파이프라인
 - 종목 1개만 선택해도 동일한 배치 흐름으로 사용 가능
+- `수집 일수` 기본값은 365일이며, CLI와 정기 수집 설정의 생략 기본값도 동일하게 365일로 맞춤
 - `리포트 생성` / `전체 파이프라인`은 Discord delivery-aware 집계를 사용함
   - all sent -> `success`
   - one or more `skipped` / `failed` -> `warning`
@@ -143,6 +146,8 @@
   - `textColor`: `#f8fafc`
   - `borderColor`: `#475569`
 - 세부 CSS는 `src/invest_bot/dashboard/streamlit_styles.py`에 중앙화되어 있음
+- 좌측 sidebar 메뉴는 둥근 버튼 박스/원형 배경 없이 텍스트만 보이고, 선택된 메뉴는 왼쪽 얇은 강조선으로 표시함
+- sidebar의 `화면 이동` 보조 라벨은 제거해 메뉴 텍스트만 남김
   - 기존 warm beige / teal 계열을 제거
   - high-contrast dark navy / slate 기반 terminal-like 대비로 정리
   - sidebar / hero / card / summary box / tabs / semantic badge 명도 대비를 더 강하게 재조정
