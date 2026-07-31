@@ -6,7 +6,9 @@ import invest_bot.db.models  # noqa: F401
 
 
 INITIAL_SCHEMA_REVISION = "20260606_000001"
+DATASET_FRAMES_SCHEMA_REVISION = "20260612_000002"
 INITIAL_SCHEMA_TABLES = frozenset({"symbols", "daily_prices", "stock_info_snapshots", "investor_daily"})
+DATASET_FRAMES_SCHEMA_TABLES = INITIAL_SCHEMA_TABLES | {"dataset_frames"}
 MANAGED_TABLES = frozenset(Base.metadata.tables.keys())
 
 
@@ -20,6 +22,8 @@ def resolve_existing_schema_revision(existing_tables: set[str], *, has_version_t
         return None
     if bool(MANAGED_TABLES) and MANAGED_TABLES.issubset(existing_tables):
         return "head"
+    if DATASET_FRAMES_SCHEMA_TABLES.issubset(existing_tables):
+        return DATASET_FRAMES_SCHEMA_REVISION
     if INITIAL_SCHEMA_TABLES.issubset(existing_tables):
         return INITIAL_SCHEMA_REVISION
     return None
@@ -32,7 +36,9 @@ def should_stamp_existing_schema(existing_tables: set[str], *, has_version_table
 __all__ = [
     "Base",
     "INITIAL_SCHEMA_REVISION",
+    "DATASET_FRAMES_SCHEMA_REVISION",
     "INITIAL_SCHEMA_TABLES",
+    "DATASET_FRAMES_SCHEMA_TABLES",
     "MANAGED_TABLES",
     "build_database_url",
     "resolve_existing_schema_revision",

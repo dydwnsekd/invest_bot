@@ -2,7 +2,12 @@ from invest_bot.config.settings import AppSettings
 from tests.helpers import make_test_dir
 
 from invest_bot.db import Base, build_database_url
-from invest_bot.db.migration import INITIAL_SCHEMA_REVISION, resolve_existing_schema_revision, should_stamp_existing_schema
+from invest_bot.db.migration import (
+    DATASET_FRAMES_SCHEMA_REVISION,
+    INITIAL_SCHEMA_REVISION,
+    resolve_existing_schema_revision,
+    should_stamp_existing_schema,
+)
 
 
 def test_build_database_url_prefers_direct_database_url_from_app_yaml():
@@ -37,9 +42,23 @@ def test_initial_db_metadata_exposes_expected_tables():
 
 
 def test_resolve_existing_schema_revision_returns_head_for_current_schema_without_version_table():
-    existing_tables = {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily", "dataset_frames"}
+    existing_tables = {
+        "symbols",
+        "daily_prices",
+        "stock_info_snapshots",
+        "investor_daily",
+        "dataset_frames",
+        "report_favorite_symbols",
+    }
 
     assert resolve_existing_schema_revision(existing_tables, has_version_table=False) == "head"
+    assert should_stamp_existing_schema(existing_tables, has_version_table=False) is True
+
+
+def test_resolve_existing_schema_revision_returns_dataset_frames_revision_for_pre_favorites_schema():
+    existing_tables = {"symbols", "daily_prices", "stock_info_snapshots", "investor_daily", "dataset_frames"}
+
+    assert resolve_existing_schema_revision(existing_tables, has_version_table=False) == DATASET_FRAMES_SCHEMA_REVISION
     assert should_stamp_existing_schema(existing_tables, has_version_table=False) is True
 
 
