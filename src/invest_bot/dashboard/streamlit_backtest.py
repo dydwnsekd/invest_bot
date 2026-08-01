@@ -18,6 +18,12 @@ from invest_bot.backtest.adapters import GOLDEN_CROSS_SIGNALS
 from invest_bot.backtest.persistence import BacktestInputSources, build_context, enrich_summary, enrich_trades
 from invest_bot.backtest.strategy_registry import DAILY_PRICES_INDICATORS, INVESTOR_DAILY
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.dashboard.streamlit_collection_period import (
+    collection_days_from_period,
+    collection_period_bounds,
+    default_collection_period,
+    normalize_collection_period,
+)
 from invest_bot.dashboard.streamlit_actions import (
     require_selected_items,
     successful_symbols_from_collection_result,
@@ -38,7 +44,7 @@ BACKTEST_SELECTED_SYMBOLS_KEY = "backtest_selected_symbols"
 BACKTEST_SELECTED_STRATEGIES_KEY = "backtest_selected_strategies"
 BACKTEST_RESULTS_KEY = "backtest_results"
 BACKTEST_BLOCKED_REASONS_KEY = "backtest_blocked_reasons"
-BACKTEST_LOOKBACK_DAYS_KEY = "backtest_prepare_days"
+BACKTEST_COLLECTION_PERIOD_KEY = "backtest_prepare_collection_period"
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,14 +121,16 @@ def render_backtest_tab(
             format_func=lambda strategy_id: f"{strategy_labels[strategy_id]} ({strategy_id})",
             key=BACKTEST_SELECTED_STRATEGIES_KEY,
         )
-        lookback_days = st.number_input(
-            "준비용 수집 일수",
-            min_value=MIN_REQUIRED_TRADING_DAYS,
-            max_value=3650,
-            value=int(st.session_state.get(BACKTEST_LOOKBACK_DAYS_KEY, DEFAULT_COLLECTION_LOOKBACK_DAYS)),
-            step=1,
-            key=BACKTEST_LOOKBACK_DAYS_KEY,
+        min_period_date, max_period_date = collection_period_bounds()
+        selected_period = st.date_input(
+            "준비용 수집 조회 기간",
+            value=default_collection_period(),
+            min_value=min_period_date,
+            max_value=max_period_date,
+            key=BACKTEST_COLLECTION_PERIOD_KEY,
         )
+        collection_period = normalize_collection_period(selected_period)
+        lookback_days = collection_days_from_period(collection_period)
         st.caption("준비 실행은 자동으로 돌지 않습니다. 버튼을 눌렀을 때만 수집, 지표 계산, 골든크로스 신호 생성을 순서대로 수행합니다.")
 
         selected_items = [

@@ -30,6 +30,7 @@ import invest_bot.dashboard.streamlit_data as streamlit_data_module
 import invest_bot.dashboard.streamlit_glossary as streamlit_glossary_module
 import invest_bot.dashboard.streamlit_interpretations as streamlit_interpretations_module
 import invest_bot.dashboard.streamlit_layout as streamlit_layout_module
+from invest_bot.dashboard.streamlit_collection_period import collection_days_from_period, normalize_collection_period
 from invest_bot.dashboard.streamlit_layout import TAB_NAMES
 import invest_bot.dashboard.streamlit_styles as streamlit_styles_module
 from invest_bot.dashboard.streamlit_glossary import (
@@ -1893,6 +1894,14 @@ def _make_dataset_preview(name: str, symbol: str, symbol_name: str, filename: st
     )
 
 
+
+def test_collection_period_helpers_normalize_calendar_range_to_days() -> None:
+    period = normalize_collection_period((date(2026, 7, 31), date(2026, 7, 1)))
+
+    assert period == (date(2026, 7, 1), date(2026, 7, 31))
+    assert collection_days_from_period(period) == 60
+    assert collection_days_from_period((date(2025, 7, 31), date(2026, 7, 31))) == 365
+
 def test_state_text_color_uses_green_red_black_contract() -> None:
     assert _state_text_color("buy") == "#15803d"
     assert _state_text_color("sell") == "#b91c1c"
@@ -1921,6 +1930,7 @@ def test_render_actions_tab_removes_actions_guide_and_keeps_primary_controls_vis
     assert "배치 실행" in joined_markdown
     assert "실행 가이드" not in joined_markdown
     assert fake_st.multiselect_labels == ["종목 선택"]
+    assert "수집 조회 기간" in fake_st.date_input_labels
     assert "한 종목 선택" not in fake_st.selectbox_labels
     assert {"데이터 수집", "전체 파이프라인", "지표 계산", "신호 생성", "리포트 생성"}.issubset(set(fake_st.button_labels))
 

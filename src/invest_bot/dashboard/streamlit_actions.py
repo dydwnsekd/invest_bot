@@ -5,6 +5,12 @@ from collections.abc import Callable
 import streamlit as st
 
 from invest_bot.config.settings import AppSettings
+from invest_bot.dashboard.streamlit_collection_period import (
+    collection_days_from_period,
+    collection_period_bounds,
+    default_collection_period,
+    normalize_collection_period,
+)
 from invest_bot.dashboard.streamlit_formatters import default_selected_symbols, format_symbol_display, format_symbol_option
 from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.collect_market_data import (
@@ -72,14 +78,20 @@ def render_actions_tab(
         else:
             st.caption("배치 작업을 실행하려면 종목을 하나 이상 선택해 주세요.")
 
-        days = st.number_input(
-            "수집 일수",
-            min_value=MIN_REQUIRED_TRADING_DAYS,
-            max_value=3650,
-            value=DEFAULT_COLLECTION_LOOKBACK_DAYS,
-            step=1,
+        min_period_date, max_period_date = collection_period_bounds()
+        selected_period = st.date_input(
+            "수집 조회 기간",
+            value=default_collection_period(),
+            min_value=min_period_date,
+            max_value=max_period_date,
+            key="action_collection_period",
         )
-        st.caption(f"기본값 {DEFAULT_COLLECTION_LOOKBACK_DAYS}일 · 최소 {MIN_REQUIRED_TRADING_DAYS}거래일")
+        collection_period = normalize_collection_period(selected_period)
+        days = collection_days_from_period(collection_period)
+        st.caption(
+            f"조회 기간 {collection_period[0].isoformat()} ~ {collection_period[1].isoformat()} · "
+            f"수집 일수 {days}일 · 최소 {MIN_REQUIRED_TRADING_DAYS}거래일"
+        )
 
         action_row_top = st.columns(2, gap="small")
         if action_row_top[0].button("데이터 수집", width="stretch", type="primary"):

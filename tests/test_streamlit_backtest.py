@@ -33,6 +33,9 @@ class _FakeMetricColumn:
     def number_input(self, *args, **kwargs):
         return self.owner.number_input(*args, **kwargs)
 
+    def date_input(self, *args, **kwargs):
+        return self.owner.date_input(*args, **kwargs)
+
     def button(self, *args, **kwargs):
         return self.owner.button(*args, **kwargs)
 
@@ -74,6 +77,7 @@ class _FakeStreamlit:
         self.multiselect_labels: list[str] = []
         self.button_labels: list[str] = []
         self.number_input_labels: list[str] = []
+        self.date_input_labels: list[str] = []
         self.dataframe_calls = 0
         self.altair_chart_calls: list[object] = []
 
@@ -114,6 +118,13 @@ class _FakeStreamlit:
         if key is not None:
             self.session_state[key] = value
         return value
+
+    def date_input(self, label: str, value, key: str | None = None, **kwargs):
+        self.date_input_labels.append(label)
+        resolved = self.session_state.get(key, value) if key is not None else value
+        if key is not None:
+            self.session_state[key] = resolved
+        return resolved
 
     def button(self, label: str, key: str | None = None, **kwargs):
         self.button_labels.append(label)
@@ -287,6 +298,7 @@ def test_render_backtest_tab_prepare_button_wires_collect_analyze_and_signal(mon
         symbol_lookup=SimpleNamespace(list_entries=lambda: [SymbolEntry(symbol="005930", symbol_name="삼성전자")]),
     )
 
+    assert "준비용 수집 조회 기간" in fake_st.date_input_labels
     assert calls == [
         ("collect", ("005930",), streamlit_backtest_module.DEFAULT_COLLECTION_LOOKBACK_DAYS),
         ("indicators", "005930"),
