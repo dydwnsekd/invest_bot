@@ -14,6 +14,7 @@ from invest_bot.dashboard.streamlit_layout import (
     render_action_feedback as _render_action_feedback,
     render_header as _render_header,
     render_sidebar as _render_sidebar,
+    resolve_tab_name as _resolve_tab_name,
 )
 from invest_bot.dashboard.streamlit_overview import (
     render_overview_tab as _render_overview_tab,
@@ -53,20 +54,21 @@ def main() -> None:
     test_report = service.load_test_report()
 
     if "selected_tab" not in st.session_state:
-        st.session_state.selected_tab = "상태판"
+        st.session_state.selected_tab = "홈"
     if "action_message" not in st.session_state:
         st.session_state.action_message = None
     if "action_message_type" not in st.session_state:
         st.session_state.action_message_type = "info"
 
     _render_sidebar(service, schedule_status)
-    _render_header()
+    st.session_state.selected_tab = _resolve_tab_name(st.session_state.get("selected_tab"))
+    _render_header(st.session_state.selected_tab)
     _render_action_feedback()
 
     tab = st.session_state.selected_tab
-    if tab == "상태판":
+    if tab == "홈":
         _render_overview_tab(snapshot, service, test_report, schedule_status, read_preview_frame=read_preview_frame)
-    elif tab == "작업 실행":
+    elif tab == "데이터 갱신":
         _render_actions_tab(
             symbol_lookup,
             schedule_status,
@@ -75,7 +77,7 @@ def main() -> None:
         )
     elif tab == "용어 해설":
         _render_glossary_tab(service)
-    elif tab == "리포트 해석":
+    elif tab == "투자 리포트":
         _render_reports_tab(
             snapshot,
             service,
@@ -95,7 +97,7 @@ def main() -> None:
             service,
             symbol_lookup=symbol_lookup,
         )
-    elif tab == "데이터 탐색":
+    elif tab == "데이터 보기":
         _render_data_tab(snapshot, service, read_preview_frame=read_preview_frame)
     else:
         _render_test_tab(test_report)

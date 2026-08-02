@@ -30,9 +30,9 @@ def render_actions_tab(
     settings: AppSettings,
     render_schedule_status_panel: Callable[[object], None],
 ) -> None:
-    st.markdown('<h3 class="section-title">작업 실행</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">데이터 갱신</h3>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-copy">선택한 여러 종목에 대해 수집부터 리포트 생성까지 배치로 실행합니다.</div>',
+        '<div class="section-copy">종목과 조회 기간을 선택해 데이터 수집부터 리포트 생성까지 필요한 단계만 실행합니다.</div>',
         unsafe_allow_html=True,
     )
 

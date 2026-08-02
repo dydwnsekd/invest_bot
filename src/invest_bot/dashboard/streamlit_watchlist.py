@@ -48,7 +48,7 @@ def render_watchlist_tab(
     favorites_store = favorites_store or ReportFavoritesStore()
     favorite_symbols = favorites_store.load_symbols()
     if not favorite_symbols:
-        st.info("아직 저장된 관심종목이 없습니다. 리포트 해석 탭에서 관심종목을 추가해 보세요.")
+        st.info("아직 저장된 관심종목이 없습니다. 투자 리포트 탭에서 관심종목을 추가해 보세요.")
         return
 
     try:

@@ -26,7 +26,7 @@ DATASET_DISPLAY_ORDER = {
 
 
 def render_data_tab(snapshot, service: DashboardDataService, *, read_preview_frame) -> None:
-    st.markdown('<h3 class="section-title">데이터 탐색</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">데이터 보기</h3>', unsafe_allow_html=True)
     st.markdown(
         '<div class="section-copy">종목을 먼저 고른 뒤, 지금 확인할 만한 핵심 데이터 요약부터 보고 필요할 때만 차트와 표를 펼쳐 보도록 흐름을 정리했습니다.</div>',
         unsafe_allow_html=True,

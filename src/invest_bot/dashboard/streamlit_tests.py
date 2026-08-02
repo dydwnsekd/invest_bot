@@ -7,7 +7,7 @@ from invest_bot.dashboard.service import TestReportPreview
 
 
 def render_test_tab(test_report: TestReportPreview | None) -> None:
-    st.markdown('<h3 class="section-title">검증 상태</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">시스템 검증</h3>', unsafe_allow_html=True)
     st.markdown(
         '<div class="section-copy">대시보드와 파이프라인 변경이 기존 동작을 깨지 않았는지 최근 테스트 결과로 확인합니다.</div>',
         unsafe_allow_html=True,

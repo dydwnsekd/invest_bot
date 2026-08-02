@@ -30,8 +30,9 @@ import invest_bot.dashboard.streamlit_data as streamlit_data_module
 import invest_bot.dashboard.streamlit_glossary as streamlit_glossary_module
 import invest_bot.dashboard.streamlit_interpretations as streamlit_interpretations_module
 import invest_bot.dashboard.streamlit_layout as streamlit_layout_module
+import invest_bot.dashboard.streamlit_overview as streamlit_overview_module
 from invest_bot.dashboard.streamlit_collection_period import collection_days_from_period, normalize_collection_period
-from invest_bot.dashboard.streamlit_layout import TAB_NAMES
+from invest_bot.dashboard.streamlit_layout import TAB_NAMES, resolve_tab_name
 import invest_bot.dashboard.streamlit_styles as streamlit_styles_module
 from invest_bot.dashboard.streamlit_glossary import (
     build_glossary_terms,
@@ -110,6 +111,10 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     assert 'background: var(--app-success-bg);' in style
     assert 'background: var(--app-danger-bg);' in style
     assert 'background: var(--app-neutral-bg);' in style
+    assert ".compact-hero" in style
+    assert ".quick-start-grid" in style
+    assert ".investor-brief-card" in style
+    assert ".watch-target-grid" in style
     assert '[data-testid="stSidebar"] .stButton > button {' in style
     assert 'border-radius: 0;' in style
     assert 'border-left: 2px solid transparent;' in style
@@ -1802,7 +1807,7 @@ def test_render_watchlist_tab_shows_info_when_no_favorites(monkeypatch: pytest.M
         favorites_store=store,
     )
 
-    assert fake_st.info_messages == ["아직 저장된 관심종목이 없습니다. 리포트 해석 탭에서 관심종목을 추가해 보세요."]
+    assert fake_st.info_messages == ["아직 저장된 관심종목이 없습니다. 투자 리포트 탭에서 관심종목을 추가해 보세요."]
 
 
 def test_render_watchlist_tab_renders_only_one_selected_favorite(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2300,6 +2305,84 @@ def test_render_action_feedback_uses_warning_channel(monkeypatch: pytest.MonkeyP
     assert fake_st.info_messages == []
 
 
+def test_dashboard_navigation_uses_user_friendly_labels_and_legacy_aliases() -> None:
+    assert TAB_NAMES == (
+        "홈",
+        "데이터 갱신",
+        "투자 리포트",
+        "관심종목",
+        "백테스트",
+        "데이터 보기",
+        "용어 해설",
+        "시스템 검증",
+    )
+    assert resolve_tab_name("상태판") == "홈"
+    assert resolve_tab_name("작업 실행") == "데이터 갱신"
+    assert resolve_tab_name("리포트 해석") == "투자 리포트"
+    assert resolve_tab_name("데이터 탐색") == "데이터 보기"
+    assert resolve_tab_name("검증") == "시스템 검증"
+    assert resolve_tab_name("알 수 없음") == "홈"
+
+
+def test_overview_watch_targets_prioritize_investor_signals() -> None:
+    report_preview = DatasetPreview(
+        name="market_reports",
+        display_name="시장 리포트",
+        path=Path("reports.csv"),
+        row_count=1,
+        columns=[],
+        summary="",
+        purpose="",
+        first_look="",
+        symbol="005930",
+        symbol_name="삼성전자",
+        recommended_columns=[],
+    )
+    signal_preview = DatasetPreview(
+        name="golden_cross_signals",
+        display_name="골든크로스 신호",
+        path=Path("signals.csv"),
+        row_count=1,
+        columns=[],
+        summary="",
+        purpose="",
+        first_look="",
+        symbol="000660",
+        symbol_name="SK하이닉스",
+        recommended_columns=[],
+    )
+
+    candidates = streamlit_overview_module.select_watch_targets(
+        [
+            (
+                report_preview,
+                pd.Series(
+                    {
+                        "symbol": "005930",
+                        "symbol_name": "삼성전자",
+                        "final_opinion": "buy",
+                        "trend_state": "bullish",
+                    }
+                ),
+            )
+        ],
+        [
+            (
+                signal_preview,
+                pd.Series(
+                    {
+                        "symbol": "000660",
+                        "symbol_name": "SK하이닉스",
+                        "signal": "buy",
+                    }
+                ),
+            )
+        ],
+    )
+
+    assert [candidate[2] for candidate in candidates] == ["매수 관점", "전략 신호"]
+
+
 def test_streamlit_dashboard_main_builds_settings_once_and_injects_them(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_st = _FakeStreamlit()
     fake_st.session_state["selected_tab"] = "작업 실행"
@@ -2309,7 +2392,7 @@ def test_streamlit_dashboard_main_builds_settings_once_and_injects_them(monkeypa
     monkeypatch.setattr(streamlit_dashboard_module, "st", fake_st)
     monkeypatch.setattr(streamlit_dashboard_module, "_apply_custom_style", lambda: None)
     monkeypatch.setattr(streamlit_dashboard_module, "_render_sidebar", lambda *args, **kwargs: None)
-    monkeypatch.setattr(streamlit_dashboard_module, "_render_header", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_header", lambda *args, **kwargs: None)
     monkeypatch.setattr(streamlit_dashboard_module, "_render_action_feedback", lambda: None)
     monkeypatch.setattr(streamlit_dashboard_module, "_load_optional_schedule_status", lambda: None)
     monkeypatch.setattr(streamlit_dashboard_module, "_read_preview_frame", lambda service, preview: None)

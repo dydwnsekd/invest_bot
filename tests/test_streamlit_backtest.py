@@ -391,7 +391,7 @@ def test_streamlit_dashboard_main_routes_backtest_tab(monkeypatch: pytest.Monkey
     monkeypatch.setattr(streamlit_dashboard_module, "st", fake_st)
     monkeypatch.setattr(streamlit_dashboard_module, "_apply_custom_style", lambda: None)
     monkeypatch.setattr(streamlit_dashboard_module, "_render_sidebar", lambda *args, **kwargs: None)
-    monkeypatch.setattr(streamlit_dashboard_module, "_render_header", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_header", lambda *args, **kwargs: None)
     monkeypatch.setattr(streamlit_dashboard_module, "_render_action_feedback", lambda: None)
     monkeypatch.setattr(streamlit_dashboard_module, "_load_optional_schedule_status", lambda: None)
     monkeypatch.setattr(streamlit_dashboard_module, "_read_preview_frame", lambda service, preview: None)

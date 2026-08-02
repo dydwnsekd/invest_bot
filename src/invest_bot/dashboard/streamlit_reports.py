@@ -32,9 +32,9 @@ def render_reports_tab(
     load_indicator_frame_for_symbol: Callable[[str], pd.DataFrame | None],
     favorites_store: ReportFavoritesStore | None = None,
 ) -> None:
-    st.markdown('<h3 class="section-title">리포트 해석</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">투자 리포트</h3>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-copy">보고 싶은 종목 리포트를 하나 선택해 핵심 판단과 차트를 집중해서 읽을 수 있도록 화면을 정리했습니다.</div>',
+        '<div class="section-copy">보고 싶은 종목을 선택해 최종 의견, 전략별 판단, 차트, 상세 데이터를 집중해서 읽습니다.</div>',
         unsafe_allow_html=True,
     )
 
