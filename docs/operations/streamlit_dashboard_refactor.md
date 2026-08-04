@@ -9,13 +9,29 @@
 - 기준 파일: `src/invest_bot/dashboard/streamlit_dashboard.py`
 - 기준 시점 파일 크기: 약 1,282 lines
 - 현재 파일 크기: 72 lines
-- 현재 전략: 동작 변경 없이 안전한 분리부터 순차 진행
-- 후속 기능 반영: `streamlit_reports.py`가 단일 리포트 본문 흐름, 리포트 해석 상단 해석 모아보기 토글, 전략별 판단 요약 렌더링까지 담당
-- 현재 공용 차트 경계: `streamlit_charts.py` / `streamlit_state.py`가 리포트 해석·데이터 탐색 공용 전문가형 주가 차트와 데이터 조합(`daily_prices_indicators` / `daily_prices` / `investor_daily`)을 담당
+- 현재 전략: 분리된 모듈 구조를 유지하면서 사용자 여정 중심 UI로 점진 개편
+- 후속 기능 반영: `streamlit_reports.py`가 투자 리포트 단일 본문 흐름, 상단 해석 모아보기 토글, 전략별 판단 요약 렌더링까지 담당
+- 현재 공용 차트 경계: `streamlit_charts.py` / `streamlit_state.py`가 투자 리포트·데이터 보기 공용 전문가형 주가 차트와 데이터 조합(`daily_prices_indicators` / `daily_prices` / `investor_daily`)을 담당
 - 현재 관심종목 경계: Watchlist는 별도 차트 구현을 두지 않고 report-card 경로를 재사용해 같은 전문가형 차트를 상속
 - 현재 용어 해설 경계: `streamlit_glossary.py`가 리포트/전략/지표/수급/데이터 용어집과 추천 순서 안내 카드를 담당
-- 현재 해석 모아보기 경계: 독립 메뉴가 아니라 `리포트 해석` 상단 토글 내부에서 `streamlit_interpretations.py` 카드 UI를 호출
-- 현재 테마/폰트 소유 경계: `.streamlit/config.toml`과 `src/invest_bot/dashboard/streamlit_styles.py`가 A+ dark terminal theme/font를 함께 관리
+- 현재 해석 모아보기 경계: 독립 메뉴가 아니라 `투자 리포트` 상단 토글 내부에서 `streamlit_interpretations.py` 카드 UI를 호출
+- 현재 테마/폰트 소유 경계: `.streamlit/config.toml`과 `src/invest_bot/dashboard/streamlit_styles.py`가 A+ dark terminal theme/font, compact hero, quick-start card를 함께 관리
+
+## 2026-08-01 UI 개편 기록
+
+- `DESIGN.md`를 repo-local source of truth로 추가해 정보 구조, 디자인 원칙, 접근성, 구현 제약을 고정
+- `streamlit_layout.py`
+  - 메뉴명을 사용자 행동 기준으로 `홈`, `데이터 갱신`, `투자 리포트`, `관심종목`, `백테스트`, `데이터 보기`, `용어 해설`, `시스템 검증`으로 재정리
+  - 기존 메뉴명(`상태판`, `작업 실행`, `리포트 해석`, `데이터 탐색`, `검증`)은 `resolve_tab_name()` alias로 유지
+  - 선택 메뉴별 hero eyebrow/title/copy를 `TAB_META`에서 렌더링
+- `streamlit_overview.py`
+  - 홈 안내를 긴 numbered markdown에서 quick-start 카드로 변경
+- `streamlit_styles.py`
+  - compact hero와 quick-start card 스타일 추가
+- 검증
+  - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q ...`
+  - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py -q` (`96 passed`)
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`254 passed`)
 
 ## 진행 원칙
 
@@ -287,6 +303,25 @@
   - chart sync / export / mobile optimization은 이번 변경 범위에서 제외
   - Plotly는 기본 의존성으로 선언했지만 Altair fallback도 당장은 유지
 
+### 2026-08-02 / Home content investor briefing refresh
+
+- 목표
+  - 좌측 메뉴뿐 아니라 우측 홈 본문도 주식 서비스처럼 종목/판단/다음 행동 중심으로 재배치
+- 변경 사항
+  - `streamlit_overview.py`
+    - 최신 리포트/신호 row를 모아 `오늘의 투자 브리핑` 렌더링
+    - 매수 관점·상승 추세·전략 매수 신호를 `오늘 볼 만한 종목` 카드로 표시
+    - 정기 수집/테스트 상태에 따른 `다음 행동` 카드 추가
+  - `streamlit_styles.py`
+    - investor briefing, watch target, next action 카드 스타일 추가
+  - `DESIGN.md`
+    - 홈 본문은 운영 상태보다 종목 중심 브리핑을 먼저 보여주는 원칙 추가
+- 참고 비교
+  - TradingView watchlist, Seeking Alpha earnings/stock flow, 네이버페이 증권 앱 설명의 관심종목·뉴스·요약 중심 흐름을 참고
+- 검증
+  - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`255 passed`)
+
 ## 검증 로그
 
 ### 2026-07-03 / DB watchlist persistence
@@ -453,3 +488,21 @@
   - `PYTHONPATH=. .venv/bin/pytest tests/test_domestic_stock_collector.py tests/test_scheduled_collection.py tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py tests/test_db_migration_artifacts.py -q`
   - 결과: `115 passed`
   - 전체 테스트는 기존 DB migration schema revision 판정 1건 실패 외 추가 실패 없음
+
+### 2026-08-01 / Calendar-based collection period controls
+
+- 목표
+  - 작업 실행과 백테스트 준비에서 숫자형 수집 일수 대신 날짜 범위 캘린더로 데이터 조회 기간을 선택
+- 변경 사항
+  - `streamlit_collection_period.py` 추가
+    - 기본 최근 365일 기간 계산
+    - 날짜 범위 정규화와 수집 일수 변환 helper 제공
+  - `streamlit_actions.py`
+    - `수집 일수` number input을 `수집 조회 기간` date range input으로 교체
+  - `streamlit_backtest.py`
+    - `준비용 수집 일수` number input을 `준비용 수집 조회 기간` date range input으로 교체
+  - `README.md` / `docs/tasks/04_dashboard.md`
+    - 캘린더 기반 조회 기간 선택 동작 문서화
+- 검증
+  - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py -q`
+  - 결과: `95 passed`
