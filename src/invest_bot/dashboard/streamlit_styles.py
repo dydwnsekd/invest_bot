@@ -359,6 +359,186 @@ def apply_custom_style() -> None:
             font-size: 0.92rem;
         }
 
+        .symbol-strip-card {
+            margin: 0.85rem 0;
+        }
+
+        .symbol-card-grid,
+        .readiness-card-grid,
+        .backtest-result-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.65rem;
+            margin-top: 0.9rem;
+        }
+
+        .symbol-focus-card,
+        .readiness-card,
+        .backtest-result-card,
+        .selection-summary-card div,
+        .backtest-step-grid div {
+            border-radius: 0.9rem;
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(203, 213, 225, 0.22);
+            padding: 0.82rem;
+        }
+
+        .symbol-focus-topline,
+        .readiness-symbol,
+        .selection-summary-card span,
+        .backtest-step-grid span {
+            color: var(--app-text-muted);
+            font-family: var(--font-label);
+            font-size: 0.74rem;
+            font-weight: 800;
+        }
+
+        .symbol-focus-card strong,
+        .readiness-card strong,
+        .backtest-result-card strong,
+        .selection-summary-card strong,
+        .backtest-step-grid strong {
+            display: block;
+            margin-top: 0.3rem;
+            color: #f8fafc;
+            font-size: 0.95rem;
+            line-height: 1.35;
+        }
+
+        .symbol-focus-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.45rem;
+        }
+
+        .symbol-focus-badges span,
+        .readiness-card span {
+            display: inline-flex;
+            width: fit-content;
+            border-radius: 999px;
+            padding: 0.18rem 0.48rem;
+            color: #e0f2fe;
+            background: rgba(56, 189, 248, 0.16);
+            border: 1px solid rgba(56, 189, 248, 0.26);
+            font-family: var(--font-label);
+            font-size: 0.72rem;
+            font-weight: 800;
+        }
+
+        .symbol-focus-card p,
+        .readiness-card p,
+        .backtest-result-card p,
+        .backtest-step-grid p {
+            margin: 0.45rem 0 0 0;
+            color: var(--app-text-muted);
+            font-size: 0.82rem;
+            line-height: 1.48;
+            word-break: keep-all;
+            overflow-wrap: anywhere;
+        }
+
+        .report-focus-card {
+            padding: 1rem;
+            border-radius: 1rem;
+            background:
+                radial-gradient(circle at top right, rgba(56, 189, 248, 0.13), transparent 32%),
+                rgba(15, 23, 42, 0.80);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+        }
+
+        .report-focus-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .report-focus-summary {
+            margin-top: 0.65rem;
+            color: var(--app-text-soft);
+            font-size: 0.94rem;
+            line-height: 1.58;
+            word-break: keep-all;
+            overflow-wrap: anywhere;
+        }
+
+        .report-focus-meta,
+        .selection-summary-card,
+        .backtest-step-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.65rem;
+            margin-top: 0.85rem;
+        }
+
+        .report-focus-meta div {
+            border-radius: 0.75rem;
+            background: rgba(2, 6, 23, 0.28);
+            border: 1px solid rgba(203, 213, 225, 0.18);
+            padding: 0.65rem;
+        }
+
+        .report-focus-meta span {
+            color: var(--app-text-muted);
+            font-family: var(--font-label);
+            font-size: 0.72rem;
+            font-weight: 800;
+        }
+
+        .report-focus-meta strong {
+            display: block;
+            margin-top: 0.22rem;
+            color: #f8fafc;
+            font-size: 0.9rem;
+        }
+
+        .watchlist-brief-card {
+            margin-top: 0.85rem;
+            border-color: rgba(34, 197, 94, 0.30);
+        }
+
+        .backtest-flow-card {
+            margin-bottom: 0.85rem;
+        }
+
+        .backtest-step-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .backtest-step-grid span {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 0.52rem;
+            color: #e0f2fe;
+            background: rgba(56, 189, 248, 0.18);
+            border: 1px solid rgba(56, 189, 248, 0.32);
+        }
+
+        .selection-summary-card {
+            margin: 0.85rem 0;
+        }
+
+        .readiness-card-ready {
+            border-color: rgba(34, 197, 94, 0.32);
+        }
+
+        .readiness-card-blocked {
+            border-color: rgba(248, 113, 113, 0.34);
+        }
+
+        .backtest-result-value {
+            margin-top: 0.4rem;
+            color: #f8fafc;
+            font-family: var(--font-ui);
+            font-size: 1.35rem;
+            font-weight: 850;
+            letter-spacing: -0.03em;
+        }
+
         .streamlit-card {
             padding: 1rem 1rem 0.85rem 1rem;
             border-radius: 1.1rem;

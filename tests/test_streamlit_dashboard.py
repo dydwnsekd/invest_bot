@@ -115,6 +115,9 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     assert ".quick-start-grid" in style
     assert ".investor-brief-card" in style
     assert ".watch-target-grid" in style
+    assert ".symbol-card-grid" in style
+    assert ".report-focus-card" in style
+    assert ".backtest-result-grid" in style
     assert '[data-testid="stSidebar"] .stButton > button {' in style
     assert 'border-radius: 0;' in style
     assert 'border-left: 2px solid transparent;' in style

@@ -98,6 +98,8 @@ def render_reports_tab(
         st.warning("현재 검색 조건에 맞는 리포트가 없습니다.")
         return
 
+    render_report_candidate_cards(visible_entries[:4])
+
     selected_entry_key = resolve_selected_report_key(
         visible_entries,
         st.session_state.get(REPORT_SELECTION_KEY),
@@ -123,6 +125,34 @@ def render_reports_tab(
         favorites_store=favorites_store,
         is_favorite=bool(selected_entry["is_favorite"]),
     )
+
+
+def render_report_candidate_cards(report_entries: list[dict[str, object]]) -> None:
+    st.markdown('<div class="streamlit-card symbol-strip-card">', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">리포트 후보</h3>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-copy">현재 조건에서 먼저 볼 만한 종목을 카드로 요약했습니다. 자세한 본문은 아래 선택한 1건만 표시합니다.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="symbol-card-grid">', unsafe_allow_html=True)
+    for entry in report_entries:
+        symbol_label = format_symbol_display(str(entry["symbol"]), str(entry["symbol_name"]))
+        favorite = "관심종목" if bool(entry.get("is_favorite")) else "일반"
+        st.markdown(
+            f"""
+            <div class="symbol-focus-card">
+              <div class="symbol-focus-topline">{escape(favorite)} · {escape(str(entry["date"]))}</div>
+              <strong>{escape(symbol_label)}</strong>
+              <div class="symbol-focus-badges">
+                <span>{escape(str(entry["display_opinion"]))}</span>
+                <span>{escape(str(entry["display_trend"]))}</span>
+              </div>
+              <p>{escape(str(entry.get("summary", "")))}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
 def build_report_entries(
     previews: list[DatasetPreview],
@@ -330,14 +360,20 @@ def render_market_report_card(
     with st.container(border=True):
         st.markdown(
             f"""
-            <div class="summary-box">
-              <div class="muted-label">{escape(symbol_label or "종목 정보 없음")}</div>
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:0.35rem;">
+            <div class="report-focus-card">
+              <div class="report-focus-header">
                 <div>
+                  <div class="muted-label">{escape(symbol_label or "종목 정보 없음")}</div>
                   <h3 class="section-title">{escape(preview.symbol_name or str(row.get("symbol_name", "")) or preview.symbol)}</h3>
-                  <div class="section-copy">{escape(summary)}</div>
                 </div>
                 <div class="badge badge-{escape(opinion)}">{escape(opinion_label)}</div>
+              </div>
+              <div class="report-focus-summary">{escape(summary)}</div>
+              <div class="report-focus-meta">
+                <div><span>기준일</span><strong>{escape(str(row.get("date", "")) or "정보 없음")}</strong></div>
+                <div><span>추세</span><strong>{escape(state_label(service, str(row.get("trend_state", "unknown"))))}</strong></div>
+                <div><span>골든크로스</span><strong>{escape(state_label(service, str(row.get("golden_cross_signal", "unknown"))))}</strong></div>
+                <div><span>수급</span><strong>{escape(state_label(service, str(row.get("investor_flow", "unknown"))))}</strong></div>
               </div>
             </div>
             """,
@@ -352,12 +388,6 @@ def render_market_report_card(
             )
             st.session_state["action_message_type"] = "success"
             st.rerun()
-
-        metric_columns = st.columns(4)
-        metric_columns[0].metric("추세", state_label(service, str(row.get("trend_state", "unknown"))))
-        metric_columns[1].metric("골든크로스", state_label(service, str(row.get("golden_cross_signal", "unknown"))))
-        metric_columns[2].metric("RSI 상태", state_label(service, str(row.get("rsi_state", "unknown"))))
-        metric_columns[3].metric("수급", state_label(service, str(row.get("investor_flow", "unknown"))))
 
         detail_columns = st.columns(4)
         detail_columns[0].metric("종가", format_number(row.get("close")))

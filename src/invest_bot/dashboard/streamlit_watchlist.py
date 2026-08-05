@@ -15,6 +15,7 @@ from invest_bot.dashboard.streamlit_reports import (
     format_report_selection_option,
     get_report_entry_by_key,
     query_report_previews,
+    render_report_candidate_cards,
     render_market_report_card,
     resolve_selected_report_key,
     selected_entry_key_index,
@@ -102,6 +103,15 @@ def render_watchlist_tab(
     if not visible_entries:
         st.warning("현재 검색 조건에 맞는 관심종목 리포트가 없습니다.")
         return
+
+    st.markdown('<div class="streamlit-card watchlist-brief-card">', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">관심종목 브리핑</h3>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-copy">저장한 종목 중 매수 관점과 최신 판단을 먼저 확인하고, 아래에서 한 종목을 자세히 읽습니다.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+    render_report_candidate_cards(visible_entries[:4])
 
     selected_entry_key = resolve_selected_report_key(
         visible_entries,
