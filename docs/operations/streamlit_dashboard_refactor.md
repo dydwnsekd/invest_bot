@@ -322,6 +322,25 @@
   - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
   - `PYTHONPATH=. .venv/bin/pytest -q` (`255 passed`)
 
+### 2026-08-05 / Report, watchlist, backtest content card refresh
+
+- 목표
+  - 투자 리포트, 관심종목, 백테스트 우측 본문도 주식 서비스처럼 종목/선택/결과 중심 카드로 정리
+- 변경 사항
+  - `streamlit_reports.py`
+    - 현재 후보 리포트를 `리포트 후보` 카드 grid로 먼저 표시
+    - 선택된 리포트 본문을 focus card로 재구성하고 핵심 상태를 meta card로 표시
+  - `streamlit_watchlist.py`
+    - 관심종목 브리핑 카드와 후보 카드 grid 추가
+  - `streamlit_backtest.py`
+    - 전략 검증 흐름 카드, 선택 요약 카드, 준비 상태 카드, 결과 카드 추가
+  - `streamlit_styles.py`
+    - symbol/report/backtest card CSS 추가
+  - `DESIGN.md` / README / task docs 반영
+- 검증
+  - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`255 passed`)
+
 ## 검증 로그
 
 ### 2026-07-03 / DB watchlist persistence
