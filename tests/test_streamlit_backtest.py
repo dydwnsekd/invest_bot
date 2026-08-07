@@ -258,9 +258,48 @@ def test_render_backtest_tab_runs_and_renders_result_sections(monkeypatch: pytes
     assert fake_st.dataframe_calls >= 3
     assert len(fake_st.altair_chart_calls) == 1
     assert any("전략 요약 카드" in body for body in fake_st.markdown_calls)
+    assert any("backtest-result-interpretation" in body for body in fake_st.markdown_calls)
     assert any("전략 비교표" in body for body in fake_st.markdown_calls)
     assert any("거래 순서 누적 수익률" in body for body in fake_st.markdown_calls)
     assert any("거래 로그" in body for body in fake_st.markdown_calls)
+
+
+def test_build_backtest_result_interpretation_explains_sample_and_risk() -> None:
+    low_sample = pd.Series(
+        {
+            "trade_count": 2,
+            "total_return_pct": 8.5,
+            "win_rate_pct": 50.0,
+            "average_return_pct": 4.2,
+            "max_drawdown_pct": -3.0,
+        }
+    )
+    risky = pd.Series(
+        {
+            "trade_count": 12,
+            "total_return_pct": 14.0,
+            "win_rate_pct": 42.0,
+            "average_return_pct": 2.4,
+            "max_drawdown_pct": -18.0,
+        }
+    )
+    losing = pd.Series(
+        {
+            "trade_count": 6,
+            "total_return_pct": -4.0,
+            "win_rate_pct": 33.0,
+            "average_return_pct": -0.7,
+            "max_drawdown_pct": -9.0,
+        }
+    )
+
+    assert "거래 수가 적어" in streamlit_backtest_module.build_backtest_result_interpretation(low_sample)
+    risky_text = streamlit_backtest_module.build_backtest_result_interpretation(risky)
+    assert "승률은 낮지만" in risky_text
+    assert "최대낙폭이 커서" in risky_text
+    losing_text = streamlit_backtest_module.build_backtest_result_interpretation(losing)
+    assert "총수익률이 마이너스" in losing_text
+    assert "손실 구간" in losing_text
 
 
 def test_render_backtest_tab_prepare_button_wires_collect_analyze_and_signal(monkeypatch: pytest.MonkeyPatch) -> None:

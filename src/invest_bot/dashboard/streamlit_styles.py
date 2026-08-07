@@ -438,6 +438,13 @@ def apply_custom_style() -> None:
             overflow-wrap: anywhere;
         }
 
+        .backtest-result-card .backtest-result-interpretation {
+            margin-top: 0.65rem;
+            padding-top: 0.6rem;
+            border-top: 1px solid rgba(203, 213, 225, 0.16);
+            color: var(--app-text-soft);
+        }
+
         .report-focus-card {
             padding: 1rem;
             border-radius: 1rem;

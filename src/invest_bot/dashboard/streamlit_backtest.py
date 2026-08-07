@@ -468,6 +468,48 @@ def _build_cumulative_trade_return_frame(trade_frame: pd.DataFrame) -> pd.DataFr
     return working[["trade_sequence", "cumulative_return_pct", "series_label"]].copy()
 
 
+def _numeric_row_value(row: pd.Series, key: str, default: float = 0.0) -> float:
+    value = pd.to_numeric(pd.Series([row.get(key, default)]), errors="coerce").iloc[0]
+    if pd.isna(value):
+        return default
+    return float(value)
+
+
+def build_backtest_result_interpretation(row: pd.Series) -> str:
+    trade_count = int(_numeric_row_value(row, "trade_count", 0.0))
+    total_return = _numeric_row_value(row, "total_return_pct", 0.0)
+    win_rate = _numeric_row_value(row, "win_rate_pct", 0.0)
+    average_return = _numeric_row_value(row, "average_return_pct", 0.0)
+    max_drawdown = _numeric_row_value(row, "max_drawdown_pct", 0.0)
+    drawdown_abs = abs(max_drawdown)
+
+    if trade_count == 0:
+        return "완료된 거래가 없어 수익률보다 신호 발생 여부와 준비 데이터 상태를 먼저 확인해야 합니다."
+
+    messages: list[str] = []
+    if total_return > 0:
+        if trade_count < 3:
+            messages.append("총수익률은 플러스지만 거래 수가 적어 아직 신뢰도는 낮게 봐야 합니다.")
+        elif win_rate < 50 and average_return > 0:
+            messages.append("승률은 낮지만 평균 수익이 손실을 만회해 총수익률은 플러스입니다.")
+        else:
+            messages.append("총수익률이 플러스라 과거 구간에서는 전략이 유효하게 작동했습니다.")
+    elif total_return < 0:
+        messages.append("총수익률이 마이너스라 이 구간에서는 전략을 그대로 쓰기 어렵습니다.")
+    else:
+        messages.append("총수익률이 거의 0에 가까워 수수료와 슬리피지를 고려하면 우위가 약합니다.")
+
+    if drawdown_abs >= 15:
+        messages.append("최대낙폭이 커서 실제 운용 시 변동성 부담을 반드시 확인해야 합니다.")
+    elif drawdown_abs >= 8:
+        messages.append("최대낙폭이 중간 수준이라 손실 구간을 버틸 수 있는지 함께 봐야 합니다.")
+
+    if trade_count < 5:
+        messages.append("표본이 적으므로 더 긴 기간이나 다른 종목에서도 같은 결과가 나오는지 재검증이 필요합니다.")
+
+    return " ".join(messages)
+
+
 def _render_results_panel(service: DashboardDataService, result_bundle: dict[str, object]) -> None:
     summary_frame = result_bundle.get("summary_frame")
     comparison_frame = result_bundle.get("comparison_frame")
@@ -479,12 +521,14 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
         st.markdown('<div class="backtest-result-grid">', unsafe_allow_html=True)
         for _, row in summary_frame.head(6).iterrows():
             label = f"{row.get('symbol_name') or row.get('symbol')} · {row.get('strategy_name')}"
+            interpretation = build_backtest_result_interpretation(row)
             st.markdown(
                 f"""
                 <div class="backtest-result-card">
                   <strong>{escape(str(label))}</strong>
                   <div class="backtest-result-value">{escape(format_number(row.get('total_return_pct', 0.0)))}%</div>
                   <p>거래 {int(row.get('trade_count', 0))}건 · 승률 {escape(format_number(row.get('win_rate_pct', 0.0)))}% · 최대낙폭 {escape(format_number(row.get('max_drawdown_pct', 0.0)))}%</p>
+                  <p class="backtest-result-interpretation">{escape(interpretation)}</p>
                 </div>
                 """,
                 unsafe_allow_html=True,
