@@ -78,6 +78,7 @@
 - Principle 2: 홈 본문은 주식 앱처럼 종목 중심 브리핑, 관심 후보, 다음 행동을 먼저 보여준다.
 - Principle 3: 표보다 카드와 요약을 먼저 보여주고, 상세 표는 필요할 때만 펼친다.
 - Principle 4: 실행 화면은 기본값과 영향 범위를 명확히 말한다.
+- Principle 5: 백테스트 결과는 숫자만 표시하지 않고 수익률, 표본 수, 승률, 평균수익, 최대낙폭을 함께 해석한다.
 - Tradeoffs:
   - Streamlit 기본 위젯을 유지해 구현 안정성을 우선한다.
   - 완전한 커스텀 SPA보다는 repo-native CSS/컴포넌트 확장으로 개선한다.
@@ -105,6 +106,7 @@
   - 리포트 후보 카드와 선택 리포트 focus card.
   - 관심종목 브리핑 카드.
   - 백테스트 flow, selection, readiness, result cards.
+  - 백테스트 결과 해석 문장.
 - Variants and states:
   - selected navigation: 왼쪽 강조선 + 밝은 텍스트.
   - empty/error/success: Streamlit status primitives 사용.

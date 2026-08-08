@@ -341,6 +341,23 @@
   - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
   - `PYTHONPATH=. .venv/bin/pytest -q` (`255 passed`)
 
+### 2026-08-07 / Backtest result interpretation copy
+
+- 목표
+  - 백테스트 결과 숫자를 초보자가 바로 이해할 수 있도록 결과 카드에 해석 문장 추가
+- 변경 사항
+  - `streamlit_backtest.py`
+    - `build_backtest_result_interpretation()` 추가
+    - 총수익률, 거래 수, 승률, 평균수익, 최대낙폭 기준으로 표본 부족, 손실, 변동성, 낮은 승률/평균수익 해석을 생성
+    - 종목/전략별 결과 카드에 해석 문장 표시
+  - `streamlit_styles.py`
+    - 결과 해석 문장 구분선/문단 스타일 추가
+  - `tests/test_streamlit_backtest.py`
+    - 표본 부족, 낮은 승률 플러스 수익, 손실/낙폭 케이스 회귀 테스트 추가
+- 검증
+  - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_backtest.py tests/test_streamlit_dashboard.py`
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`256 passed`)
+
 ## 검증 로그
 
 ### 2026-07-03 / DB watchlist persistence
