@@ -1290,6 +1290,45 @@ def test_render_reports_tab_places_interpretation_overview_behind_top_toggle(mon
     assert fake_st.expander_labels == []
     assert captured == {"entry_count": 1, "show_reason_expander": False}
 
+
+def test_report_candidate_card_button_updates_selected_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(
+        button_values={"report_candidate_000660_000660_20260624_csv": True}
+    )
+    monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
+    entries = [
+        {
+            "entry_key": "005930:005930_20260624.csv",
+            "symbol": "005930",
+            "symbol_name": "삼성전자",
+            "date": "2026-06-24",
+            "display_opinion": "매수 관점",
+            "display_trend": "상승 우세",
+            "summary": "a",
+            "is_favorite": False,
+        },
+        {
+            "entry_key": "000660:000660_20260624.csv",
+            "symbol": "000660",
+            "symbol_name": "SK하이닉스",
+            "date": "2026-06-24",
+            "display_opinion": "관망",
+            "display_trend": "중립",
+            "summary": "b",
+            "is_favorite": True,
+        },
+    ]
+
+    streamlit_reports_module.render_report_candidate_cards(
+        entries,
+        selection_key=streamlit_reports_module.REPORT_SELECTION_KEY,
+        key_prefix="report_candidate",
+    )
+
+    assert "이 종목 보기" in fake_st.button_labels
+    assert fake_st.session_state[streamlit_reports_module.REPORT_SELECTION_KEY] == "000660:000660_20260624.csv"
+
+
 def test_build_report_entries_marks_favorite_symbols() -> None:
     previews = [_make_report_preview("005930", "삼성전자", "005930_20260624.csv")]
     frames = {

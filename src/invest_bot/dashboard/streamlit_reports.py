@@ -98,7 +98,11 @@ def render_reports_tab(
         st.warning("현재 검색 조건에 맞는 리포트가 없습니다.")
         return
 
-    render_report_candidate_cards(visible_entries[:4])
+    render_report_candidate_cards(
+        visible_entries[:4],
+        selection_key=REPORT_SELECTION_KEY,
+        key_prefix="report_candidate",
+    )
 
     selected_entry_key = resolve_selected_report_key(
         visible_entries,
@@ -127,32 +131,55 @@ def render_reports_tab(
     )
 
 
-def render_report_candidate_cards(report_entries: list[dict[str, object]]) -> None:
+def render_report_candidate_cards(
+    report_entries: list[dict[str, object]],
+    *,
+    selection_key: str | None = None,
+    key_prefix: str = "report_candidate",
+) -> None:
     st.markdown('<div class="streamlit-card symbol-strip-card">', unsafe_allow_html=True)
     st.markdown('<h3 class="section-title">리포트 후보</h3>', unsafe_allow_html=True)
     st.markdown(
         '<div class="section-copy">현재 조건에서 먼저 볼 만한 종목을 카드로 요약했습니다. 자세한 본문은 아래 선택한 1건만 표시합니다.</div>',
         unsafe_allow_html=True,
     )
-    st.markdown('<div class="symbol-card-grid">', unsafe_allow_html=True)
-    for entry in report_entries:
-        symbol_label = format_symbol_display(str(entry["symbol"]), str(entry["symbol_name"]))
-        favorite = "관심종목" if bool(entry.get("is_favorite")) else "일반"
-        st.markdown(
-            f"""
-            <div class="symbol-focus-card">
-              <div class="symbol-focus-topline">{escape(favorite)} · {escape(str(entry["date"]))}</div>
-              <strong>{escape(symbol_label)}</strong>
-              <div class="symbol-focus-badges">
-                <span>{escape(str(entry["display_opinion"]))}</span>
-                <span>{escape(str(entry["display_trend"]))}</span>
-              </div>
-              <p>{escape(str(entry.get("summary", "")))}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    st.markdown("</div></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+    if not report_entries:
+        return
+
+    card_columns = st.columns(min(len(report_entries), 4), gap="small")
+    for index, entry in enumerate(report_entries):
+        column = card_columns[index % len(card_columns)]
+        with column:
+            symbol_label = format_symbol_display(str(entry["symbol"]), str(entry["symbol_name"]))
+            favorite = "관심종목" if bool(entry.get("is_favorite")) else "일반"
+            st.markdown(
+                f"""
+                <div class="symbol-focus-card">
+                  <div class="symbol-focus-topline">{escape(favorite)} · {escape(str(entry["date"]))}</div>
+                  <strong>{escape(symbol_label)}</strong>
+                  <div class="symbol-focus-badges">
+                    <span>{escape(str(entry["display_opinion"]))}</span>
+                    <span>{escape(str(entry["display_trend"]))}</span>
+                  </div>
+                  <p>{escape(str(entry.get("summary", "")))}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if selection_key is not None and st.button(
+                "이 종목 보기",
+                key=build_candidate_select_button_key(key_prefix, entry),
+                width="stretch",
+            ):
+                st.session_state[selection_key] = str(entry["entry_key"])
+                st.rerun()
+
+
+def build_candidate_select_button_key(key_prefix: str, entry: dict[str, object]) -> str:
+    raw_key = f"{key_prefix}_{entry.get('entry_key', '')}"
+    safe_key = "".join(char if char.isalnum() else "_" for char in raw_key)
+    return safe_key[:180]
 
 def build_report_entries(
     previews: list[DatasetPreview],

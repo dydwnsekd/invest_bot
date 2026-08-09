@@ -358,6 +358,22 @@
   - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_backtest.py tests/test_streamlit_dashboard.py`
   - `PYTHONPATH=. .venv/bin/pytest -q` (`256 passed`)
 
+### 2026-08-09 / Candidate card direct selection
+
+- 목표
+  - 투자 리포트와 관심종목 후보 카드를 본 뒤 selectbox에서 다시 찾지 않아도 바로 본문을 전환할 수 있게 개선
+- 변경 사항
+  - `streamlit_reports.py`
+    - `render_report_candidate_cards()`에 `selection_key`와 `key_prefix` 인자 추가
+    - 후보 카드마다 `이 종목 보기` 버튼을 렌더링하고 선택 session state를 갱신
+  - `streamlit_watchlist.py`
+    - 관심종목 후보 카드도 같은 직접 선택 버튼 사용
+  - `tests/test_streamlit_dashboard.py`
+    - 후보 카드 버튼이 선택 리포트 key를 갱신하는 회귀 테스트 추가
+- 검증
+  - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`257 passed`)
+
 ## 검증 로그
 
 ### 2026-07-03 / DB watchlist persistence

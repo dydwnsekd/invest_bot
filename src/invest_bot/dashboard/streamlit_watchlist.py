@@ -111,7 +111,11 @@ def render_watchlist_tab(
         unsafe_allow_html=True,
     )
     st.markdown("</div>", unsafe_allow_html=True)
-    render_report_candidate_cards(visible_entries[:4])
+    render_report_candidate_cards(
+        visible_entries[:4],
+        selection_key=WATCHLIST_SELECTION_KEY,
+        key_prefix="watchlist_candidate",
+    )
 
     selected_entry_key = resolve_selected_report_key(
         visible_entries,
