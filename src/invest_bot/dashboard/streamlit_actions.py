@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import contextmanager, nullcontext
 
 import streamlit as st
 
@@ -95,17 +96,40 @@ def render_actions_tab(
 
         action_row_top = st.columns(2, gap="small")
         if action_row_top[0].button("데이터 수집", width="stretch", type="primary"):
-            run_collect_action(selected_items, int(days))
+            with render_action_progress("데이터 수집", selected_items):
+                run_collect_action(selected_items, int(days))
         if action_row_top[1].button("전체 파이프라인", width="stretch"):
-            run_full_pipeline_action(selected_items, int(days), settings=settings)
+            with render_action_progress("전체 파이프라인", selected_items):
+                run_full_pipeline_action(selected_items, int(days), settings=settings)
 
         action_row_bottom = st.columns(3, gap="small")
         if action_row_bottom[0].button("지표 계산", width="stretch"):
-            run_batch_symbol_action(selected_items, generate_indicators_for_symbol, "지표 계산")
+            with render_action_progress("지표 계산", selected_items):
+                run_batch_symbol_action(selected_items, generate_indicators_for_symbol, "지표 계산")
         if action_row_bottom[1].button("신호 생성", width="stretch"):
-            run_batch_symbol_action(selected_items, generate_golden_cross_signals_for_symbol, "골든크로스 신호 생성")
+            with render_action_progress("신호 생성", selected_items):
+                run_batch_symbol_action(selected_items, generate_golden_cross_signals_for_symbol, "골든크로스 신호 생성")
         if action_row_bottom[2].button("리포트 생성", width="stretch"):
-            run_market_report_batch_action(selected_items, settings=settings)
+            with render_action_progress("리포트 생성", selected_items):
+                run_market_report_batch_action(selected_items, settings=settings)
+
+
+@contextmanager
+def render_action_progress(action_name: str, selected_items: list[ResolvedSymbol]):
+    selected_count = len(selected_items)
+    status = getattr(st, "status", None)
+    if not callable(status):
+        with nullcontext():
+            yield
+        return
+    with status(
+        f"{action_name} 진행 중입니다. 선택 종목 {selected_count}개를 처리하고 있습니다.",
+        expanded=True,
+    ):
+        write = getattr(st, "write", None)
+        if callable(write):
+            write("완료될 때까지 화면을 닫지 말고 기다려 주세요. 작업이 끝나면 결과 메시지가 표시됩니다.")
+        yield
 
 
 def run_collect_action(selected_items: list[ResolvedSymbol], days: int) -> None:

@@ -5,6 +5,7 @@ from html import escape
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from invest_bot.dashboard.report_favorites import ReportFavoritesStore
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
@@ -23,6 +24,9 @@ from invest_bot.dashboard.streamlit_state import load_professional_chart_frame_f
 REPORT_SELECTION_KEY = "report_selected_entry_key"
 REPORT_FAVORITES_ONLY_KEY = "report_favorites_only"
 REPORT_SORT_OPTION_KEY = "report_sort_option"
+CANDIDATE_PENDING_SELECTION_SUFFIX = "__candidate_pending"
+CANDIDATE_SCROLL_SUFFIX = "__scroll_to_detail"
+REPORT_DETAIL_ANCHOR_ID = "selected-report-detail"
 
 def render_reports_tab(
     snapshot,
@@ -104,10 +108,7 @@ def render_reports_tab(
         key_prefix="report_candidate",
     )
 
-    selected_entry_key = resolve_selected_report_key(
-        visible_entries,
-        st.session_state.get(REPORT_SELECTION_KEY),
-    )
+    selected_entry_key = resolve_report_selection_from_state(visible_entries, REPORT_SELECTION_KEY)
     selected_key = st.selectbox(
         "리포트 선택",
         options=[str(entry["entry_key"]) for entry in visible_entries],
@@ -120,6 +121,7 @@ def render_reports_tab(
     st.caption(
         f"현재 조건에서 {len(visible_entries)}개의 리포트 중 선택한 1건만 본문에 표시합니다."
     )
+    render_scroll_anchor_if_requested(REPORT_SELECTION_KEY)
     render_market_report_card(
         selected_entry["preview"],
         service,
@@ -172,7 +174,7 @@ def render_report_candidate_cards(
                 key=build_candidate_select_button_key(key_prefix, entry),
                 width="stretch",
             ):
-                st.session_state[selection_key] = str(entry["entry_key"])
+                st.session_state[build_candidate_pending_selection_key(selection_key)] = str(entry["entry_key"])
                 st.rerun()
 
 
@@ -180,6 +182,32 @@ def build_candidate_select_button_key(key_prefix: str, entry: dict[str, object])
     raw_key = f"{key_prefix}_{entry.get('entry_key', '')}"
     safe_key = "".join(char if char.isalnum() else "_" for char in raw_key)
     return safe_key[:180]
+
+
+def build_candidate_pending_selection_key(selection_key: str) -> str:
+    return f"{selection_key}{CANDIDATE_PENDING_SELECTION_SUFFIX}"
+
+
+def build_candidate_scroll_key(selection_key: str) -> str:
+    return f"{selection_key}{CANDIDATE_SCROLL_SUFFIX}"
+
+
+def render_scroll_anchor_if_requested(selection_key: str) -> None:
+    st.markdown(f'<div id="{REPORT_DETAIL_ANCHOR_ID}"></div>', unsafe_allow_html=True)
+    if not st.session_state.pop(build_candidate_scroll_key(selection_key), False):
+        return
+    components.html(
+        f"""
+        <script>
+        const anchor = window.parent.document.getElementById("{REPORT_DETAIL_ANCHOR_ID}");
+        if (anchor) {{
+          anchor.scrollIntoView({{ behavior: "smooth", block: "start" }});
+        }}
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 def build_report_entries(
     previews: list[DatasetPreview],
@@ -259,6 +287,18 @@ def resolve_selected_report_key(
     if not report_entries:
         return None
     return str(report_entries[0]["entry_key"])
+
+
+def resolve_report_selection_from_state(
+    report_entries: list[dict[str, object]],
+    selection_key: str,
+) -> str | None:
+    pending_key = build_candidate_pending_selection_key(selection_key)
+    pending_entry_key = st.session_state.pop(pending_key, None)
+    if pending_entry_key is not None and get_report_entry_by_key(report_entries, str(pending_entry_key)) is not None:
+        st.session_state[selection_key] = str(pending_entry_key)
+        st.session_state[build_candidate_scroll_key(selection_key)] = True
+    return resolve_selected_report_key(report_entries, st.session_state.get(selection_key))
 
 
 def resolve_selected_report_entry(

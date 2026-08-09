@@ -51,6 +51,7 @@ TAB_META = {
 }
 
 TAB_NAMES = tuple(TAB_META.keys())
+TAB_QUERY_PARAM = "tab"
 TAB_ALIASES = {
     "상태판": "홈",
     "작업 실행": "데이터 갱신",
@@ -65,6 +66,31 @@ def resolve_tab_name(tab_name: str | None) -> str:
     return resolved if resolved in TAB_META else "홈"
 
 
+def read_tab_from_query_params() -> str:
+    query_params = getattr(st, "query_params", None)
+    if query_params is None:
+        return "홈"
+    try:
+        raw_value = query_params.get(TAB_QUERY_PARAM)
+    except (AttributeError, TypeError):
+        return "홈"
+    if isinstance(raw_value, list):
+        raw_value = raw_value[0] if raw_value else None
+    return resolve_tab_name(str(raw_value) if raw_value not in (None, "") else None)
+
+
+def sync_tab_to_query_params(tab_name: str | None) -> None:
+    query_params = getattr(st, "query_params", None)
+    if query_params is None:
+        return
+    resolved_tab = resolve_tab_name(tab_name)
+    try:
+        if query_params.get(TAB_QUERY_PARAM) != resolved_tab:
+            query_params[TAB_QUERY_PARAM] = resolved_tab
+    except (AttributeError, TypeError):
+        return
+
+
 def render_sidebar(service: DashboardDataService, schedule_status) -> None:
     st.session_state.selected_tab = resolve_tab_name(st.session_state.get("selected_tab"))
     with st.sidebar:
@@ -74,6 +100,7 @@ def render_sidebar(service: DashboardDataService, schedule_status) -> None:
             button_type = "primary" if st.session_state.selected_tab == tab_name else "secondary"
             if st.button(tab_name, width="stretch", type=button_type, key=f"nav_{tab_name}"):
                 st.session_state.selected_tab = tab_name
+                sync_tab_to_query_params(tab_name)
                 st.rerun()
 
         st.divider()

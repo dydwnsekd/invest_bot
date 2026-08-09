@@ -11,10 +11,12 @@ from invest_bot.dashboard.streamlit_backtest import render_backtest_tab as _rend
 from invest_bot.dashboard.streamlit_data import render_data_tab as _render_data_tab
 from invest_bot.dashboard.streamlit_glossary import render_glossary_tab as _render_glossary_tab
 from invest_bot.dashboard.streamlit_layout import (
+    read_tab_from_query_params as _read_tab_from_query_params,
     render_action_feedback as _render_action_feedback,
     render_header as _render_header,
     render_sidebar as _render_sidebar,
     resolve_tab_name as _resolve_tab_name,
+    sync_tab_to_query_params as _sync_tab_to_query_params,
 )
 from invest_bot.dashboard.streamlit_overview import (
     render_overview_tab as _render_overview_tab,
@@ -54,7 +56,7 @@ def main() -> None:
     test_report = service.load_test_report()
 
     if "selected_tab" not in st.session_state:
-        st.session_state.selected_tab = "홈"
+        st.session_state.selected_tab = _read_tab_from_query_params()
     if "action_message" not in st.session_state:
         st.session_state.action_message = None
     if "action_message_type" not in st.session_state:
@@ -62,6 +64,7 @@ def main() -> None:
 
     _render_sidebar(service, schedule_status)
     st.session_state.selected_tab = _resolve_tab_name(st.session_state.get("selected_tab"))
+    _sync_tab_to_query_params(st.session_state.selected_tab)
     _render_header(st.session_state.selected_tab)
     _render_action_feedback()
 

@@ -71,19 +71,28 @@ from invest_bot.dashboard.streamlit_formatters import (
 import invest_bot.dashboard.streamlit_reports as streamlit_reports_module
 import invest_bot.dashboard.streamlit_watchlist as streamlit_watchlist_module
 from invest_bot.dashboard.streamlit_reports import (
+    build_candidate_pending_selection_key,
+    build_candidate_scroll_key,
     build_strategy_summary_items,
     filter_report_entries,
     format_report_selection_option,
     get_report_entry_by_key,
     query_report_entries,
     query_report_previews,
+    resolve_report_selection_from_state,
     resolve_selected_report_entry,
     resolve_selected_report_key,
     selected_entry_index,
     selected_entry_key_index,
     sort_report_entries,
 )
-from invest_bot.dashboard.streamlit_watchlist import refresh_favorite_symbols_if_needed, render_watchlist_tab
+from invest_bot.dashboard.streamlit_watchlist import (
+    WATCHLIST_SELECTION_KEY,
+    build_watchlist_overview_entries,
+    refresh_favorite_symbols_if_needed,
+    render_watchlist_overview,
+    render_watchlist_tab,
+)
 from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolEntry
 from invest_bot.dashboard.streamlit_state import load_professional_chart_frame_for_symbol
 from tests.helpers import init_test_db, make_test_dir
@@ -117,6 +126,8 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     assert ".watch-target-grid" in style
     assert ".symbol-card-grid" in style
     assert ".report-focus-card" in style
+    assert ".watchlist-symbol-card" in style
+    assert ".watchlist-symbol-card.is-selected" in style
     assert ".backtest-result-grid" in style
     assert '[data-testid="stSidebar"] .stButton > button {' in style
     assert 'border-radius: 0;' in style
@@ -1326,7 +1337,46 @@ def test_report_candidate_card_button_updates_selected_report(monkeypatch: pytes
     )
 
     assert "이 종목 보기" in fake_st.button_labels
-    assert fake_st.session_state[streamlit_reports_module.REPORT_SELECTION_KEY] == "000660:000660_20260624.csv"
+    pending_key = build_candidate_pending_selection_key(streamlit_reports_module.REPORT_SELECTION_KEY)
+    assert fake_st.session_state[pending_key] == "000660:000660_20260624.csv"
+
+
+def test_pending_candidate_selection_resolves_before_selectbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    pending_key = build_candidate_pending_selection_key(streamlit_reports_module.REPORT_SELECTION_KEY)
+    scroll_key = build_candidate_scroll_key(streamlit_reports_module.REPORT_SELECTION_KEY)
+    fake_st.session_state[pending_key] = "000660:b.csv"
+    monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
+    entries = [
+        {"entry_key": "005930:a.csv"},
+        {"entry_key": "000660:b.csv"},
+    ]
+
+    selected_key = resolve_report_selection_from_state(entries, streamlit_reports_module.REPORT_SELECTION_KEY)
+
+    assert selected_key == "000660:b.csv"
+    assert fake_st.session_state[streamlit_reports_module.REPORT_SELECTION_KEY] == "000660:b.csv"
+    assert fake_st.session_state[scroll_key] is True
+    assert pending_key not in fake_st.session_state
+
+
+def test_scroll_anchor_renders_script_after_candidate_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    scroll_key = build_candidate_scroll_key(streamlit_reports_module.REPORT_SELECTION_KEY)
+    fake_st.session_state[scroll_key] = True
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(streamlit_reports_module, "st", fake_st)
+    monkeypatch.setattr(
+        streamlit_reports_module,
+        "components",
+        SimpleNamespace(html=lambda body, **kwargs: captured.update({"body": body, "kwargs": kwargs})),
+    )
+
+    streamlit_reports_module.render_scroll_anchor_if_requested(streamlit_reports_module.REPORT_SELECTION_KEY)
+
+    assert "selected-report-detail" in "\n".join(fake_st.markdown_calls)
+    assert "scrollIntoView" in str(captured["body"])
+    assert scroll_key not in fake_st.session_state
 
 
 def test_build_report_entries_marks_favorite_symbols() -> None:
@@ -1892,6 +1942,80 @@ def test_render_watchlist_tab_renders_only_one_selected_favorite(monkeypatch: py
     assert captured == ["005930"]
 
 
+def test_render_watchlist_overview_shows_every_registered_symbol(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_watchlist_module, "st", fake_st)
+    entries = [
+        {
+            "entry_key": "005930:a.csv",
+            "symbol": "005930",
+            "symbol_name": "삼성전자",
+            "date": "2026-08-08",
+            "display_opinion": "매수 관점",
+            "display_trend": "상승 우세",
+        },
+        {
+            "entry_key": "000660:b.csv",
+            "symbol": "000660",
+            "symbol_name": "SK하이닉스",
+            "date": "2026-08-08",
+            "display_opinion": "관망",
+            "display_trend": "중립",
+        },
+    ]
+
+    render_watchlist_overview(entries, selection_key=WATCHLIST_SELECTION_KEY)
+
+    rendered = "\n".join(fake_st.markdown_calls)
+    assert "등록한 관심종목 전체" in rendered
+    assert "삼성전자" in rendered
+    assert "SK하이닉스" in rendered
+    assert fake_st.button_labels == ["삼성전자 상세 보기", "SK하이닉스 상세 보기"]
+
+
+def test_watchlist_overview_card_sets_pending_detail_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(button_values={"watchlist_overview_0_005930": True})
+    monkeypatch.setattr(streamlit_watchlist_module, "st", fake_st)
+    entries = [
+        {
+            "entry_key": "005930:a.csv",
+            "symbol": "005930",
+            "symbol_name": "삼성전자",
+            "date": "2026-08-08",
+            "display_opinion": "매수 관점",
+            "display_trend": "상승 우세",
+        }
+    ]
+
+    render_watchlist_overview(entries, selection_key=WATCHLIST_SELECTION_KEY)
+
+    pending_key = build_candidate_pending_selection_key(WATCHLIST_SELECTION_KEY)
+    assert fake_st.session_state[pending_key] == "005930:a.csv"
+    assert fake_st.session_state["watchlist_query"] == ""
+
+
+def test_build_watchlist_overview_entries_keeps_symbol_without_report() -> None:
+    report_entries = [
+        {
+            "entry_key": "005930:a.csv",
+            "symbol": "005930",
+            "symbol_name": "삼성전자",
+        }
+    ]
+    previews = [
+        _make_report_preview("005930", "삼성전자", "005930_20260808.csv"),
+        _make_report_preview("000660", "SK하이닉스", "000660_20260808.csv"),
+    ]
+
+    overview = build_watchlist_overview_entries(report_entries, {"005930", "000660"}, previews)
+
+    assert {str(entry["symbol"]) for entry in overview} == {"005930", "000660"}
+    missing_report = next(entry for entry in overview if entry["symbol"] == "000660")
+    assert missing_report["symbol_name"] == "SK하이닉스"
+    assert missing_report["display_opinion"] == "리포트 준비 중"
+    assert missing_report["has_report"] is False
+
+
 def test_query_report_previews_filters_before_frame_loading() -> None:
     previews = [
         _make_report_preview("005930", "삼성전자", "005930_20260624.csv"),
@@ -1980,6 +2104,34 @@ def test_render_actions_tab_removes_actions_guide_and_keeps_primary_controls_vis
     assert "수집 조회 기간" in fake_st.date_input_labels
     assert "한 종목 선택" not in fake_st.selectbox_labels
     assert {"데이터 수집", "전체 파이프라인", "지표 계산", "신호 생성", "리포트 생성"}.issubset(set(fake_st.button_labels))
+
+
+def test_render_action_progress_shows_loading_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[tuple[str, object]] = []
+
+    class _FakeStatus:
+        def __enter__(self):
+            events.append(("enter", None))
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            events.append(("exit", None))
+
+    fake_st = SimpleNamespace(
+        status=lambda message, **kwargs: events.append(("status", message)) or _FakeStatus(),
+        write=lambda message: events.append(("write", message)),
+    )
+    monkeypatch.setattr(streamlit_actions_module, "st", fake_st)
+
+    with streamlit_actions_module.render_action_progress(
+        "데이터 수집",
+        [ResolvedSymbol(raw_input="005930", symbol="005930", symbol_name="삼성전자")],
+    ):
+        events.append(("body", None))
+
+    assert ("status", "데이터 수집 진행 중입니다. 선택 종목 1개를 처리하고 있습니다.") in events
+    assert any(event == "write" and "기다려 주세요" in str(message) for event, message in events)
+    assert events[-1] == ("exit", None)
 
 
 def test_render_reports_tab_removes_top_metrics_strip_and_keeps_single_report_flow(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2364,6 +2516,18 @@ def test_dashboard_navigation_uses_user_friendly_labels_and_legacy_aliases() -> 
     assert resolve_tab_name("데이터 탐색") == "데이터 보기"
     assert resolve_tab_name("검증") == "시스템 검증"
     assert resolve_tab_name("알 수 없음") == "홈"
+
+
+def test_dashboard_tab_query_params_keep_selected_tab_on_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_query_params: dict[str, str] = {"tab": "투자 리포트"}
+    fake_st = SimpleNamespace(query_params=fake_query_params)
+    monkeypatch.setattr(streamlit_layout_module, "st", fake_st)
+
+    assert streamlit_layout_module.read_tab_from_query_params() == "투자 리포트"
+
+    streamlit_layout_module.sync_tab_to_query_params("백테스트")
+
+    assert fake_query_params["tab"] == "백테스트"
 
 
 def test_overview_watch_targets_prioritize_investor_signals() -> None:

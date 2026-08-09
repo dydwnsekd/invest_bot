@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from datetime import date, timedelta
+from html import escape
 from pathlib import Path
 
 import pandas as pd
@@ -11,13 +12,14 @@ from invest_bot.config.settings import AppSettings
 from invest_bot.dashboard.report_favorites import ReportFavoritesStore
 from invest_bot.dashboard.service import DashboardDataService
 from invest_bot.dashboard.streamlit_reports import (
+    build_candidate_pending_selection_key,
     build_report_entries,
     format_report_selection_option,
     get_report_entry_by_key,
-    query_report_previews,
-    render_report_candidate_cards,
+    query_report_entries,
+    render_scroll_anchor_if_requested,
     render_market_report_card,
-    resolve_selected_report_key,
+    resolve_report_selection_from_state,
     selected_entry_key_index,
     sort_report_entries,
 )
@@ -65,22 +67,41 @@ def render_watchlist_tab(
 
     report_previews = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
     favorite_previews = [preview for preview in report_previews if preview.symbol in favorite_symbols]
-    if not favorite_previews:
+    entries = build_report_entries(
+        favorite_previews,
+        service,
+        read_preview_frame=read_preview_frame,
+        favorite_symbols=favorite_symbols,
+    )
+    overview_entries = build_watchlist_overview_entries(entries, favorite_symbols, snapshot.processed_previews)
+
+    metric_columns = st.columns(3)
+    metric_columns[0].metric("저장된 관심종목", len(favorite_symbols))
+    metric_columns[1].metric("리포트 연결", len(entries))
+    metric_columns[2].metric("매수 관점", sum(1 for item in entries if item["final_opinion"] == "buy"))
+
+    if entries:
+        resolve_report_selection_from_state(entries, WATCHLIST_SELECTION_KEY)
+    render_watchlist_overview(overview_entries, selection_key=WATCHLIST_SELECTION_KEY)
+
+    if not entries:
         st.info("저장된 관심종목과 연결되는 최신 시장 리포트가 아직 없습니다.")
         return
+
+    st.markdown('<div class="streamlit-card watchlist-detail-controls">', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">상세 리포트 선택</h3>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-copy">카드를 누르거나 검색과 정렬을 사용해 아래에서 한 종목을 자세히 확인합니다.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
 
     query = st.text_input(
         "관심종목 검색",
         placeholder="종목코드 또는 종목명으로 찾기",
         key="watchlist_query",
     ).strip().lower()
-    visible_previews = query_report_previews(favorite_previews, query)
-    entries = build_report_entries(
-        visible_previews,
-        service,
-        read_preview_frame=read_preview_frame,
-        favorite_symbols=favorite_symbols,
-    )
+    visible_entries = query_report_entries(entries, query)
 
     sort_option = st.selectbox(
         "정렬",
@@ -93,34 +114,13 @@ def render_watchlist_tab(
         else 0,
         key=WATCHLIST_SORT_OPTION_KEY,
     )
-    visible_entries = sort_report_entries(entries, sort_option)
-
-    metric_columns = st.columns(3)
-    metric_columns[0].metric("저장된 관심종목", len(favorite_symbols))
-    metric_columns[1].metric("현재 후보", len(visible_entries))
-    metric_columns[2].metric("매수 관점", sum(1 for item in visible_entries if item["final_opinion"] == "buy"))
+    visible_entries = sort_report_entries(visible_entries, sort_option)
 
     if not visible_entries:
         st.warning("현재 검색 조건에 맞는 관심종목 리포트가 없습니다.")
         return
 
-    st.markdown('<div class="streamlit-card watchlist-brief-card">', unsafe_allow_html=True)
-    st.markdown('<h3 class="section-title">관심종목 브리핑</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">저장한 종목 중 매수 관점과 최신 판단을 먼저 확인하고, 아래에서 한 종목을 자세히 읽습니다.</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
-    render_report_candidate_cards(
-        visible_entries[:4],
-        selection_key=WATCHLIST_SELECTION_KEY,
-        key_prefix="watchlist_candidate",
-    )
-
-    selected_entry_key = resolve_selected_report_key(
-        visible_entries,
-        st.session_state.get(WATCHLIST_SELECTION_KEY),
-    )
+    selected_entry_key = resolve_report_selection_from_state(visible_entries, WATCHLIST_SELECTION_KEY)
     selected_key = st.selectbox(
         "관심종목 선택",
         options=[str(entry["entry_key"]) for entry in visible_entries],
@@ -131,6 +131,7 @@ def render_watchlist_tab(
     selected_entry = get_report_entry_by_key(visible_entries, selected_key)
 
     st.caption(f"저장된 관심종목 {len(visible_entries)}건 중 선택한 1건만 본문에 표시합니다.")
+    render_scroll_anchor_if_requested(WATCHLIST_SELECTION_KEY)
     render_market_report_card(
         selected_entry["preview"],
         service,
@@ -140,6 +141,80 @@ def render_watchlist_tab(
         favorites_store=favorites_store,
         is_favorite=bool(selected_entry["is_favorite"]),
     )
+
+
+def render_watchlist_overview(
+    entries: list[dict[str, object]],
+    *,
+    selection_key: str,
+) -> None:
+    st.markdown('<div class="streamlit-card watchlist-brief-card">', unsafe_allow_html=True)
+    st.markdown('<h3 class="section-title">등록한 관심종목 전체</h3>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="section-copy">현재 저장된 {len(entries)}개 종목을 한 번에 보여줍니다. 각 카드에서 최신 판단을 확인하고 바로 상세로 이동할 수 있습니다.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    card_columns = st.columns(min(len(entries), 4), gap="small")
+    selected_key = str(st.session_state.get(selection_key, ""))
+    for index, entry in enumerate(entries):
+        with card_columns[index % len(card_columns)]:
+            entry_key = str(entry["entry_key"])
+            selected_class = " is-selected" if entry_key == selected_key else ""
+            symbol_name = str(entry["symbol_name"] or entry["symbol"])
+            st.markdown(
+                f"""
+                <div class="watchlist-symbol-card{selected_class}">
+                  <div class="watchlist-symbol-card__topline">{escape(str(entry["symbol"]))} · {escape(str(entry["date"]))}</div>
+                  <strong>{escape(symbol_name)}</strong>
+                  <div class="symbol-focus-badges">
+                    <span>{escape(str(entry["display_opinion"]))}</span>
+                    <span>{escape(str(entry["display_trend"]))}</span>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                f"{symbol_name} 상세 보기",
+                key=f"watchlist_overview_{index}_{entry['symbol']}",
+                width="stretch",
+                disabled=not bool(entry.get("has_report", True)),
+            ):
+                st.session_state["watchlist_query"] = ""
+                st.session_state[build_candidate_pending_selection_key(selection_key)] = entry_key
+                st.rerun()
+
+
+def build_watchlist_overview_entries(
+    report_entries: list[dict[str, object]],
+    favorite_symbols: set[str],
+    previews: Sequence[object],
+) -> list[dict[str, object]]:
+    entries_by_symbol = {str(entry["symbol"]): dict(entry, has_report=True) for entry in report_entries}
+    symbol_names = {
+        str(getattr(preview, "symbol", "")): str(getattr(preview, "symbol_name", ""))
+        for preview in previews
+        if getattr(preview, "symbol", "")
+    }
+    overview_entries: list[dict[str, object]] = []
+    for symbol in sorted(favorite_symbols, key=lambda item: (symbol_names.get(item, ""), item)):
+        if symbol in entries_by_symbol:
+            overview_entries.append(entries_by_symbol[symbol])
+            continue
+        overview_entries.append(
+            {
+                "entry_key": "",
+                "symbol": symbol,
+                "symbol_name": symbol_names.get(symbol, ""),
+                "date": "최신 리포트 없음",
+                "display_opinion": "리포트 준비 중",
+                "display_trend": "데이터 확인 필요",
+                "has_report": False,
+            }
+        )
+    return overview_entries
 
 
 def refresh_favorite_symbols_if_needed(

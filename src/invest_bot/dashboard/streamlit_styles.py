@@ -505,6 +505,42 @@ def apply_custom_style() -> None:
             border-color: rgba(34, 197, 94, 0.30);
         }
 
+        .watchlist-symbol-card {
+            min-height: 7.4rem;
+            margin-top: 0.65rem;
+            padding: 0.85rem;
+            border-radius: 0.9rem;
+            background:
+                radial-gradient(circle at top right, rgba(34, 197, 94, 0.10), transparent 38%),
+                rgba(15, 23, 42, 0.82);
+            border: 1px solid rgba(203, 213, 225, 0.22);
+        }
+
+        .watchlist-symbol-card.is-selected {
+            border-color: rgba(56, 189, 248, 0.72);
+            box-shadow: inset 3px 0 0 rgba(56, 189, 248, 0.92);
+        }
+
+        .watchlist-symbol-card__topline {
+            color: var(--app-text-muted);
+            font-family: var(--font-label);
+            font-size: 0.74rem;
+            font-weight: 800;
+        }
+
+        .watchlist-symbol-card strong {
+            display: block;
+            margin-top: 0.3rem;
+            color: #f8fafc;
+            font-size: 1rem;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+
+        .watchlist-detail-controls {
+            margin: 1.1rem 0 0.75rem;
+        }
+
         .backtest-flow-card {
             margin-bottom: 0.85rem;
         }
