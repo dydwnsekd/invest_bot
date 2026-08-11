@@ -374,6 +374,39 @@
   - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
   - `PYTHONPATH=. .venv/bin/pytest -q` (`257 passed`)
 
+### 2026-08-09 / Candidate selection state fix
+
+- 문제
+  - 후보 카드의 `이 종목 보기` 버튼이 selectbox와 같은 session state key를 직접 변경해 실제 Streamlit 위젯 상태 반영이 불안정할 수 있음
+- 수정
+  - 버튼 클릭 시 위젯 key를 직접 쓰지 않고 `__candidate_pending` pending key에 선택값 저장
+  - 다음 rerun에서 selectbox 생성 전에 pending 값을 실제 선택 key로 해소
+  - 투자 리포트와 관심종목 모두 같은 경로 사용
+- 검증
+  - 후보 카드 버튼이 pending key를 세팅하는 테스트 추가
+  - pending 선택값이 selectbox 렌더 전 실제 선택값으로 해소되는 테스트 추가
+  - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`258 passed`)
+
+### 2026-08-09 / Tab persistence, detail scroll, action progress
+
+- 목표
+  - UI 전반 사용감을 개선하기 위해 새로고침 탭 유지, 후보 선택 후 상세 이동, 작업 진행 상태 표시 추가
+- 변경 사항
+  - `streamlit_layout.py` / `streamlit_dashboard.py`
+    - 선택 탭을 `?tab=` query param과 동기화
+    - 새로고침 시 query param에서 기존 탭 복원
+  - `streamlit_reports.py` / `streamlit_watchlist.py`
+    - 후보 카드 버튼 선택값을 pending key로 처리한 뒤 실제 선택값으로 해소
+    - 선택 해소 후 상세 영역 anchor로 smooth scroll 실행
+  - `streamlit_actions.py`
+    - 데이터 수집, 전체 파이프라인, 지표 계산, 신호 생성, 리포트 생성 버튼 실행 중 status/progress copy 표시
+  - `tests/test_streamlit_dashboard.py`
+    - query param 탭 유지, scroll anchor, action progress 회귀 테스트 추가
+- 검증
+  - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`264 passed`)
+
 ## 검증 로그
 
 ### 2026-07-03 / DB watchlist persistence
@@ -558,3 +591,23 @@
 - 검증
   - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py -q`
   - 결과: `95 passed`
+
+### 2026-08-09 / Full watchlist overview
+
+- 목표
+  - 관심종목 선택 드롭다운을 열지 않아도 등록한 종목 전체와 최신 판단을 한눈에 확인
+- 변경 사항
+  - `streamlit_watchlist.py`
+    - 리포트가 아직 없는 등록 종목까지 포함해 전체 관심종목을 최대 4열의 compact 카드 보드로 먼저 표시
+    - 종목명, 종목코드, 최신 기준일, 최종 의견, 추세를 카드에 노출
+    - 카드별 `상세 보기` 버튼으로 기존 단일 리포트 본문과 부드러운 스크롤 이동 경로 연결
+    - 검색과 정렬은 전체 목록 아래의 상세 선택 보조 도구로 재배치
+  - `streamlit_styles.py`
+    - 관심종목 카드와 선택 상태 강조 스타일 추가
+  - `DESIGN.md` / `README.md` / `docs/tasks/04_dashboard.md`
+    - 드롭다운 비의존 전체 관심종목 확인 원칙과 실제 동작 반영
+- 검증
+  - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `99 passed`
+  - `PYTHONPATH=. .venv/bin/pytest -q`
+  - 결과: `264 passed`
