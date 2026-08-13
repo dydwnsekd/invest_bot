@@ -2639,6 +2639,70 @@ def test_streamlit_dashboard_main_builds_settings_once_and_injects_them(monkeypa
     assert captured["actions_settings"] is settings
 
 
+def test_home_refreshes_favorites_and_rebuilds_snapshot_after_update(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_dashboard_module, "st", fake_st)
+    refresh_calls: list[set[str]] = []
+
+    class _Store:
+        def load_symbols(self) -> set[str]:
+            return {"005930", "000660"}
+
+    class _Service:
+        def __init__(self) -> None:
+            self.snapshot_calls = 0
+
+        def build_snapshot(self):
+            self.snapshot_calls += 1
+            return SimpleNamespace(version=self.snapshot_calls)
+
+    service = _Service()
+    initial_snapshot = SimpleNamespace(version=0)
+    monkeypatch.setattr(
+        streamlit_dashboard_module,
+        "_refresh_favorite_symbols_if_needed",
+        lambda current_service, symbols: refresh_calls.append(symbols)
+        or {"collected_symbols": ["005930"], "pipeline_symbols": ["005930"]},
+    )
+
+    refreshed = streamlit_dashboard_module._refresh_home_watchlist_snapshot(
+        initial_snapshot,
+        service,
+        settings=AppSettings(),
+        favorites_store=_Store(),
+    )
+
+    assert refresh_calls == [{"005930", "000660"}]
+    assert refreshed.version == 1
+    assert service.snapshot_calls == 1
+
+
+def test_home_keeps_snapshot_when_watchlist_is_already_current(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_dashboard_module, "st", fake_st)
+
+    class _Store:
+        def load_symbols(self) -> set[str]:
+            return {"005930"}
+
+    service = SimpleNamespace(build_snapshot=lambda: pytest.fail("최신 상태에서는 snapshot을 다시 만들면 안 됩니다."))
+    initial_snapshot = SimpleNamespace(version=0)
+    monkeypatch.setattr(
+        streamlit_dashboard_module,
+        "_refresh_favorite_symbols_if_needed",
+        lambda current_service, symbols: {"collected_symbols": [], "pipeline_symbols": []},
+    )
+
+    refreshed = streamlit_dashboard_module._refresh_home_watchlist_snapshot(
+        initial_snapshot,
+        service,
+        settings=AppSettings(),
+        favorites_store=_Store(),
+    )
+
+    assert refreshed is initial_snapshot
+
+
 def test_interpretation_rows_show_stock_and_strategy_labels() -> None:
     service = DashboardDataService()
     entries = [
