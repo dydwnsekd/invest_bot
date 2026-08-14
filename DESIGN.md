@@ -132,7 +132,7 @@
 - Touch/hover differences: hover에 의존하지 않고 selected state를 항상 표시한다.
 
 ## Interaction states
-- Loading: Streamlit 실행 상태 표시를 따른다.
+- Loading: 데이터 갱신처럼 시간이 걸리는 작업은 Streamlit status로 대상과 진행 내용을 표시하며, 홈 진입 시 관심종목 최신화 검사도 포함한다.
 - Empty: 데이터 없음 메시지는 다음 행동을 제안한다.
 - Error: 실패 이유와 영향 범위를 말한다.
 - Success: 무엇이 완료됐는지와 다음 확인 화면을 제안한다.
@@ -149,7 +149,7 @@
 ## Implementation constraints
 - Framework/styling system: Streamlit + repo-local CSS.
 - Design-token constraints: 기존 CSS 변수 유지.
-- Performance constraints: 데이터 로딩을 추가로 늘리지 않는다.
+- Performance constraints: 홈의 관심종목 자동 최신화는 저장된 기준일을 먼저 비교하고 필요한 종목만 수집·분석한다.
 - Compatibility constraints: 기존 tests와 탭 라우팅 alias를 유지한다.
 - Test/screenshot expectations: 변경 후 `pytest` 전체 통과를 기준으로 한다.
 

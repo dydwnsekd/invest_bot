@@ -405,7 +405,7 @@
     - query param 탭 유지, scroll anchor, action progress 회귀 테스트 추가
 - 검증
   - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
-  - `PYTHONPATH=. .venv/bin/pytest -q` (`264 passed`)
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`266 passed`)
 
 ## 검증 로그
 
@@ -610,4 +610,23 @@
   - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
   - 결과: `99 passed`
   - `PYTHONPATH=. .venv/bin/pytest -q`
-  - 결과: `264 passed`
+  - 결과: `266 passed`
+
+### 2026-08-12 / Home-entry watchlist refresh
+
+- 목표
+  - 홈 화면 진입 시 관심종목의 기준일, 추세, 신호, 리포트가 최신 데이터에 맞게 자동 갱신되도록 연결
+- 변경 사항
+  - `streamlit_dashboard.py`
+    - 홈 브리핑 렌더링 전에 DB 관심종목 목록을 로드
+    - 기존 관심종목 최신 여부 검사 경로를 재사용해 부족한 가격·수급 데이터만 수집
+    - 갱신 대상에 대해 지표 → 신호 → 리포트 파이프라인을 실행하고 snapshot 재구성
+    - 관심종목이 이미 최신이면 기존 snapshot을 재사용
+    - 검사·갱신 중 등록 종목 수와 처리 내용을 Streamlit status로 표시
+  - `DESIGN.md` / `README.md` / `docs/tasks/04_dashboard.md`
+    - 홈 진입 자동 최신화와 조건부 수집 원칙 반영
+- 검증
+  - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `101 passed`
+  - `PYTHONPATH=. .venv/bin/pytest -q`
+  - 결과: `266 passed`
