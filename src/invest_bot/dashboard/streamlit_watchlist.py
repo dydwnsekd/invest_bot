@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Sequence
 from datetime import date, timedelta
 from html import escape
@@ -32,6 +33,7 @@ from invest_bot.market.collector import MarketDataCollector
 WATCHLIST_SELECTION_KEY = "watchlist_selected_entry_key"
 WATCHLIST_SORT_OPTION_KEY = "watchlist_sort_option"
 WATCHLIST_BOOTSTRAP_DAYS = 365
+LOGGER = logging.getLogger(__name__)
 
 
 def render_watchlist_tab(
@@ -338,8 +340,15 @@ def _collect_watchlist_symbol_range(
         collector.storage.save("daily_prices_summary", f"{symbol}_{date_range}.csv", merged_summary)
 
     if _load_latest_dataset_frame(service, "stock_info", symbol) is None:
-        stock_info = collector.collect_stock_info(symbol)
-        collector.save_stock_info(symbol, stock_info)
+        try:
+            stock_info = collector.collect_stock_info(symbol)
+            collector.save_stock_info(symbol, stock_info)
+        except Exception as error:  # noqa: BLE001
+            LOGGER.warning(
+                "Optional stock info collection failed for %s; continuing watchlist refresh: %s",
+                symbol,
+                error,
+            )
 
     investor_daily, investor_summary = collector.collect_investor_daily(symbol, end_date)
     collector.save_investor_daily(symbol, end_date, investor_daily, investor_summary)

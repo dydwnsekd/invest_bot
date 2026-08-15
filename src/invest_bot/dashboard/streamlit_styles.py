@@ -67,6 +67,7 @@ def apply_custom_style() -> None:
         .material-symbols-outlined,
         .material-icons,
         [class*="material-symbols"],
+        [data-testid="stIconMaterial"],
         [data-testid="stExpandSidebarButton"],
         [data-testid="stExpandSidebarButton"] *,
         [data-testid="stSidebarCollapseButton"] span,
@@ -83,11 +84,24 @@ def apply_custom_style() -> None:
             word-wrap: normal !important;
             direction: ltr !important;
             -webkit-font-smoothing: antialiased !important;
+            font-feature-settings: "liga" !important;
+            -webkit-font-feature-settings: "liga" !important;
             font-variation-settings:
                 "FILL" 0,
                 "wght" 400,
                 "GRAD" 0,
                 "opsz" 24;
+        }
+
+        /*
+         * Streamlit status/expander chevrons are Material ligature text internally.
+         * Keep this explicit selector after app-wide typography rules so icon names
+         * such as keyboard_arrow_down never become visible text.
+         */
+        [data-testid="stExpander"] [data-testid="stIconMaterial"] {
+            font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
+            font-feature-settings: "liga" !important;
+            -webkit-font-feature-settings: "liga" !important;
         }
 
         [data-testid="stSidebar"] {

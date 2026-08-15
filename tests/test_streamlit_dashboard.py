@@ -117,6 +117,9 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     assert '"Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic"' in style
     assert '"Inter", "IBM Plex Sans"' in style
     assert 'font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;' in style
+    assert '[data-testid="stIconMaterial"],' in style
+    assert '[data-testid="stExpander"] [data-testid="stIconMaterial"] {' in style
+    assert 'font-feature-settings: "liga" !important;' in style
     assert 'background: var(--app-success-bg);' in style
     assert 'background: var(--app-danger-bg);' in style
     assert 'background: var(--app-neutral-bg);' in style
@@ -1884,6 +1887,55 @@ def test_refresh_favorite_symbols_recollects_stale_data_and_rebuilds_report() ->
     assert pipeline_calls == ["analyze:005930", "signal:005930", "report:005930"]
     assert result["collected_symbols"] == ["005930"]
     assert result["pipeline_symbols"] == ["005930"]
+
+
+def test_watchlist_collection_continues_when_optional_stock_info_api_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = _FakeDatasetStorage({})
+    service = DashboardDataService(settings=AppSettings(), dataset_storage=storage)
+    calls: list[str] = []
+
+    class _Collector:
+        storage = SimpleNamespace(save=lambda *args, **kwargs: None)
+
+        def collect_daily_prices(self, symbol, start_date, end_date):
+            return (
+                pd.DataFrame([{"symbol": symbol}]),
+                pd.DataFrame([{"stck_bsop_date": "20260814", "stck_clpr": "1000"}]),
+            )
+
+        def save_daily_prices(self, *args, **kwargs) -> None:
+            calls.append("daily")
+
+        def collect_stock_info(self, symbol):
+            calls.append("stock_info")
+            raise RuntimeError("500 Server Error: search-stock-info")
+
+        def save_stock_info(self, *args, **kwargs) -> None:
+            pytest.fail("실패한 종목정보는 저장하면 안 됩니다.")
+
+        def collect_investor_daily(self, symbol, target_date):
+            calls.append("investor")
+            return (
+                pd.DataFrame([{"frgn_ntby_qty": "100"}]),
+                pd.DataFrame([{"stck_bsop_date": "20260814"}]),
+            )
+
+        def save_investor_daily(self, *args, **kwargs) -> None:
+            calls.append("investor_saved")
+
+    monkeypatch.setattr(streamlit_watchlist_module, "MarketDataCollector", lambda settings: _Collector())
+
+    collected = streamlit_watchlist_module._collect_watchlist_symbol_range(
+        service,
+        "005380",
+        start_date=date(2026, 8, 14),
+        end_date=date(2026, 8, 14),
+    )
+
+    assert collected is True
+    assert calls == ["daily", "stock_info", "investor", "investor_saved"]
 
 def test_render_watchlist_tab_shows_info_when_no_favorites(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_st = _FakeStreamlit()
