@@ -405,7 +405,7 @@
     - query param 탭 유지, scroll anchor, action progress 회귀 테스트 추가
 - 검증
   - `PYTHONPYCACHEPREFIX=/tmp/invest_bot_pycache python3 -m compileall -q src/invest_bot/dashboard tests/test_streamlit_dashboard.py tests/test_streamlit_backtest.py`
-  - `PYTHONPATH=. .venv/bin/pytest -q` (`266 passed`)
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`267 passed`)
 
 ## 검증 로그
 
@@ -610,7 +610,7 @@
   - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
   - 결과: `99 passed`
   - `PYTHONPATH=. .venv/bin/pytest -q`
-  - 결과: `266 passed`
+  - 결과: `267 passed`
 
 ### 2026-08-12 / Home-entry watchlist refresh
 
@@ -629,4 +629,37 @@
   - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
   - 결과: `101 passed`
   - `PYTHONPATH=. .venv/bin/pytest -q`
-  - 결과: `266 passed`
+  - 결과: `267 passed`
+
+### 2026-08-15 / Optional stock-info failure isolation
+
+- 증상
+  - 홈 관심종목 최신화 중 KIS 모의투자 `search-stock-info` 요청이 HTTP 500을 반환하면 관심종목 전체 갱신이 중단됨
+- 원인
+  - 가격 데이터 저장 후 수행하는 선택적 종목 기본정보 조회 예외가 수급 수집과 후속 지표·신호·리포트 단계까지 전파됨
+- 변경 사항
+  - `streamlit_watchlist.py`
+    - 종목 기본정보 조회/저장만 독립 예외 경계로 분리
+    - 실패 내용을 warning log로 남기고 투자자 수급 수집과 후속 파이프라인은 계속 실행
+  - `tests/test_streamlit_dashboard.py`
+    - 종목정보 API 500 상황에서도 수급 저장까지 완료되는 회귀 테스트 추가
+- 검증
+  - `PYTHONPATH=. .venv/bin/pytest tests/test_streamlit_dashboard.py -q`
+  - 결과: `102 passed`
+  - `PYTHONPATH=. .venv/bin/pytest -q`
+  - 결과: `267 passed`
+
+### 2026-08-15 / Streamlit status icon-font guard
+
+- 증상
+  - `관심종목 최신 데이터를 확인하고 있습니다` status의 펼침 화살표가 아이콘이 아니라 Material 아이콘 이름 텍스트로 표시됨
+- 원인
+  - 앱 전역 `span` 글꼴 규칙이 Streamlit expander 내부 `stIconMaterial`의 ligature 아이콘 글꼴을 덮어쓸 수 있었음
+- 변경 사항
+  - `streamlit_styles.py`
+    - 모든 `[data-testid="stIconMaterial"]`에 Material Symbols 폰트와 `liga` 기능을 우선 적용
+    - status/expander 조합에 대한 명시적 보호 selector와 재발 방지 주석 추가
+  - `DESIGN.md`
+    - 전역 폰트 CSS 변경 시 아이콘 폰트 보존과 텍스트 노출 회귀 테스트를 필수 내부 지침으로 추가
+  - `tests/test_streamlit_dashboard.py`
+    - `stIconMaterial`, expander 보호 selector, ligature 설정 존재 여부 검증 추가

@@ -145,6 +145,8 @@
 - Microcopy rules:
   - “무엇을 한다”, “왜 필요한가”, “다음에 볼 것”을 분리한다.
   - 화살표/아이콘 문자가 깨질 수 있는 표현을 피한다.
+  - Streamlit이 `stIconMaterial`에 아이콘 이름을 ligature text로 넣는 구조를 고려해, 전역 `span`/폰트 CSS를 수정할 때는 반드시 `[data-testid="stIconMaterial"]`의 Material Symbols 폰트와 `liga` 설정을 다시 보장한다.
+  - status, expander, sidebar 등 Streamlit 기본 아이콘을 사용하는 UI를 추가하거나 수정하면 아이콘 이름(`keyboard_arrow_down`, `expand_more` 등)이 화면 텍스트로 노출되지 않는지 CSS 회귀 테스트를 함께 유지한다.
 
 ## Implementation constraints
 - Framework/styling system: Streamlit + repo-local CSS.
