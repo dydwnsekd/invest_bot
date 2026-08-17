@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date, timedelta
 from html import escape
 
 import pandas as pd
@@ -15,6 +17,14 @@ from invest_bot.dashboard.streamlit_formatters import (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class OverviewTrustStatus:
+    label: str
+    detail: str
+    report_date: date | None
+    signal_date: date | None
+
+
 def render_overview_tab(
     snapshot,
     service: DashboardDataService,
@@ -27,8 +37,10 @@ def render_overview_tab(
     signal_previews = [preview for preview in snapshot.processed_previews if preview.name == "golden_cross_signals"]
     report_rows = collect_latest_rows(report_previews, read_preview_frame=read_preview_frame)
     signal_rows = collect_latest_rows(signal_previews, read_preview_frame=read_preview_frame)
+    trust_status = build_overview_trust_status(report_rows, signal_rows, test_report)
 
-    render_investor_briefing_metrics(snapshot, report_rows, signal_rows, test_report)
+    render_overview_trust_status(trust_status)
+    render_investor_briefing_metrics(snapshot, report_rows, signal_rows, trust_status)
 
     top_left, top_right = st.columns([1.35, 1], gap="large")
 
@@ -63,20 +75,117 @@ def collect_latest_rows(
         frame = read_preview_frame(preview)
         if frame is None or frame.empty:
             continue
-        rows.append((preview, frame.iloc[-1]))
+        rows.append((preview, latest_row(frame)))
     return rows
 
 
-def render_investor_briefing_metrics(snapshot, report_rows, signal_rows, test_report: TestReportPreview | None) -> None:
+def latest_row(frame: pd.DataFrame) -> pd.Series:
+    for column in ("date", "trade_date", "stck_bsop_date"):
+        if column not in frame.columns:
+            continue
+        parsed_dates = pd.to_datetime(frame[column], errors="coerce")
+        if parsed_dates.notna().any():
+            return frame.loc[parsed_dates.idxmax()]
+    return frame.iloc[-1]
+
+
+def build_overview_trust_status(
+    report_rows: list[tuple[DatasetPreview, pd.Series]],
+    signal_rows: list[tuple[DatasetPreview, pd.Series]],
+    test_report: TestReportPreview | None,
+    *,
+    today: date | None = None,
+) -> OverviewTrustStatus:
+    report_date = latest_row_date(report_rows)
+    signal_date = latest_row_date(signal_rows)
+    reference_today = today or date.today()
+    latest_expected_date = latest_weekday(reference_today)
+
+    if test_report and test_report.failed:
+        return OverviewTrustStatus(
+            label=f"테스트 실패 {test_report.failed}건",
+            detail="저장된 테스트 결과에 실패 항목이 있습니다. 투자 판단 전에 시스템 검증을 확인해 주세요.",
+            report_date=report_date,
+            signal_date=signal_date,
+        )
+    if report_date is None:
+        return OverviewTrustStatus(
+            label="리포트 없음",
+            detail="표시할 투자 리포트가 없습니다. 데이터 갱신에서 전체 파이프라인을 실행해 주세요.",
+            report_date=None,
+            signal_date=signal_date,
+        )
+    if report_date < latest_expected_date - timedelta(days=3):
+        return OverviewTrustStatus(
+            label="기준일 확인 필요",
+            detail=(
+                f"최신 리포트 기준일은 {format_reference_date(report_date)}입니다. "
+                "투자 판단 전에 데이터 갱신에서 최신 수집과 리포트 생성을 확인해 주세요."
+            ),
+            report_date=report_date,
+            signal_date=signal_date,
+        )
+    if signal_date is None or signal_date != report_date:
+        signal_detail = "전략 신호가 없습니다." if signal_date is None else f"전략 신호 기준일은 {format_reference_date(signal_date)}입니다."
+        return OverviewTrustStatus(
+            label="기준일 불일치",
+            detail=f"리포트 기준일은 {format_reference_date(report_date)}이고, {signal_detail} 두 결과를 함께 확인해 주세요.",
+            report_date=report_date,
+            signal_date=signal_date,
+        )
+    return OverviewTrustStatus(
+        label="기준일 확인됨",
+        detail=f"리포트와 전략 신호의 기준일은 {format_reference_date(report_date)}입니다.",
+        report_date=report_date,
+        signal_date=signal_date,
+    )
+
+
+def latest_row_date(rows: list[tuple[DatasetPreview, pd.Series]]) -> date | None:
+    dates: list[date] = []
+    for _, row in rows:
+        for column in ("date", "trade_date", "stck_bsop_date"):
+            parsed = pd.to_datetime(row.get(column), errors="coerce")
+            if not pd.isna(parsed):
+                dates.append(parsed.date())
+                break
+    return max(dates) if dates else None
+
+
+def latest_weekday(reference_date: date) -> date:
+    while reference_date.weekday() >= 5:
+        reference_date -= timedelta(days=1)
+    return reference_date
+
+
+def format_reference_date(value: date) -> str:
+    return value.strftime("%Y-%m-%d")
+
+
+def render_overview_trust_status(status: OverviewTrustStatus) -> None:
+    if status.label == "기준일 확인됨":
+        st.info(f"데이터 기준일 · {status.detail}")
+        return
+    st.warning(f"데이터 확인 필요 · {status.detail}")
+
+
+def render_investor_briefing_metrics(snapshot, report_rows, signal_rows, trust_status: OverviewTrustStatus) -> None:
     buy_report_count = sum(1 for _, row in report_rows if str(row.get("final_opinion", "")).lower() == "buy")
     buy_signal_count = sum(1 for _, row in signal_rows if str(row.get("signal", "")).lower() == "buy")
-    system_state = "정상" if not test_report or test_report.failed == 0 else f"실패 {test_report.failed}건"
 
     metric_columns = st.columns(4)
     metric_columns[0].metric("추적 데이터셋", len(snapshot.raw_previews) + len(snapshot.processed_previews))
     metric_columns[1].metric("리포트 종목", len(report_rows))
     metric_columns[2].metric("매수/관심 신호", buy_report_count + buy_signal_count)
-    metric_columns[3].metric("시스템 상태", system_state)
+    metric_columns[3].metric("데이터 상태", compact_trust_label(trust_status.label))
+
+
+def compact_trust_label(label: str) -> str:
+    return {
+        "기준일 확인 필요": "확인 필요",
+        "기준일 불일치": "불일치",
+        "기준일 확인됨": "확인됨",
+    }.get(label, label)
 
 
 def render_today_briefing(report_rows, signal_rows, *, service: DashboardDataService) -> None:
@@ -98,7 +207,7 @@ def render_today_briefing(report_rows, signal_rows, *, service: DashboardDataSer
     opinion = state_label(service, str(primary_row.get("final_opinion", "hold")))
     trend = state_label(service, str(primary_row.get("trend_state", "neutral")))
     summary = localize_report_summary_from_row(service, primary_row)
-    date_text = str(primary_row.get("date", "")) or "날짜 정보 없음"
+    date_text = format_row_date(primary_row) or "날짜 정보 없음"
 
     st.markdown(
         f"""
@@ -154,6 +263,8 @@ def render_watch_targets(report_rows, signal_rows, *, service: DashboardDataServ
             unsafe_allow_html=True,
         )
     st.markdown("</div>", unsafe_allow_html=True)
+    if st.button("투자 리포트에서 후보 자세히 보기", key="overview_open_reports", width="stretch"):
+        navigate_to_tab("투자 리포트")
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -187,21 +298,21 @@ def render_next_action_panel(schedule_status, test_report: TestReportPreview | N
     st.markdown('<h3 class="section-title">다음 행동</h3>', unsafe_allow_html=True)
     st.markdown('<div class="section-copy">현재 상태에 따라 먼저 할 일을 안내합니다.</div>', unsafe_allow_html=True)
 
-    actions: list[tuple[str, str]] = []
+    actions: list[tuple[str, str, str]] = []
     if schedule_status is None or not getattr(schedule_status, "log_exists", False):
-        actions.append(("데이터 갱신", "정기 수집 로그가 없으면 먼저 데이터 갱신에서 수집과 리포트 생성을 실행하세요."))
+        actions.append(("데이터 갱신", "정기 수집 로그가 없으면 먼저 데이터 갱신에서 수집과 리포트 생성을 실행하세요.", "데이터 갱신"))
     elif getattr(schedule_status, "last_failed_count", 0):
-        actions.append(("수집 실패 확인", "최근 정기 수집에 실패가 있어 데이터 갱신에서 실패 종목을 다시 실행하세요."))
+        actions.append(("수집 실패 확인", "최근 정기 수집에 실패가 있어 데이터 갱신에서 실패 종목을 다시 실행하세요.", "데이터 갱신"))
     else:
-        actions.append(("투자 리포트 확인", "데이터가 준비되어 있으니 투자 리포트에서 종목별 판단을 읽어보세요."))
+        actions.append(("투자 리포트 확인", "데이터가 준비되어 있으니 투자 리포트에서 종목별 판단을 읽어보세요.", "투자 리포트"))
 
     if test_report and test_report.failed:
-        actions.append(("시스템 검증", "테스트 실패가 있으니 시스템 검증에서 실패 항목을 먼저 확인하세요."))
+        actions.append(("시스템 검증", "테스트 실패가 있으니 시스템 검증에서 실패 항목을 먼저 확인하세요.", "시스템 검증"))
     else:
-        actions.append(("백테스트", "관심 있는 전략은 백테스트에서 과거 성과를 확인하세요."))
+        actions.append(("백테스트", "관심 있는 전략은 백테스트에서 과거 성과를 확인하세요.", "백테스트"))
 
     st.markdown('<div class="next-action-list">', unsafe_allow_html=True)
-    for title, copy in actions:
+    for index, (title, copy, target_tab) in enumerate(actions):
         st.markdown(
             f"""
             <div class="next-action-item">
@@ -211,8 +322,15 @@ def render_next_action_panel(schedule_status, test_report: TestReportPreview | N
             """,
             unsafe_allow_html=True,
         )
+        if st.button(f"{title} 열기", key=f"overview_next_action_{index}", width="stretch"):
+            navigate_to_tab(target_tab)
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+def navigate_to_tab(tab_name: str) -> None:
+    st.session_state.selected_tab = tab_name
+    st.rerun()
 
 
 def render_quick_start_panel() -> None:
@@ -274,7 +392,7 @@ def render_latest_signal_summary(
             st.caption("신호 데이터가 비어 있습니다.")
             return
 
-        row = frame.iloc[-1]
+        row = latest_row(frame)
         symbol_label = format_symbol_display(latest.symbol, latest.symbol_name or str(row.get("symbol_name", "")))
         if symbol_label:
             st.caption(symbol_label)
@@ -300,13 +418,21 @@ def render_latest_report_summary(
             st.caption("리포트 데이터가 비어 있습니다.")
             return
 
-        row = frame.iloc[-1]
+        row = latest_row(frame)
         symbol_label = format_symbol_display(str(row.get("symbol", latest.symbol)), str(row.get("symbol_name", latest.symbol_name)))
         st.markdown(f"#### {symbol_label}")
         st.caption(localize_report_summary_from_row(service, row))
         badge_columns = st.columns(2)
         badge_columns[0].metric("최종 의견", state_label(service, str(row.get("final_opinion", "hold"))))
         badge_columns[1].metric("추세", state_label(service, str(row.get("trend_state", "neutral"))))
+
+
+def format_row_date(row: pd.Series) -> str:
+    for column in ("date", "trade_date", "stck_bsop_date"):
+        parsed = pd.to_datetime(row.get(column), errors="coerce")
+        if not pd.isna(parsed):
+            return parsed.strftime("%Y-%m-%d")
+    return ""
 
 
 def render_schedule_status_summary(schedule_status) -> None:

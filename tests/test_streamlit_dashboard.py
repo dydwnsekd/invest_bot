@@ -119,6 +119,8 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     assert 'font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;' in style
     assert '[data-testid="stIconMaterial"],' in style
     assert '[data-testid="stExpander"] [data-testid="stIconMaterial"] {' in style
+    assert '[data-testid="stStatusWidget"] [data-testid="stIconMaterial"]' in style
+    assert '[data-testid="stExpanderIconError"]' in style
     assert 'font-feature-settings: "liga" !important;' in style
     assert 'background: var(--app-success-bg);' in style
     assert 'background: var(--app-danger-bg);' in style
@@ -137,6 +139,8 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     assert 'border-left: 2px solid transparent;' in style
     assert 'background: transparent;' in style
     assert 'border-left-color: rgba(56, 189, 248, 0.92);' in style
+    assert ':focus-visible' in style
+    assert 'button[data-baseweb="tab"]:focus-visible' in style
 
 
 def test_streamlit_config_uses_dark_theme_tokens() -> None:
@@ -248,6 +252,78 @@ def test_localize_report_summary_from_row_prefers_states_over_raw_summary_text()
     localized = _localize_report_summary_from_row(service, row)
 
     assert localized == "추세는 상승 우세이고, 골든크로스 신호는 매수 관점이며, RSI 상태는 강한 흐름, 거래량은 거래 활발, 수급은 수급 우호적입니다."
+
+
+def test_overview_latest_row_uses_the_latest_parseable_date() -> None:
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-08-14", "close": 100},
+            {"date": "2026-08-07", "close": 90},
+        ]
+    )
+
+    row = streamlit_overview_module.latest_row(frame)
+
+    assert row["close"] == 100
+
+
+def test_overview_trust_status_flags_a_stale_report() -> None:
+    rows = [(SimpleNamespace(), pd.Series({"date": "2026-08-07"}))]
+
+    status = streamlit_overview_module.build_overview_trust_status(
+        rows,
+        rows,
+        test_report=None,
+        today=date(2026, 8, 17),
+    )
+
+    assert status.label == "기준일 확인 필요"
+    assert "2026-08-07" in status.detail
+
+
+def test_overview_trust_status_prioritizes_failed_tests() -> None:
+    rows = [(SimpleNamespace(), pd.Series({"date": "2026-08-14"}))]
+    test_report = SimpleNamespace(failed=2)
+
+    status = streamlit_overview_module.build_overview_trust_status(
+        rows,
+        rows,
+        test_report=test_report,
+        today=date(2026, 8, 17),
+    )
+
+    assert status.label == "테스트 실패 2건"
+
+
+def test_overview_trust_status_identifies_mismatched_report_and_signal_dates() -> None:
+    report_rows = [(SimpleNamespace(), pd.Series({"date": "2026-08-14"}))]
+    signal_rows = [(SimpleNamespace(), pd.Series({"date": "2026-08-13"}))]
+
+    status = streamlit_overview_module.build_overview_trust_status(
+        report_rows,
+        signal_rows,
+        test_report=None,
+        today=date(2026, 8, 17),
+    )
+
+    assert status.label == "기준일 불일치"
+    assert "2026-08-13" in status.detail
+
+
+def test_overview_navigation_sets_the_requested_tab(monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
+    fake_st = SimpleNamespace(session_state=SimpleNamespace(selected_tab="홈"), rerun=lambda: events.append("rerun"))
+    monkeypatch.setattr(streamlit_overview_module, "st", fake_st)
+
+    streamlit_overview_module.navigate_to_tab("투자 리포트")
+
+    assert fake_st.session_state.selected_tab == "투자 리포트"
+    assert events == ["rerun"]
+
+
+def test_overview_compacts_long_trust_labels_for_metric_display() -> None:
+    assert streamlit_overview_module.compact_trust_label("기준일 확인 필요") == "확인 필요"
+    assert streamlit_overview_module.compact_trust_label("기준일 불일치") == "불일치"
 
 
 def test_format_display_value_formats_state_text_and_numbers() -> None:
@@ -2940,3 +3016,56 @@ def test_render_glossary_tab_renders_terms_table(monkeypatch: pytest.MonkeyPatch
     assert fake_st.expander_labels == []
     assert "전체 용어" in [label for label, _ in fake_st.metric_calls]
     assert fake_st.dataframe_calls == 1
+
+
+def test_conflicting_directional_signals_detects_buy_and_sell() -> None:
+    row = pd.Series(
+        {
+            "golden_cross_signal": "buy",
+            "rsi_strategy_signal": "sell",
+            "trend_filter_signal": "hold",
+            "mean_reversion_signal": "watch",
+        }
+    )
+
+    conflict, directions = streamlit_reports_module.conflicting_directional_signals(row)
+
+    assert conflict is True
+    assert {"buy", "sell"}.issubset(directions)
+
+
+def test_conflicting_directional_signals_is_false_for_consistent_signals() -> None:
+    row = pd.Series(
+        {
+            "golden_cross_signal": "buy",
+            "rsi_strategy_signal": "buy",
+            "trend_filter_signal": "hold",
+            "mean_reversion_signal": "watch",
+        }
+    )
+
+    conflict, _ = streamlit_reports_module.conflicting_directional_signals(row)
+
+    assert conflict is False
+
+
+def test_conflicting_directional_signals_includes_the_final_opinion() -> None:
+    row = pd.Series(
+        {
+            "golden_cross_signal": "hold",
+            "rsi_strategy_signal": "hold",
+            "trend_filter_signal": "hold",
+            "mean_reversion_signal": "buy",
+            "final_opinion": "sell",
+        }
+    )
+
+    conflict, directions = streamlit_reports_module.conflicting_directional_signals(row)
+
+    assert conflict is True
+    assert {"buy", "sell"}.issubset(directions)
+
+
+def test_format_report_date_hides_empty_timestamp_time() -> None:
+    assert streamlit_reports_module.format_report_date("2026-08-07 00:00:00") == "2026-08-07"
+    assert streamlit_reports_module.format_report_date("not-a-date") == "not-a-date"

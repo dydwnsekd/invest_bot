@@ -30,7 +30,7 @@ REPORT_DETAIL_ANCHOR_ID = "selected-report-detail"
 
 def render_reports_tab(
     snapshot,
-    service: DashboardDataService,
+    service: DashboardDataService | None = None,
     *,
     read_preview_frame: Callable[[object], pd.DataFrame],
     load_indicator_frame_for_symbol: Callable[[str], pd.DataFrame | None],
@@ -104,6 +104,8 @@ def render_reports_tab(
 
     render_report_candidate_cards(
         visible_entries[:4],
+        service=service,
+        total_count=len(visible_entries),
         selection_key=REPORT_SELECTION_KEY,
         key_prefix="report_candidate",
     )
@@ -136,6 +138,8 @@ def render_reports_tab(
 def render_report_candidate_cards(
     report_entries: list[dict[str, object]],
     *,
+    service: DashboardDataService | None = None,
+    total_count: int | None = None,
     selection_key: str | None = None,
     key_prefix: str = "report_candidate",
 ) -> None:
@@ -145,6 +149,7 @@ def render_report_candidate_cards(
         '<div class="section-copy">현재 조건에서 먼저 볼 만한 종목을 카드로 요약했습니다. 자세한 본문은 아래 선택한 1건만 표시합니다.</div>',
         unsafe_allow_html=True,
     )
+    st.caption(f"검색 결과 {total_count if total_count is not None else len(report_entries)}건 · 후보 카드는 최대 4건까지 표시")
     st.markdown("</div>", unsafe_allow_html=True)
     if not report_entries:
         return
@@ -155,6 +160,13 @@ def render_report_candidate_cards(
         with column:
             symbol_label = format_symbol_display(str(entry["symbol"]), str(entry["symbol_name"]))
             favorite = "관심종목" if bool(entry.get("is_favorite")) else "일반"
+            entry_frame = entry.get("frame")
+            entry_row = entry_frame.iloc[-1] if isinstance(entry_frame, pd.DataFrame) and not entry_frame.empty else None
+            candidate_summary = (
+                localize_report_summary_from_row(service, entry_row)
+                if service is not None and entry_row is not None
+                else str(entry.get("summary", ""))
+            )
             st.markdown(
                 f"""
                 <div class="symbol-focus-card">
@@ -164,7 +176,7 @@ def render_report_candidate_cards(
                     <span>{escape(str(entry["display_opinion"]))}</span>
                     <span>{escape(str(entry["display_trend"]))}</span>
                   </div>
-                  <p>{escape(str(entry.get("summary", "")))}</p>
+                  <p>{escape(candidate_summary)}</p>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -231,7 +243,7 @@ def build_report_entries(
                 "frame": frame,
                 "symbol": preview.symbol,
                 "symbol_name": preview.symbol_name or str(row.get("symbol_name", "")),
-                "date": str(row.get("date", "")),
+                "date": format_report_date(row.get("date", "")),
                 "final_opinion": str(row.get("final_opinion", "unknown")),
                 "trend_state": str(row.get("trend_state", "unknown")),
                 "golden_cross_signal": str(row.get("golden_cross_signal", "unknown")),
@@ -246,6 +258,14 @@ def build_report_entries(
 
 def build_report_entry_key(preview: DatasetPreview) -> str:
     return f"{preview.symbol}:{preview.path.name}"
+
+
+def format_report_date(value: object) -> str:
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return str(value).strip()
+    return parsed.strftime("%Y-%m-%d")
+
 
 def query_report_previews(previews: list[DatasetPreview], query: str) -> list[DatasetPreview]:
     if not query:
@@ -358,6 +378,17 @@ def build_strategy_summary_items(service: DashboardDataService, row: pd.Series) 
         )
     return items
 
+
+def conflicting_directional_signals(row: pd.Series) -> tuple[bool, set[str]]:
+    """Return whether strategy signals and the final opinion contain both buy and sell."""
+    keys = ("golden_cross_signal", "rsi_strategy_signal", "trend_filter_signal", "mean_reversion_signal")
+    directions = {str(row.get(key, "")).strip().lower() for key in keys}
+    final_opinion = str(row.get("final_opinion", "")).strip().lower()
+    if final_opinion in {"buy", "sell"}:
+        directions.add(final_opinion)
+    directions.discard("")
+    return {"buy", "sell"}.issubset(directions), directions
+
 def filter_report_entries(
     report_entries: list[dict[str, object]],
     query: str,
@@ -422,6 +453,7 @@ def render_market_report_card(
     summary = localize_report_summary_from_row(service, row)
     reason = localize_reason(str(row.get("golden_cross_reason", "")))
     strategy_items = build_strategy_summary_items(service, row)
+    has_conflict, _ = conflicting_directional_signals(row)
     favorites_store = favorites_store or ReportFavoritesStore()
 
     with st.container(border=True):
@@ -437,7 +469,7 @@ def render_market_report_card(
               </div>
               <div class="report-focus-summary">{escape(summary)}</div>
               <div class="report-focus-meta">
-                <div><span>기준일</span><strong>{escape(str(row.get("date", "")) or "정보 없음")}</strong></div>
+                <div><span>기준일</span><strong>{escape(format_report_date(row.get("date", "")) or "정보 없음")}</strong></div>
                 <div><span>추세</span><strong>{escape(state_label(service, str(row.get("trend_state", "unknown"))))}</strong></div>
                 <div><span>골든크로스</span><strong>{escape(state_label(service, str(row.get("golden_cross_signal", "unknown"))))}</strong></div>
                 <div><span>수급</span><strong>{escape(state_label(service, str(row.get("investor_flow", "unknown"))))}</strong></div>
@@ -463,6 +495,8 @@ def render_market_report_card(
         detail_columns[3].metric("RSI 14", format_number(row.get("rsi_14")))
 
         st.markdown("#### 전략별 판단")
+        if has_conflict:
+            st.warning("전략 신호가 서로 엇갈립니다. 최종 의견은 참고 정보이며 단독 매매 결정으로 사용하지 마세요.")
         for item in strategy_items:
             st.markdown(
                 (

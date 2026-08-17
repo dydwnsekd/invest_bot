@@ -75,7 +75,7 @@ def main() -> None:
 
     tab = st.session_state.selected_tab
     if tab == "홈":
-        snapshot = _refresh_home_watchlist_snapshot(snapshot, service, settings=settings)
+        st.caption("홈은 저장된 데이터 기준 요약입니다. 최신 데이터가 필요하면 ‘데이터 갱신’에서 실행해 주세요.")
         _render_overview_tab(snapshot, service, test_report, schedule_status, read_preview_frame=read_preview_frame)
     elif tab == "데이터 갱신":
         _render_actions_tab(

@@ -71,7 +71,9 @@ def apply_custom_style() -> None:
         [data-testid="stExpandSidebarButton"],
         [data-testid="stExpandSidebarButton"] *,
         [data-testid="stSidebarCollapseButton"] span,
-        [data-testid="stSidebarNavCollapseButton"] span {
+        [data-testid="stSidebarNavCollapseButton"] span,
+        [data-testid="stStatusWidget"] [data-testid="stIconMaterial"],
+        [data-testid="stExpanderIconError"] {
             font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
             font-weight: normal !important;
             font-style: normal !important;
@@ -91,6 +93,14 @@ def apply_custom_style() -> None:
                 "wght" 400,
                 "GRAD" 0,
                 "opsz" 24;
+        }
+
+        /* Older Streamlit builds can expose the icon test-id/ligature as text. */
+        [data-testid="stStatusWidget"] [data-testid="stIconMaterial"],
+        [data-testid="stExpanderIconError"] {
+            font-size: 0 !important;
+            width: 1.25rem;
+            overflow: hidden;
         }
 
         /*
@@ -133,6 +143,14 @@ def apply_custom_style() -> None:
             background: transparent;
             color: #f8fafc;
             padding-left: 0.86rem;
+        }
+
+        [data-testid="stSidebar"] .stButton > button:focus-visible,
+        [data-testid="stAppViewContainer"] .stButton > button:focus-visible,
+        button[data-baseweb="tab"]:focus-visible {
+            outline: 2px solid var(--app-accent);
+            outline-offset: 2px;
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.24);
         }
 
         [data-testid="stSidebar"] .stButton > button[kind="primary"] {
