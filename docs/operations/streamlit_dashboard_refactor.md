@@ -663,3 +663,26 @@
     - 전역 폰트 CSS 변경 시 아이콘 폰트 보존과 텍스트 노출 회귀 테스트를 필수 내부 지침으로 추가
   - `tests/test_streamlit_dashboard.py`
     - `stIconMaterial`, expander 보호 selector, ligature 설정 존재 여부 검증 추가
+
+### 2026-08-17 / Read-only Home trust state and report interpretation
+
+- 배경
+  - 홈 진입 중 외부 API 오류와 파이프라인 실행이 발생하면 조회 화면의 상태를 즉시 신뢰하기 어렵고, 사용자가 의도하지 않은 데이터 변경으로 이어질 수 있었음
+- 변경 사항
+  - `streamlit_dashboard.py` / `streamlit_overview.py`
+    - 홈을 저장된 snapshot만 읽는 브리핑 화면으로 전환
+    - 리포트·신호 기준일, 데이터 상태, 시스템 검증 실패를 신뢰 상태로 표시
+    - 다음 행동 카드에서 `데이터 갱신`, `투자 리포트`, `백테스트`, `시스템 검증`으로 직접 이동
+  - `streamlit_reports.py`
+    - 후보 카드에 한글 요약, 검색 결과 수, 기준일을 표시
+    - 최종 의견과 골든크로스·RSI·추세·평균회귀 전략 신호가 엇갈리면 단독 매매 판단을 피하도록 주의 문구 표시
+  - `streamlit_styles.py`
+    - status/expander 아이콘 이름 텍스트 노출 방지 범위를 보강하고 키보드 `:focus-visible` 표시 추가
+  - `streamlit_overview.py` / `streamlit_reports.py` / `streamlit_watchlist.py` / `streamlit_backtest.py`
+    - 여러 `st.markdown()` 호출에 걸쳐 HTML wrapper를 열고 닫던 구조를 제거
+    - 위젯을 포함하는 섹션은 Streamlit container로 묶고, 카드 grid는 완결된 HTML 한 번으로 렌더링해 빈 카드·여백을 방지
+  - `README.md` / `DESIGN.md` / `docs/tasks/04_dashboard.md` / `docs/analysis/market_report_guide.md`
+    - 읽기 전용 홈 정책, 신뢰 상태, 신호 충돌 해석 원칙을 현재 구현과 일치하도록 갱신
+- 검증
+  - `PYTHONPATH=. .venv/bin/pytest -q`
+  - 결과: `278 passed`

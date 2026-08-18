@@ -1,8 +1,8 @@
 # Design
 
 ## Source of truth
-- Status: Draft
-- Last refreshed: 2026-08-09
+- Status: Active
+- Last refreshed: 2026-08-17
 - Primary product surfaces:
   - Streamlit 국내주식 운영 대시보드
   - 홈, 데이터 갱신, 투자 리포트, 관심종목, 백테스트, 데이터 보기, 용어 해설, 시스템 검증
@@ -103,12 +103,15 @@
   - 동적 화면 헤더.
   - 홈 화면의 퀵스타트 카드.
   - 오늘의 투자 브리핑 카드.
+  - 홈 데이터 신뢰 상태(리포트·신호 기준일, 데이터 상태, 시스템 검증 결과)와 갱신 안내.
   - 오늘 볼 만한 종목 카드.
-  - 다음 행동 카드.
+  - 화면 이동 버튼이 연결된 다음 행동 카드.
   - 리포트 후보 카드와 선택 리포트 focus card.
+  - 후보 수·한글 요약·날짜를 포함한 리포트 후보 카드와 최종 의견/전략 신호 충돌 경고.
   - 후보 카드의 직접 선택 버튼.
   - 선택 상세 영역 스크롤 anchor.
   - 작업 실행 중 status/progress 표시.
+  - Streamlit 위젯을 포함하는 카드에는 `st.container(border=True)`를 사용하고, 커스텀 HTML 카드는 한 번의 markdown 호출 안에서 완결한다.
   - 전체 등록 종목을 노출하는 관심종목 카드 보드와 카드별 상세 보기 버튼.
   - 백테스트 flow, selection, readiness, result cards.
   - 백테스트 결과 해석 문장.
@@ -121,7 +124,7 @@
 
 ## Accessibility
 - Target standard: WCAG 2.1 AA 수준의 대비와 키보드 접근성을 지향한다.
-- Keyboard/focus behavior: Streamlit 버튼/입력 위젯 기본 focus를 유지한다.
+- Keyboard/focus behavior: Streamlit 버튼·탭·입력 위젯에 명확한 `:focus-visible` 윤곽선을 제공하고, 키보드만으로 다음 행동과 리포트 선택을 완료할 수 있어야 한다.
 - Contrast/readability: dark background에서 본문과 muted text 대비를 충분히 유지한다.
 - Screen-reader semantics: 제목 계층과 버튼 라벨은 기능을 설명해야 한다.
 - Reduced motion and sensory considerations: 과도한 애니메이션 없음.
@@ -132,9 +135,9 @@
 - Touch/hover differences: hover에 의존하지 않고 selected state를 항상 표시한다.
 
 ## Interaction states
-- Loading: 데이터 갱신처럼 시간이 걸리는 작업은 Streamlit status로 대상과 진행 내용을 표시하며, 홈 진입 시 관심종목 최신화 검사도 포함한다.
+- Loading: 데이터 갱신처럼 시간이 걸리는 작업은 Streamlit status로 대상과 진행 내용을 표시한다. 홈은 저장된 snapshot만 읽고, 최신화는 사용자가 `데이터 갱신`에서 명시적으로 실행한다.
 - Empty: 데이터 없음 메시지는 다음 행동을 제안한다.
-- Error: 실패 이유와 영향 범위를 말한다.
+- Error: 실패 이유와 영향 범위를 말하되, 외부 API 오류나 내부 아이콘 이름 같은 기술 텍스트를 홈 본문에 그대로 노출하지 않는다.
 - Success: 무엇이 완료됐는지와 다음 확인 화면을 제안한다.
 - Disabled: 명확한 차단 사유를 제공한다.
 - Offline/slow network: 외부 API/DB 실패는 오류 메시지와 재시도 맥락을 제공한다.
@@ -151,7 +154,8 @@
 ## Implementation constraints
 - Framework/styling system: Streamlit + repo-local CSS.
 - Design-token constraints: 기존 CSS 변수 유지.
-- Performance constraints: 홈의 관심종목 자동 최신화는 저장된 기준일을 먼저 비교하고 필요한 종목만 수집·분석한다.
+- Markup constraints: 서로 다른 `st.markdown()` 호출 사이에서 HTML wrapper를 열고 닫지 않는다. 빈 카드·깨진 grid가 보이면 먼저 이 규칙을 확인한다.
+- Performance constraints: 홈은 저장된 데이터만 조회해 빠르게 렌더링한다. 수집·분석은 `데이터 갱신`에서 대상 종목과 실행 범위를 사용자가 확인한 뒤 수행한다.
 - Compatibility constraints: 기존 tests와 탭 라우팅 alias를 유지한다.
 - Test/screenshot expectations: 변경 후 `pytest` 전체 통과를 기준으로 한다.
 
