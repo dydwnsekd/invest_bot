@@ -127,9 +127,7 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     assert 'background: var(--app-neutral-bg);' in style
     assert ".compact-hero" in style
     assert ".quick-start-grid" in style
-    assert ".investor-brief-card" in style
     assert ".watch-target-grid" in style
-    assert ".symbol-card-grid" in style
     assert ".report-focus-card" in style
     assert ".watchlist-symbol-card" in style
     assert ".watchlist-symbol-card.is-selected" in style
@@ -141,6 +139,31 @@ def test_apply_custom_style_emits_approved_dark_terminal_theme(monkeypatch: pyte
     assert 'border-left-color: rgba(56, 189, 248, 0.92);' in style
     assert ':focus-visible' in style
     assert 'button[data-baseweb="tab"]:focus-visible' in style
+
+
+def test_dashboard_cards_do_not_split_html_wrappers_between_streamlit_calls() -> None:
+    dashboard_root = Path(__file__).resolve().parents[1] / "src" / "invest_bot" / "dashboard"
+    split_wrapper_markers = {
+        "streamlit_overview.py": (
+            "st.markdown('<div class=\"streamlit-card investor-brief-card\">'",
+            "st.markdown('<div class=\"watch-target-grid\">'",
+            "st.markdown('<div class=\"next-action-list\">'",
+        ),
+        "streamlit_reports.py": ("st.markdown('<div class=\"streamlit-card symbol-strip-card\">'",),
+        "streamlit_watchlist.py": (
+            "st.markdown('<div class=\"streamlit-card watchlist-detail-controls\">'",
+            "st.markdown('<div class=\"streamlit-card watchlist-brief-card\">'",
+        ),
+        "streamlit_backtest.py": (
+            "st.markdown('<div class=\"readiness-card-grid\">'",
+            "st.markdown('<div class=\"backtest-result-grid\">'",
+        ),
+    }
+
+    for filename, markers in split_wrapper_markers.items():
+        source = (dashboard_root / filename).read_text(encoding="utf-8")
+        for marker in markers:
+            assert marker not in source
 
 
 def test_streamlit_config_uses_dark_theme_tokens() -> None:

@@ -143,14 +143,13 @@ def render_report_candidate_cards(
     selection_key: str | None = None,
     key_prefix: str = "report_candidate",
 ) -> None:
-    st.markdown('<div class="streamlit-card symbol-strip-card">', unsafe_allow_html=True)
-    st.markdown('<h3 class="section-title">리포트 후보</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">현재 조건에서 먼저 볼 만한 종목을 카드로 요약했습니다. 자세한 본문은 아래 선택한 1건만 표시합니다.</div>',
-        unsafe_allow_html=True,
-    )
-    st.caption(f"검색 결과 {total_count if total_count is not None else len(report_entries)}건 · 후보 카드는 최대 4건까지 표시")
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<h3 class="section-title">리포트 후보</h3>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-copy">현재 조건에서 먼저 볼 만한 종목을 카드로 요약했습니다. 자세한 본문은 아래 선택한 1건만 표시합니다.</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(f"검색 결과 {total_count if total_count is not None else len(report_entries)}건 · 후보 카드는 최대 4건까지 표시")
     if not report_entries:
         return
 

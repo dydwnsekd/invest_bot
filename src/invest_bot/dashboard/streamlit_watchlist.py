@@ -90,13 +90,12 @@ def render_watchlist_tab(
         st.info("저장된 관심종목과 연결되는 최신 시장 리포트가 아직 없습니다.")
         return
 
-    st.markdown('<div class="streamlit-card watchlist-detail-controls">', unsafe_allow_html=True)
-    st.markdown('<h3 class="section-title">상세 리포트 선택</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">카드를 누르거나 검색과 정렬을 사용해 아래에서 한 종목을 자세히 확인합니다.</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<h3 class="section-title">상세 리포트 선택</h3>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-copy">카드를 누르거나 검색과 정렬을 사용해 아래에서 한 종목을 자세히 확인합니다.</div>',
+            unsafe_allow_html=True,
+        )
 
     query = st.text_input(
         "관심종목 검색",
@@ -150,13 +149,12 @@ def render_watchlist_overview(
     *,
     selection_key: str,
 ) -> None:
-    st.markdown('<div class="streamlit-card watchlist-brief-card">', unsafe_allow_html=True)
-    st.markdown('<h3 class="section-title">등록한 관심종목 전체</h3>', unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="section-copy">현재 저장된 {len(entries)}개 종목을 한 번에 보여줍니다. 각 카드에서 최신 판단을 확인하고 바로 상세로 이동할 수 있습니다.</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<h3 class="section-title">등록한 관심종목 전체</h3>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="section-copy">현재 저장된 {len(entries)}개 종목을 한 번에 보여줍니다. 각 카드에서 최신 판단을 확인하고 바로 상세로 이동할 수 있습니다.</div>',
+            unsafe_allow_html=True,
+        )
 
     card_columns = st.columns(min(len(entries), 4), gap="small")
     selected_key = str(st.session_state.get(selection_key, ""))

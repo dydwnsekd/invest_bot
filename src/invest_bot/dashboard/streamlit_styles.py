@@ -268,13 +268,6 @@ def apply_custom_style() -> None:
             margin-bottom: 0.65rem;
         }
 
-        .investor-brief-card {
-            border-color: rgba(56, 189, 248, 0.44);
-            background:
-                radial-gradient(circle at top right, rgba(56, 189, 248, 0.16), transparent 34%),
-                rgba(17, 24, 39, 0.95);
-        }
-
         .briefing-lead-card {
             margin-top: 0.95rem;
             padding: 1rem;
@@ -376,12 +369,6 @@ def apply_custom_style() -> None:
             overflow-wrap: anywhere;
         }
 
-        .next-action-list {
-            display: grid;
-            gap: 0.62rem;
-            margin-top: 0.9rem;
-        }
-
         .next-action-item {
             padding: 0.78rem 0.85rem;
         }
@@ -391,11 +378,6 @@ def apply_custom_style() -> None:
             font-size: 0.92rem;
         }
 
-        .symbol-strip-card {
-            margin: 0.85rem 0;
-        }
-
-        .symbol-card-grid,
         .readiness-card-grid,
         .backtest-result-grid {
             display: grid;
@@ -532,11 +514,6 @@ def apply_custom_style() -> None:
             font-size: 0.9rem;
         }
 
-        .watchlist-brief-card {
-            margin-top: 0.85rem;
-            border-color: rgba(34, 197, 94, 0.30);
-        }
-
         .watchlist-symbol-card {
             min-height: 7.4rem;
             margin-top: 0.65rem;
@@ -567,10 +544,6 @@ def apply_custom_style() -> None:
             font-size: 1rem;
             line-height: 1.35;
             overflow-wrap: anywhere;
-        }
-
-        .watchlist-detail-controls {
-            margin: 1.1rem 0 0.75rem;
         }
 
         .backtest-flow-card {

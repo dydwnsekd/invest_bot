@@ -167,24 +167,21 @@ def render_backtest_tab(
 
 
 def _render_backtest_flow_cards() -> None:
-    st.markdown('<div class="streamlit-card backtest-flow-card">', unsafe_allow_html=True)
-    st.markdown('<h3 class="section-title">전략 검증 흐름</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">종목과 전략을 먼저 고른 뒤 준비 상태를 확인하고, 결과는 수익률·승률·거래 로그 순서로 읽습니다.</div>',
-        unsafe_allow_html=True,
-    )
     st.markdown(
         """
-        <div class="backtest-step-grid">
-          <div><span>1</span><strong>종목 선택</strong><p>검증할 관심 종목을 고릅니다.</p></div>
-          <div><span>2</span><strong>전략 선택</strong><p>비교할 전략을 여러 개 선택합니다.</p></div>
-          <div><span>3</span><strong>준비 확인</strong><p>필요 데이터와 차단 사유를 확인합니다.</p></div>
-          <div><span>4</span><strong>결과 비교</strong><p>수익률, 승률, 거래 기록을 비교합니다.</p></div>
+        <div class="streamlit-card backtest-flow-card">
+          <h3 class="section-title">전략 검증 흐름</h3>
+          <div class="section-copy">종목과 전략을 먼저 고른 뒤 준비 상태를 확인하고, 결과는 수익률·승률·거래 로그 순서로 읽습니다.</div>
+          <div class="backtest-step-grid">
+            <div><span>1</span><strong>종목 선택</strong><p>검증할 관심 종목을 고릅니다.</p></div>
+            <div><span>2</span><strong>전략 선택</strong><p>비교할 전략을 여러 개 선택합니다.</p></div>
+            <div><span>3</span><strong>준비 확인</strong><p>필요 데이터와 차단 사유를 확인합니다.</p></div>
+            <div><span>4</span><strong>결과 비교</strong><p>수익률, 승률, 거래 기록을 비교합니다.</p></div>
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _render_backtest_selection_summary(
@@ -273,10 +270,10 @@ def _render_readiness_panel(payload: dict[str, object]) -> None:
 
     rows = payload["rows"]
     if isinstance(rows, pd.DataFrame) and not rows.empty:
-        st.markdown('<div class="readiness-card-grid">', unsafe_allow_html=True)
+        cards = []
         for _, row in rows.head(6).iterrows():
             state_class = "ready" if str(row.get("ready")) == "준비 완료" else "blocked"
-            st.markdown(
+            cards.append(
                 f"""
                 <div class="readiness-card readiness-card-{state_class}">
                   <div class="readiness-symbol">{escape(str(row.get("symbol_name") or row.get("symbol") or ""))}</div>
@@ -285,9 +282,8 @@ def _render_readiness_panel(payload: dict[str, object]) -> None:
                   <p>{escape(str(row.get("blocking_reasons", "")))}</p>
                 </div>
                 """,
-                unsafe_allow_html=True,
             )
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(f'<div class="readiness-card-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.info("백테스트를 확인하려면 종목과 전략을 하나 이상 선택해 주세요.")
@@ -518,11 +514,11 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
 
     st.markdown("#### 전략 요약 카드")
     if isinstance(summary_frame, pd.DataFrame) and not summary_frame.empty:
-        st.markdown('<div class="backtest-result-grid">', unsafe_allow_html=True)
+        cards = []
         for _, row in summary_frame.head(6).iterrows():
             label = f"{row.get('symbol_name') or row.get('symbol')} · {row.get('strategy_name')}"
             interpretation = build_backtest_result_interpretation(row)
-            st.markdown(
+            cards.append(
                 f"""
                 <div class="backtest-result-card">
                   <strong>{escape(str(label))}</strong>
@@ -531,9 +527,8 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
                   <p class="backtest-result-interpretation">{escape(interpretation)}</p>
                 </div>
                 """,
-                unsafe_allow_html=True,
             )
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(f'<div class="backtest-result-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
         card_columns = st.columns(min(len(summary_frame), 3) or 1, gap="small")
         for index, (_, row) in enumerate(summary_frame.iterrows()):
             column = card_columns[index % len(card_columns)]

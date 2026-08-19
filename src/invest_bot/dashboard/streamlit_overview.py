@@ -189,83 +189,78 @@ def compact_trust_label(label: str) -> str:
 
 
 def render_today_briefing(report_rows, signal_rows, *, service: DashboardDataService) -> None:
-    st.markdown('<div class="streamlit-card investor-brief-card">', unsafe_allow_html=True)
-    st.markdown('<div class="eyebrow inline-eyebrow">오늘의 투자 브리핑</div>', unsafe_allow_html=True)
-    st.markdown('<h3 class="section-title">먼저 확인할 종목과 판단 근거</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">최신 리포트와 신호에서 투자자가 바로 볼 만한 판단을 앞쪽에 모았습니다.</div>',
-        unsafe_allow_html=True,
-    )
+    with st.container(border=True):
+        st.markdown('<div class="eyebrow inline-eyebrow">오늘의 투자 브리핑</div>', unsafe_allow_html=True)
+        st.markdown('<h3 class="section-title">먼저 확인할 종목과 판단 근거</h3>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-copy">최신 리포트와 신호에서 투자자가 바로 볼 만한 판단을 앞쪽에 모았습니다.</div>',
+            unsafe_allow_html=True,
+        )
 
-    if not report_rows:
-        st.info("아직 투자 리포트가 없습니다. 데이터 갱신에서 전체 파이프라인을 실행하면 브리핑이 채워집니다.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
+        if not report_rows:
+            st.info("아직 투자 리포트가 없습니다. 데이터 갱신에서 전체 파이프라인을 실행하면 브리핑이 채워집니다.")
+            return
 
-    primary_preview, primary_row = report_rows[0]
-    symbol_label = format_symbol_display(str(primary_row.get("symbol", primary_preview.symbol)), str(primary_row.get("symbol_name", primary_preview.symbol_name)))
-    opinion = state_label(service, str(primary_row.get("final_opinion", "hold")))
-    trend = state_label(service, str(primary_row.get("trend_state", "neutral")))
-    summary = localize_report_summary_from_row(service, primary_row)
-    date_text = format_row_date(primary_row) or "날짜 정보 없음"
+        primary_preview, primary_row = report_rows[0]
+        symbol_label = format_symbol_display(str(primary_row.get("symbol", primary_preview.symbol)), str(primary_row.get("symbol_name", primary_preview.symbol_name)))
+        opinion = state_label(service, str(primary_row.get("final_opinion", "hold")))
+        trend = state_label(service, str(primary_row.get("trend_state", "neutral")))
+        summary = localize_report_summary_from_row(service, primary_row)
+        date_text = format_row_date(primary_row) or "날짜 정보 없음"
 
-    st.markdown(
-        f"""
-        <div class="briefing-lead-card">
-          <div class="briefing-symbol">{escape(symbol_label)}</div>
-          <div class="briefing-summary">{escape(summary)}</div>
-          <div class="briefing-meta-grid">
-            <div><span>최종 의견</span><strong>{escape(opinion)}</strong></div>
-            <div><span>추세</span><strong>{escape(trend)}</strong></div>
-            <div><span>기준일</span><strong>{escape(date_text)}</strong></div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    if signal_rows:
-        _, signal_row = signal_rows[0]
-        signal = state_label(service, str(signal_row.get("signal", "hold")))
-        reason = localize_reason(str(signal_row.get("signal_reason", "")))
-        st.caption(f"최신 전략 신호: {signal} · {reason}")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-def render_watch_targets(report_rows, signal_rows, *, service: DashboardDataService) -> None:
-    st.markdown('<div class="streamlit-card">', unsafe_allow_html=True)
-    st.markdown('<h3 class="section-title">오늘 볼 만한 종목</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">매수 관점, 관심 관찰, 강한 신호가 있는 종목을 먼저 보여줍니다.</div>',
-        unsafe_allow_html=True,
-    )
-
-    candidate_rows = select_watch_targets(report_rows, signal_rows)
-    if not candidate_rows:
-        st.caption("아직 우선 확인할 종목이 없습니다. 최신 리포트나 신호를 생성해 보세요.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
-
-    st.markdown('<div class="watch-target-grid">', unsafe_allow_html=True)
-    for preview, row, reason_key in candidate_rows[:4]:
-        symbol_label = format_symbol_display(str(row.get("symbol", preview.symbol)), str(row.get("symbol_name", preview.symbol_name)))
-        opinion = state_label(service, str(row.get("final_opinion", row.get("signal", "hold"))))
-        reason = localize_report_summary_from_row(service, row) if "final_opinion" in row else localize_reason(str(row.get("signal_reason", "")))
         st.markdown(
             f"""
-            <div class="watch-target-card">
-              <div class="watch-target-reason">{escape(reason_key)}</div>
-              <strong>{escape(symbol_label)}</strong>
-              <span>{escape(opinion)}</span>
-              <p>{escape(reason)}</p>
+            <div class="briefing-lead-card">
+              <div class="briefing-symbol">{escape(symbol_label)}</div>
+              <div class="briefing-summary">{escape(summary)}</div>
+              <div class="briefing-meta-grid">
+                <div><span>최종 의견</span><strong>{escape(opinion)}</strong></div>
+                <div><span>추세</span><strong>{escape(trend)}</strong></div>
+                <div><span>기준일</span><strong>{escape(date_text)}</strong></div>
+              </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-    st.markdown("</div>", unsafe_allow_html=True)
-    if st.button("투자 리포트에서 후보 자세히 보기", key="overview_open_reports", width="stretch"):
-        navigate_to_tab("투자 리포트")
-    st.markdown("</div>", unsafe_allow_html=True)
+
+        if signal_rows:
+            _, signal_row = signal_rows[0]
+            signal = state_label(service, str(signal_row.get("signal", "hold")))
+            reason = localize_reason(str(signal_row.get("signal_reason", "")))
+            st.caption(f"최신 전략 신호: {signal} · {reason}")
+
+
+def render_watch_targets(report_rows, signal_rows, *, service: DashboardDataService) -> None:
+    with st.container(border=True):
+        st.markdown('<h3 class="section-title">오늘 볼 만한 종목</h3>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-copy">매수 관점, 관심 관찰, 강한 신호가 있는 종목을 먼저 보여줍니다.</div>',
+            unsafe_allow_html=True,
+        )
+
+        candidate_rows = select_watch_targets(report_rows, signal_rows)
+        if not candidate_rows:
+            st.caption("아직 우선 확인할 종목이 없습니다. 최신 리포트나 신호를 생성해 보세요.")
+            return
+
+        cards = []
+        for preview, row, reason_key in candidate_rows[:4]:
+            symbol_label = format_symbol_display(str(row.get("symbol", preview.symbol)), str(row.get("symbol_name", preview.symbol_name)))
+            opinion = state_label(service, str(row.get("final_opinion", row.get("signal", "hold"))))
+            reason = localize_report_summary_from_row(service, row) if "final_opinion" in row else localize_reason(str(row.get("signal_reason", "")))
+            cards.append(
+                f"""
+                <div class="watch-target-card">
+                  <div class="watch-target-reason">{escape(reason_key)}</div>
+                  <strong>{escape(symbol_label)}</strong>
+                  <span>{escape(opinion)}</span>
+                  <p>{escape(reason)}</p>
+                </div>
+                """
+            )
+        st.markdown(f'<div class="watch-target-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+        if st.button("투자 리포트에서 후보 자세히 보기", key="overview_open_reports", width="stretch"):
+            navigate_to_tab("투자 리포트")
 
 
 def select_watch_targets(report_rows, signal_rows) -> list[tuple[DatasetPreview, pd.Series, str]]:
@@ -294,38 +289,35 @@ def select_watch_targets(report_rows, signal_rows) -> list[tuple[DatasetPreview,
 
 
 def render_next_action_panel(schedule_status, test_report: TestReportPreview | None) -> None:
-    st.markdown('<div class="streamlit-card next-action-card">', unsafe_allow_html=True)
-    st.markdown('<h3 class="section-title">다음 행동</h3>', unsafe_allow_html=True)
-    st.markdown('<div class="section-copy">현재 상태에 따라 먼저 할 일을 안내합니다.</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<h3 class="section-title">다음 행동</h3>', unsafe_allow_html=True)
+        st.markdown('<div class="section-copy">현재 상태에 따라 먼저 할 일을 안내합니다.</div>', unsafe_allow_html=True)
 
-    actions: list[tuple[str, str, str]] = []
-    if schedule_status is None or not getattr(schedule_status, "log_exists", False):
-        actions.append(("데이터 갱신", "정기 수집 로그가 없으면 먼저 데이터 갱신에서 수집과 리포트 생성을 실행하세요.", "데이터 갱신"))
-    elif getattr(schedule_status, "last_failed_count", 0):
-        actions.append(("수집 실패 확인", "최근 정기 수집에 실패가 있어 데이터 갱신에서 실패 종목을 다시 실행하세요.", "데이터 갱신"))
-    else:
-        actions.append(("투자 리포트 확인", "데이터가 준비되어 있으니 투자 리포트에서 종목별 판단을 읽어보세요.", "투자 리포트"))
+        actions: list[tuple[str, str, str]] = []
+        if schedule_status is None or not getattr(schedule_status, "log_exists", False):
+            actions.append(("데이터 갱신", "정기 수집 로그가 없으면 먼저 데이터 갱신에서 수집과 리포트 생성을 실행하세요.", "데이터 갱신"))
+        elif getattr(schedule_status, "last_failed_count", 0):
+            actions.append(("수집 실패 확인", "최근 정기 수집에 실패가 있어 데이터 갱신에서 실패 종목을 다시 실행하세요.", "데이터 갱신"))
+        else:
+            actions.append(("투자 리포트 확인", "데이터가 준비되어 있으니 투자 리포트에서 종목별 판단을 읽어보세요.", "투자 리포트"))
 
-    if test_report and test_report.failed:
-        actions.append(("시스템 검증", "테스트 실패가 있으니 시스템 검증에서 실패 항목을 먼저 확인하세요.", "시스템 검증"))
-    else:
-        actions.append(("백테스트", "관심 있는 전략은 백테스트에서 과거 성과를 확인하세요.", "백테스트"))
+        if test_report and test_report.failed:
+            actions.append(("시스템 검증", "테스트 실패가 있으니 시스템 검증에서 실패 항목을 먼저 확인하세요.", "시스템 검증"))
+        else:
+            actions.append(("백테스트", "관심 있는 전략은 백테스트에서 과거 성과를 확인하세요.", "백테스트"))
 
-    st.markdown('<div class="next-action-list">', unsafe_allow_html=True)
-    for index, (title, copy, target_tab) in enumerate(actions):
-        st.markdown(
-            f"""
-            <div class="next-action-item">
-              <strong>{escape(title)}</strong>
-              <p>{escape(copy)}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if st.button(f"{title} 열기", key=f"overview_next_action_{index}", width="stretch"):
-            navigate_to_tab(target_tab)
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        for index, (title, copy, target_tab) in enumerate(actions):
+            st.markdown(
+                f"""
+                <div class="next-action-item">
+                  <strong>{escape(title)}</strong>
+                  <p>{escape(copy)}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if st.button(f"{title} 열기", key=f"overview_next_action_{index}", width="stretch"):
+                navigate_to_tab(target_tab)
 
 
 def navigate_to_tab(tab_name: str) -> None:
@@ -334,14 +326,13 @@ def navigate_to_tab(tab_name: str) -> None:
 
 
 def render_quick_start_panel() -> None:
-    st.markdown('<div class="streamlit-card">', unsafe_allow_html=True)
-    st.markdown('<h3 class="section-title">처음 보는 순서</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">상태 확인부터 실행, 판단, 검증까지 한 흐름으로 이어집니다.</div>',
-        unsafe_allow_html=True,
-    )
-    render_quick_start_cards()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<h3 class="section-title">처음 보는 순서</h3>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-copy">상태 확인부터 실행, 판단, 검증까지 한 흐름으로 이어집니다.</div>',
+            unsafe_allow_html=True,
+        )
+        render_quick_start_cards()
 
 
 def render_quick_start_cards() -> None:
