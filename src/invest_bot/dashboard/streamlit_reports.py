@@ -27,6 +27,13 @@ REPORT_SORT_OPTION_KEY = "report_sort_option"
 CANDIDATE_PENDING_SELECTION_SUFFIX = "__candidate_pending"
 CANDIDATE_SCROLL_SUFFIX = "__scroll_to_detail"
 REPORT_DETAIL_ANCHOR_ID = "selected-report-detail"
+REPORT_STRATEGY_SIGNAL_KEYS = (
+    "golden_cross_signal",
+    "rsi_strategy_signal",
+    "trend_filter_signal",
+    "mean_reversion_signal",
+)
+REPORT_CORE_DATA_KEYS = ("close", "ma_5", "ma_20", "rsi_14")
 
 def render_reports_tab(
     snapshot,
@@ -378,10 +385,78 @@ def build_strategy_summary_items(service: DashboardDataService, row: pd.Series) 
     return items
 
 
+def build_report_decision_context(row: pd.Series) -> dict[str, str]:
+    """Describe observable report agreement and data coverage without implying return confidence."""
+    counts = {"buy": 0, "sell": 0, "neutral": 0, "unknown": 0}
+    for key in REPORT_STRATEGY_SIGNAL_KEYS:
+        signal = str(row.get(key, "unknown")).strip().lower()
+        if signal == "buy":
+            counts["buy"] += 1
+        elif signal == "sell":
+            counts["sell"] += 1
+        elif signal in {"hold", "watch"}:
+            counts["neutral"] += 1
+        else:
+            counts["unknown"] += 1
+
+    if counts["buy"] and counts["sell"]:
+        agreement_label = "전략 혼재"
+    elif counts["neutral"] >= max(counts["buy"], counts["sell"]):
+        agreement_label = "관망 우세"
+    elif counts["buy"] > counts["sell"]:
+        agreement_label = "매수 방향 우세"
+    elif counts["sell"] > counts["buy"]:
+        agreement_label = "매도 방향 우세"
+    else:
+        agreement_label = "방향 신호 없음"
+    agreement_detail = f"매수 {counts['buy']} · 관망 {counts['neutral']} · 매도 {counts['sell']}"
+    if counts["unknown"]:
+        agreement_detail += f" · 정보 부족 {counts['unknown']}"
+
+    core_available = sum(_report_value_available(row.get(key)) for key in REPORT_CORE_DATA_KEYS)
+    investor_flow = str(row.get("investor_flow", "unknown")).strip().lower()
+    flow_detail = "수급 확인" if investor_flow not in {"", "unknown", "nan", "none"} else "수급 정보 부족"
+    return {
+        "agreement_label": agreement_label,
+        "agreement_detail": agreement_detail,
+        "data_detail": f"핵심 지표 {core_available}/{len(REPORT_CORE_DATA_KEYS)} · {flow_detail}",
+    }
+
+
+def build_report_evidence(row: pd.Series, strategy_items: list[dict[str, str]]) -> dict[str, str]:
+    positive = [f"{item['label']}: {item['reason']}" for item in strategy_items if item["signal"] == "buy"]
+    risks = [f"{item['label']}: {item['reason']}" for item in strategy_items if item["signal"] == "sell"]
+    trend = str(row.get("trend_state", "unknown")).strip().lower()
+    if trend == "bullish":
+        positive.append("추세: 상승 우세")
+    elif trend == "bearish":
+        risks.append("추세: 하락 우세")
+    if str(row.get("investor_flow", "unknown")).strip().lower() in {"", "unknown", "nan", "none"}:
+        risks.append("수급: 정보 부족")
+
+    opinion = str(row.get("final_opinion", "unknown")).strip().lower()
+    if opinion == "buy":
+        reassessment = "종가가 20일선 아래로 내려가거나 매도 신호가 나오면 다시 확인"
+    elif opinion == "sell":
+        reassessment = "5일선이 20일선을 상향 돌파하거나 추세가 개선되면 다시 확인"
+    else:
+        reassessment = "새 전략 신호 또는 최신 기준일이 반영되면 다시 확인"
+    return {
+        "positive": " · ".join(positive) if positive else "뚜렷한 매수 근거가 없습니다.",
+        "risk": " · ".join(risks) if risks else "강한 하락 또는 데이터 부족 신호는 없습니다.",
+        "reassessment": reassessment,
+    }
+
+
+def _report_value_available(value: object) -> bool:
+    if value is None or isinstance(value, str) and not value.strip():
+        return False
+    return not bool(pd.isna(value))
+
+
 def conflicting_directional_signals(row: pd.Series) -> tuple[bool, set[str]]:
     """Return whether strategy signals and the final opinion contain both buy and sell."""
-    keys = ("golden_cross_signal", "rsi_strategy_signal", "trend_filter_signal", "mean_reversion_signal")
-    directions = {str(row.get(key, "")).strip().lower() for key in keys}
+    directions = {str(row.get(key, "")).strip().lower() for key in REPORT_STRATEGY_SIGNAL_KEYS}
     final_opinion = str(row.get("final_opinion", "")).strip().lower()
     if final_opinion in {"buy", "sell"}:
         directions.add(final_opinion)
@@ -452,6 +527,8 @@ def render_market_report_card(
     summary = localize_report_summary_from_row(service, row)
     reason = localize_reason(str(row.get("golden_cross_reason", "")))
     strategy_items = build_strategy_summary_items(service, row)
+    decision_context = build_report_decision_context(row)
+    evidence = build_report_evidence(row, strategy_items)
     has_conflict, _ = conflicting_directional_signals(row)
     favorites_store = favorites_store or ReportFavoritesStore()
 
@@ -464,11 +541,15 @@ def render_market_report_card(
                   <div class="muted-label">{escape(symbol_label or "종목 정보 없음")}</div>
                   <h3 class="section-title">{escape(preview.symbol_name or str(row.get("symbol_name", "")) or preview.symbol)}</h3>
                 </div>
-                <div class="badge badge-{escape(opinion)}">{escape(opinion_label)}</div>
+                <div class="badge badge-{escape(opinion)}">종합 신호 · {escape(opinion_label)}</div>
               </div>
               <div class="report-focus-summary">{escape(summary)}</div>
+              <div class="report-decision-grid">
+                <div><span>전략 합의도</span><strong>{escape(decision_context['agreement_label'])}</strong><p>{escape(decision_context['agreement_detail'])}</p></div>
+                <div><span>판단 데이터</span><strong>{escape(decision_context['data_detail'])}</strong><p>수익 가능성 신뢰도가 아닌, 표시 데이터의 충족 상태입니다.</p></div>
+                <div><span>기준일</span><strong>{escape(format_report_date(row.get("date", "")) or "정보 없음")}</strong><p>기준일이 오래되면 데이터 갱신 후 다시 확인합니다.</p></div>
+              </div>
               <div class="report-focus-meta">
-                <div><span>기준일</span><strong>{escape(format_report_date(row.get("date", "")) or "정보 없음")}</strong></div>
                 <div><span>추세</span><strong>{escape(state_label(service, str(row.get("trend_state", "unknown"))))}</strong></div>
                 <div><span>골든크로스</span><strong>{escape(state_label(service, str(row.get("golden_cross_signal", "unknown"))))}</strong></div>
                 <div><span>수급</span><strong>{escape(state_label(service, str(row.get("investor_flow", "unknown"))))}</strong></div>
@@ -495,7 +576,17 @@ def render_market_report_card(
 
         st.markdown("#### 전략별 판단")
         if has_conflict:
-            st.warning("전략 신호가 서로 엇갈립니다. 최종 의견은 참고 정보이며 단독 매매 결정으로 사용하지 마세요.")
+            st.warning("전략 신호가 서로 엇갈립니다. 종합 신호는 참고 정보이며 단독 매매 결정으로 사용하지 마세요.")
+        st.markdown(
+            f"""
+            <div class="report-evidence-grid">
+              <div><span>상승 근거</span><p>{escape(evidence['positive'])}</p></div>
+              <div><span>위험 요인</span><p>{escape(evidence['risk'])}</p></div>
+              <div><span>재평가 기준</span><p>{escape(evidence['reassessment'])}</p></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         for item in strategy_items:
             st.markdown(
                 (

@@ -917,6 +917,67 @@ def test_build_strategy_summary_items_formats_three_strategy_rows() -> None:
     assert items[2]["reason"] == "종가가 72,000로 20일 이동평균선 70,200 대비 1.0256배이며, 평균회귀 기준 범위 안에 있습니다."
 
 
+def test_report_decision_context_separates_strategy_agreement_from_data_coverage() -> None:
+    row = pd.Series(
+        {
+            "golden_cross_signal": "hold",
+            "rsi_strategy_signal": "sell",
+            "trend_filter_signal": "hold",
+            "mean_reversion_signal": "buy",
+            "close": 231000,
+            "ma_5": 237400,
+            "ma_20": 247950,
+            "rsi_14": 46.73,
+            "investor_flow": "unknown",
+        }
+    )
+
+    context = streamlit_reports_module.build_report_decision_context(row)
+
+    assert context["agreement_label"] == "전략 혼재"
+    assert context["agreement_detail"] == "매수 1 · 관망 2 · 매도 1"
+    assert context["data_detail"] == "핵심 지표 4/4 · 수급 정보 부족"
+
+
+def test_report_decision_context_prioritizes_neutral_majority_over_one_directional_signal() -> None:
+    row = pd.Series(
+        {
+            "golden_cross_signal": "hold",
+            "rsi_strategy_signal": "hold",
+            "trend_filter_signal": "sell",
+            "mean_reversion_signal": "hold",
+        }
+    )
+
+    context = streamlit_reports_module.build_report_decision_context(row)
+
+    assert context["agreement_label"] == "관망 우세"
+
+
+def test_report_evidence_keeps_positive_risk_and_reassessment_separate() -> None:
+    service = DashboardDataService()
+    row = pd.Series(
+        {
+            "final_opinion": "sell",
+            "trend_state": "bearish",
+            "investor_flow": "unknown",
+            "rsi_strategy_signal": "hold",
+            "rsi_strategy_reason": "",
+            "trend_filter_signal": "sell",
+            "trend_filter_reason": "close is 65000.00, below ma_60 68900.00 and below prev_close 66000.00.",
+            "mean_reversion_signal": "buy",
+            "mean_reversion_reason": "close is 68000.00, at 0.9600 of ma_20 70800.00, at or below buy ratio 0.9700.",
+        }
+    )
+
+    evidence = streamlit_reports_module.build_report_evidence(row, build_strategy_summary_items(service, row))
+
+    assert "평균회귀 전략" in evidence["positive"]
+    assert "추세 필터 전략" in evidence["risk"]
+    assert "추세: 하락 우세" in evidence["risk"]
+    assert "5일선이 20일선을 상향 돌파" in evidence["reassessment"]
+
+
 class _FakeMetricColumn:
     def __init__(self, owner=None):
         self.owner = owner

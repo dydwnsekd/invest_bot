@@ -180,7 +180,7 @@ def apply_custom_style() -> None:
             padding: 0.28rem 0.7rem;
             border-radius: 999px;
             font-family: var(--font-label);
-            font-size: 0.78rem;
+            font-size: 0.82rem;
             font-weight: 700;
             color: #f8fafc;
             background: rgba(14, 165, 233, 0.24);
@@ -245,7 +245,7 @@ def apply_custom_style() -> None:
         .quick-start-card p {
             margin: 0.35rem 0 0 0;
             color: var(--app-text-muted);
-            font-size: 0.86rem;
+            font-size: 0.9rem;
             line-height: 1.48;
         }
 
@@ -484,7 +484,56 @@ def apply_custom_style() -> None:
             overflow-wrap: anywhere;
         }
 
-        .report-focus-meta,
+        .report-decision-grid,
+        .report-evidence-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.65rem;
+            margin-top: 0.85rem;
+        }
+
+        .report-decision-grid div,
+        .report-evidence-grid div {
+            min-width: 0;
+            padding: 0.7rem;
+            border-radius: 0.8rem;
+            background: rgba(2, 6, 23, 0.34);
+            border: 1px solid rgba(203, 213, 225, 0.20);
+        }
+
+        .report-decision-grid span,
+        .report-evidence-grid span {
+            display: block;
+            color: var(--app-text-muted);
+            font-family: var(--font-label);
+            font-size: 0.8rem;
+            font-weight: 800;
+        }
+
+        .report-decision-grid strong {
+            display: block;
+            margin-top: 0.22rem;
+            color: #f8fafc;
+            font-size: 0.92rem;
+        }
+
+        .report-decision-grid p,
+        .report-evidence-grid p {
+            margin: 0.35rem 0 0;
+            color: var(--app-text-soft);
+            font-size: 0.88rem;
+            line-height: 1.5;
+            word-break: keep-all;
+            overflow-wrap: anywhere;
+        }
+
+        .report-focus-meta {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.65rem;
+            margin-top: 0.85rem;
+        }
+
         .selection-summary-card,
         .backtest-step-grid {
             display: grid;
@@ -503,7 +552,7 @@ def apply_custom_style() -> None:
         .report-focus-meta span {
             color: var(--app-text-muted);
             font-family: var(--font-label);
-            font-size: 0.72rem;
+            font-size: 0.8rem;
             font-weight: 800;
         }
 
@@ -533,7 +582,7 @@ def apply_custom_style() -> None:
         .watchlist-symbol-card__topline {
             color: var(--app-text-muted);
             font-family: var(--font-label);
-            font-size: 0.74rem;
+            font-size: 0.8rem;
             font-weight: 800;
         }
 
@@ -868,6 +917,22 @@ def apply_custom_style() -> None:
             line-height: 1.55;
             word-break: keep-all;
             overflow-wrap: anywhere;
+        }
+
+        [data-testid="stMetricValue"],
+        .report-focus-meta strong,
+        .report-decision-grid strong,
+        .briefing-meta-grid strong,
+        .watchlist-symbol-card__topline {
+            font-family: "Inter", "IBM Plex Sans", var(--font-ui);
+            font-variant-numeric: tabular-nums;
+        }
+
+        @media (max-width: 760px) {
+            .report-decision-grid,
+            .report-evidence-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
 
