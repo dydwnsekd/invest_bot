@@ -88,8 +88,10 @@ from invest_bot.dashboard.streamlit_reports import (
 )
 from invest_bot.dashboard.streamlit_watchlist import (
     WATCHLIST_SELECTION_KEY,
+    build_watchlist_data_statuses,
     build_watchlist_overview_entries,
     refresh_favorite_symbols_if_needed,
+    render_watchlist_data_status,
     render_watchlist_overview,
     render_watchlist_tab,
 )
@@ -2049,6 +2051,72 @@ def test_refresh_favorite_symbols_recollects_stale_data_and_rebuilds_report() ->
     assert result["pipeline_symbols"] == ["005930"]
 
 
+def test_watchlist_data_statuses_distinguish_current_data_source_and_output_gaps() -> None:
+    storage = _FakeDatasetStorage(
+        {
+            ("daily_prices", "005930"): ("005930_20260821.csv", pd.DataFrame([{"stck_bsop_date": "20260821"}])),
+            ("investor_daily_summary", "005930"): ("005930_20260821.csv", pd.DataFrame([{"stck_bsop_date": "20260821"}])),
+            ("daily_prices_indicators", "005930"): ("005930_20260821.csv", pd.DataFrame([{"date": "2026-08-21"}])),
+            ("golden_cross_signals", "005930"): ("005930_20260821.csv", pd.DataFrame([{"date": "2026-08-21"}])),
+            ("market_reports", "005930"): ("005930_20260821.csv", pd.DataFrame([{"date": "2026-08-21"}])),
+            ("daily_prices", "000660"): ("000660_20260821.csv", pd.DataFrame([{"stck_bsop_date": "20260821"}])),
+            ("investor_daily_summary", "000660"): ("000660_20260821.csv", pd.DataFrame([{"stck_bsop_date": "20260821"}])),
+            ("daily_prices_indicators", "000660"): ("000660_20260821.csv", pd.DataFrame([{"date": "2026-08-20"}])),
+            ("golden_cross_signals", "000660"): ("000660_20260821.csv", pd.DataFrame([{"date": "2026-08-20"}])),
+            ("market_reports", "000660"): ("000660_20260821.csv", pd.DataFrame([{"date": "2026-08-20"}])),
+            ("daily_prices", "005380"): ("005380_20260820.csv", pd.DataFrame([{"stck_bsop_date": "20260820"}])),
+            ("investor_daily_summary", "005380"): ("005380_20260820.csv", pd.DataFrame([{"stck_bsop_date": "20260820"}])),
+        }
+    )
+
+    statuses = build_watchlist_data_statuses(
+        DashboardDataService(dataset_storage=storage),
+        {"005930", "000660", "005380"},
+        today=date(2026, 8, 22),
+    )
+
+    status_by_symbol = {status.symbol: status for status in statuses}
+    assert status_by_symbol["005930"].label == "최신"
+    assert status_by_symbol["000660"].label == "분석 갱신 필요"
+    assert "분석, 신호, 리포트" in status_by_symbol["000660"].detail
+    assert status_by_symbol["005380"].label == "데이터 갱신 필요"
+    assert "최신 영업일(2026-08-21)" in status_by_symbol["005380"].detail
+
+
+def test_watchlist_data_status_opens_refresh_with_only_outdated_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(button_values={"watchlist_open_data_refresh": True})
+    monkeypatch.setattr(streamlit_watchlist_module, "st", fake_st)
+    statuses = [
+        streamlit_watchlist_module.WatchlistDataStatus(
+            symbol="005930",
+            label="최신",
+            detail="최신입니다.",
+            daily_date=date(2026, 8, 21),
+            investor_date=date(2026, 8, 21),
+            indicator_date=date(2026, 8, 21),
+            signal_date=date(2026, 8, 21),
+            report_date=date(2026, 8, 21),
+        ),
+        streamlit_watchlist_module.WatchlistDataStatus(
+            symbol="000660",
+            label="분석 갱신 필요",
+            detail="리포트를 다시 생성하세요.",
+            daily_date=date(2026, 8, 21),
+            investor_date=date(2026, 8, 21),
+            indicator_date=date(2026, 8, 21),
+            signal_date=date(2026, 8, 21),
+            report_date=None,
+        ),
+    ]
+
+    render_watchlist_data_status(statuses)
+
+    assert fake_st.session_state["selected_tab"] == "데이터 갱신"
+    assert fake_st.session_state["streamlit_selected_symbols"] == ["000660"]
+    assert fake_st.session_state["multi_symbol_picker"] == ["000660"]
+    assert "자동으로는 데이터를 갱신하지 않습니다" in "\n".join(fake_st.markdown_calls)
+
+
 def test_watchlist_collection_continues_when_optional_stock_info_api_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2120,8 +2188,9 @@ def test_render_watchlist_tab_renders_only_one_selected_favorite(monkeypatch: py
     monkeypatch.setattr(
         streamlit_watchlist_module,
         "refresh_favorite_symbols_if_needed",
-        lambda *args, **kwargs: {"collected_symbols": [], "pipeline_symbols": []},
+        lambda *args, **kwargs: pytest.fail("관심종목 조회 중 자동 최신화를 실행하면 안 됩니다."),
     )
+    monkeypatch.setattr(streamlit_watchlist_module, "build_watchlist_data_statuses", lambda *args, **kwargs: [])
 
     captured: list[str] = []
 
@@ -2152,6 +2221,7 @@ def test_render_watchlist_tab_renders_only_one_selected_favorite(monkeypatch: py
     )
 
     assert captured == ["005930"]
+    assert "자동으로는 데이터를 갱신하지 않습니다" in "\n".join(fake_st.markdown_calls)
 
 
 def test_render_watchlist_overview_shows_every_registered_symbol(monkeypatch: pytest.MonkeyPatch) -> None:

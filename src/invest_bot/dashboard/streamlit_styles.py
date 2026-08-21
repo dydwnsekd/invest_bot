@@ -595,6 +595,84 @@ def apply_custom_style() -> None:
             overflow-wrap: anywhere;
         }
 
+        .watchlist-status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+            gap: 0.65rem;
+            margin: 0.85rem 0;
+        }
+
+        .watchlist-status-card {
+            padding: 0.8rem;
+            border-radius: 0.85rem;
+            background: rgba(15, 23, 42, 0.82);
+            border: 1px solid rgba(203, 213, 225, 0.22);
+        }
+
+        .watchlist-status-card.is-current {
+            border-color: rgba(34, 197, 94, 0.42);
+        }
+
+        .watchlist-status-card.is-action-needed {
+            border-color: rgba(251, 191, 36, 0.56);
+        }
+
+        .watchlist-status-card__heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.65rem;
+        }
+
+        .watchlist-status-card__heading > strong {
+            color: #f8fafc;
+            font-family: var(--font-label);
+            font-size: 0.95rem;
+        }
+
+        .watchlist-status-card__heading > span {
+            flex: 0 0 auto;
+            padding: 0.2rem 0.48rem;
+            border-radius: 999px;
+            color: #f8fafc;
+            font-family: var(--font-label);
+            font-size: 0.76rem;
+            font-weight: 800;
+            background: rgba(34, 197, 94, 0.16);
+            border: 1px solid rgba(34, 197, 94, 0.34);
+        }
+
+        .watchlist-status-card.is-action-needed .watchlist-status-card__heading > span {
+            color: #fef3c7;
+            background: rgba(245, 158, 11, 0.16);
+            border-color: rgba(251, 191, 36, 0.42);
+        }
+
+        .watchlist-status-card p {
+            min-height: 2.8rem;
+            margin: 0.55rem 0 0;
+            color: var(--app-text-soft);
+            font-size: 0.88rem;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+        }
+
+        .watchlist-status-card__dates {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem 0.55rem;
+            margin-top: 0.65rem;
+            color: var(--app-text-muted);
+            font-family: var(--font-label);
+            font-size: 0.75rem;
+        }
+
+        .watchlist-status-card__dates strong {
+            color: var(--app-text-soft);
+            font-family: "Inter", "IBM Plex Sans", var(--font-ui);
+            font-variant-numeric: tabular-nums;
+        }
+
         .backtest-flow-card {
             margin-bottom: 0.85rem;
         }

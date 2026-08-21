@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import date, timedelta
 from html import escape
 from pathlib import Path
@@ -36,6 +37,22 @@ WATCHLIST_BOOTSTRAP_DAYS = 365
 LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class WatchlistDataStatus:
+    symbol: str
+    label: str
+    detail: str
+    daily_date: date | None
+    investor_date: date | None
+    indicator_date: date | None
+    signal_date: date | None
+    report_date: date | None
+
+    @property
+    def needs_update(self) -> bool:
+        return self.label != "최신"
+
+
 def render_watchlist_tab(
     snapshot,
     service: DashboardDataService,
@@ -56,16 +73,8 @@ def render_watchlist_tab(
         st.info("아직 저장된 관심종목이 없습니다. 투자 리포트 탭에서 관심종목을 추가해 보세요.")
         return
 
-    try:
-        refresh_result = refresh_favorite_symbols_if_needed(service, favorite_symbols)
-    except Exception as error:  # noqa: BLE001
-        refresh_result = {"collected_symbols": [], "pipeline_symbols": []}
-        st.warning(f"관심종목 자동 최신화 중 오류가 발생했습니다: {error}")
-    if refresh_result["collected_symbols"] or refresh_result["pipeline_symbols"]:
-        snapshot = service.build_snapshot()
-        updated_symbols = ", ".join(refresh_result["pipeline_symbols"][:3])
-        suffix = "" if len(refresh_result["pipeline_symbols"]) <= 3 else f" 외 {len(refresh_result['pipeline_symbols']) - 3}건"
-        st.caption(f"관심종목 최신화 완료: {updated_symbols}{suffix}")
+    statuses = build_watchlist_data_statuses(service, favorite_symbols)
+    render_watchlist_data_status(statuses)
 
     report_previews = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
     favorite_previews = [preview for preview in report_previews if preview.symbol in favorite_symbols]
@@ -142,6 +151,163 @@ def render_watchlist_tab(
         favorites_store=favorites_store,
         is_favorite=bool(selected_entry["is_favorite"]),
     )
+
+
+def render_watchlist_data_status(statuses: Sequence[WatchlistDataStatus]) -> None:
+    current_count = sum(not status.needs_update for status in statuses)
+    needs_update = [status for status in statuses if status.needs_update]
+
+    with st.container(border=True):
+        st.markdown('<h3 class="section-title">데이터 갱신 상태</h3>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-copy">관심종목 조회 중에는 자동으로는 데이터를 갱신하지 않습니다. 가격·수급·분석·신호·리포트의 저장 기준일을 비교해 필요한 작업만 직접 실행하세요.</div>',
+            unsafe_allow_html=True,
+        )
+        metrics = st.columns(2)
+        metrics[0].metric("최신", current_count)
+        metrics[1].metric("갱신 필요", len(needs_update))
+
+        cards = "".join(_render_watchlist_status_card(status) for status in statuses)
+        st.markdown(f'<div class="watchlist-status-grid">{cards}</div>', unsafe_allow_html=True)
+
+        if needs_update:
+            symbols = [status.symbol for status in needs_update]
+            if st.button(
+                f"갱신 필요 종목 {len(symbols)}개 선택해 데이터 갱신",
+                key="watchlist_open_data_refresh",
+                width="stretch",
+                type="primary",
+            ):
+                _open_data_refresh_for_symbols(symbols)
+        else:
+            st.info("등록한 관심종목의 저장 데이터와 분석 결과가 최신 영업일 기준으로 준비되어 있습니다.")
+
+
+def _render_watchlist_status_card(status: WatchlistDataStatus) -> str:
+    state_class = " is-current" if not status.needs_update else " is-action-needed"
+    fields = (
+        ("가격", status.daily_date),
+        ("수급", status.investor_date),
+        ("분석", status.indicator_date),
+        ("신호", status.signal_date),
+        ("리포트", status.report_date),
+    )
+    date_items = "".join(
+        f"<span>{escape(label)} <strong>{escape(_format_status_date(value))}</strong></span>"
+        for label, value in fields
+    )
+    return f"""
+        <article class="watchlist-status-card{state_class}">
+          <div class="watchlist-status-card__heading">
+            <strong>{escape(status.symbol)}</strong>
+            <span>{escape(status.label)}</span>
+          </div>
+          <p>{escape(status.detail)}</p>
+          <div class="watchlist-status-card__dates">{date_items}</div>
+        </article>
+    """
+
+
+def _open_data_refresh_for_symbols(symbols: Sequence[str]) -> None:
+    selected_symbols = list(symbols)
+    st.session_state["streamlit_selected_symbols"] = selected_symbols
+    st.session_state["multi_symbol_picker"] = selected_symbols
+    st.session_state["selected_tab"] = "데이터 갱신"
+    st.session_state["action_message"] = (
+        f"관심종목 상태를 확인했습니다. 갱신이 필요한 {len(selected_symbols)}개 종목을 선택했습니다. "
+        "필요한 단계 또는 전체 파이프라인을 실행해 주세요."
+    )
+    st.session_state["action_message_type"] = "info"
+    st.rerun()
+
+
+def build_watchlist_data_statuses(
+    service: DashboardDataService,
+    favorite_symbols: set[str],
+    *,
+    today: date | None = None,
+) -> list[WatchlistDataStatus]:
+    target_date = _latest_expected_market_date(today or date.today())
+    return [
+        build_watchlist_data_status(service, symbol, target_date=target_date)
+        for symbol in sorted(favorite_symbols)
+    ]
+
+
+def build_watchlist_data_status(
+    service: DashboardDataService,
+    symbol: str,
+    *,
+    target_date: date,
+) -> WatchlistDataStatus:
+    daily_date = _load_latest_dataset_date(service, "daily_prices", symbol, ("trade_date", "stck_bsop_date", "date"))
+    investor_date = _load_latest_dataset_date(
+        service,
+        "investor_daily_summary",
+        symbol,
+        ("trade_date", "stck_bsop_date", "date"),
+    )
+    indicator_date = _load_latest_dataset_date(service, "daily_prices_indicators", symbol, ("date", "trade_date", "stck_bsop_date"))
+    signal_date = _load_latest_dataset_date(service, "golden_cross_signals", symbol, ("date", "trade_date", "stck_bsop_date"))
+    report_date = _load_latest_dataset_date(service, "market_reports", symbol, ("date",))
+
+    missing_sources = [label for label, value in (("가격", daily_date), ("수급", investor_date)) if value is None]
+    stale_sources = [
+        label
+        for label, value in (("가격", daily_date), ("수급", investor_date))
+        if value is not None and value < target_date
+    ]
+    if missing_sources or stale_sources:
+        affected = ", ".join([*missing_sources, *stale_sources])
+        return WatchlistDataStatus(
+            symbol=symbol,
+            label="데이터 갱신 필요",
+            detail=f"{affected} 데이터가 최신 영업일({target_date.isoformat()}) 기준으로 준비되지 않았습니다.",
+            daily_date=daily_date,
+            investor_date=investor_date,
+            indicator_date=indicator_date,
+            signal_date=signal_date,
+            report_date=report_date,
+        )
+
+    assert daily_date is not None
+    assert investor_date is not None
+    analysis_reference_date = max(daily_date, investor_date)
+    outdated_outputs = [
+        label
+        for label, value, reference_date in (
+            ("분석", indicator_date, daily_date),
+            ("신호", signal_date, daily_date),
+            ("리포트", report_date, analysis_reference_date),
+        )
+        if value is None or value < reference_date
+    ]
+    if outdated_outputs:
+        return WatchlistDataStatus(
+            symbol=symbol,
+            label="분석 갱신 필요",
+            detail=f"가격·수급 데이터는 최신입니다. {', '.join(outdated_outputs)} 결과를 다시 생성하세요.",
+            daily_date=daily_date,
+            investor_date=investor_date,
+            indicator_date=indicator_date,
+            signal_date=signal_date,
+            report_date=report_date,
+        )
+
+    return WatchlistDataStatus(
+        symbol=symbol,
+        label="최신",
+        detail=f"가격·수급·분석·신호·리포트가 최신 영업일({target_date.isoformat()}) 기준으로 준비되었습니다.",
+        daily_date=daily_date,
+        investor_date=investor_date,
+        indicator_date=indicator_date,
+        signal_date=signal_date,
+        report_date=report_date,
+    )
+
+
+def _format_status_date(value: date | None) -> str:
+    return value.isoformat() if value is not None else "없음"
 
 
 def render_watchlist_overview(
