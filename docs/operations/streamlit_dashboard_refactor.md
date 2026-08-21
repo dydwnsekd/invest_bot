@@ -686,3 +686,19 @@
 - 검증
   - `PYTHONPATH=. .venv/bin/pytest -q`
   - 결과: `278 passed`
+
+### 2026-08-20 / Report decision context and numeric readability
+
+- 변경 사항
+  - `streamlit_reports.py`
+    - `최종 의견`을 `종합 신호`로 표현하고, 골든크로스·RSI·추세 필터·평균회귀 전략의 매수/관망/매도 건수를 합의도로 표시
+    - 핵심 지표 4개와 수급 데이터의 표시 충족 상태를 수익 가능성과 분리해 안내
+    - 상승 근거, 위험 요인, 재평가 기준을 전략별 판단 앞에 배치
+  - `streamlit_styles.py`
+    - 보조 라벨 크기를 높이고 가격·비율·날짜 카드에 tabular 숫자 정렬 적용
+    - 리포트 판단 요약을 작은 화면에서도 한 열로 읽을 수 있게 구성
+  - `tests/test_streamlit_dashboard.py`
+    - 전략 합의도·데이터 충족 상태·상승/위험/재평가 근거 분리 회귀 테스트 추가
+- 검증
+  - `PYTHONPATH=. .venv/bin/pytest -q`
+  - 결과: `281 passed`

@@ -2,7 +2,7 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-08-17
+- Last refreshed: 2026-08-20
 - Primary product surfaces:
   - Streamlit 국내주식 운영 대시보드
   - 홈, 데이터 갱신, 투자 리포트, 관심종목, 백테스트, 데이터 보기, 용어 해설, 시스템 검증
@@ -87,7 +87,7 @@
 
 ## Visual language
 - Color: 기존 high-contrast dark navy/slate palette를 유지한다.
-- Typography: 한국어 가독성 우선 폰트 스택을 유지한다.
+- Typography: 한국어 본문은 Pretendard 계열을 우선하고, 가격·비율·날짜·지표는 tabular 숫자 정렬을 적용해 빠른 비교를 돕는다. 보조 라벨은 데스크톱 기준 최소 0.8rem을 유지한다.
 - Spacing/layout rhythm: 1rem 안팎의 카드 간격, 넓은 터치/클릭 영역.
 - Shape/radius/elevation: 정보 카드에는 부드러운 radius, 좌측 메뉴는 텍스트형 내비게이션.
 - Motion: hover/focus 정도의 미세한 전환만 사용.
@@ -108,6 +108,7 @@
   - 화면 이동 버튼이 연결된 다음 행동 카드.
   - 리포트 후보 카드와 선택 리포트 focus card.
   - 후보 수·한글 요약·날짜를 포함한 리포트 후보 카드와 최종 의견/전략 신호 충돌 경고.
+  - 종합 신호, 전략 합의도, 핵심 지표·수급 충족 상태, 상승 근거·위험 요인·재평가 기준을 함께 표시하는 리포트 판단 요약.
   - 후보 카드의 직접 선택 버튼.
   - 선택 상세 영역 스크롤 anchor.
   - 작업 실행 중 status/progress 표시.
@@ -147,6 +148,8 @@
 - Terminology: 어려운 용어는 `용어 해설`과 연결되는 표현을 사용한다.
 - Microcopy rules:
   - “무엇을 한다”, “왜 필요한가”, “다음에 볼 것”을 분리한다.
+  - `매수 관점`/`매도 관점`은 종합 신호로 표기하고, 전략 합의도·기준일·데이터 충족 상태·위험 요인을 같은 화면에서 함께 제공한다.
+  - 수익 가능성을 암시하는 신뢰도 대신 확인 가능한 데이터 충족 상태와 전략 신호 수를 사용한다.
   - 화살표/아이콘 문자가 깨질 수 있는 표현을 피한다.
   - Streamlit이 `stIconMaterial`에 아이콘 이름을 ligature text로 넣는 구조를 고려해, 전역 `span`/폰트 CSS를 수정할 때는 반드시 `[data-testid="stIconMaterial"]`의 Material Symbols 폰트와 `liga` 설정을 다시 보장한다.
   - status, expander, sidebar 등 Streamlit 기본 아이콘을 사용하는 UI를 추가하거나 수정하면 아이콘 이름(`keyboard_arrow_down`, `expand_more` 등)이 화면 텍스트로 노출되지 않는지 CSS 회귀 테스트를 함께 유지한다.
