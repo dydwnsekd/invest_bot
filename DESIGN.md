@@ -2,7 +2,7 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-08-20
+- Last refreshed: 2026-08-22
 - Primary product surfaces:
   - Streamlit 국내주식 운영 대시보드
   - 홈, 데이터 갱신, 투자 리포트, 관심종목, 백테스트, 데이터 보기, 용어 해설, 시스템 검증
@@ -81,6 +81,7 @@
 - Principle 5: 백테스트 결과는 숫자만 표시하지 않고 수익률, 표본 수, 승률, 평균수익, 최대낙폭을 함께 해석한다.
 - Principle 6: 후보 카드에서 확인 대상을 발견하면 별도 selectbox 재탐색 없이 바로 선택할 수 있어야 한다.
 - Principle 7: 관심종목은 드롭다운을 열지 않아도 등록한 전체 종목과 최신 판단을 먼저 파악할 수 있어야 한다.
+- Principle 8: 관심종목은 조회 화면으로 유지하고, 종목별 가격·수급·분석·신호·리포트 기준일과 갱신 필요 사유를 먼저 보여준다.
 - Tradeoffs:
   - Streamlit 기본 위젯을 유지해 구현 안정성을 우선한다.
   - 완전한 커스텀 SPA보다는 repo-native CSS/컴포넌트 확장으로 개선한다.
@@ -136,7 +137,7 @@
 - Touch/hover differences: hover에 의존하지 않고 selected state를 항상 표시한다.
 
 ## Interaction states
-- Loading: 데이터 갱신처럼 시간이 걸리는 작업은 Streamlit status로 대상과 진행 내용을 표시한다. 홈은 저장된 snapshot만 읽고, 최신화는 사용자가 `데이터 갱신`에서 명시적으로 실행한다.
+- Loading: 데이터 갱신처럼 시간이 걸리는 작업은 Streamlit status로 대상과 진행 내용을 표시한다. 홈과 관심종목은 저장된 snapshot만 읽고, 최신화는 사용자가 `데이터 갱신`에서 명시적으로 실행한다.
 - Empty: 데이터 없음 메시지는 다음 행동을 제안한다.
 - Error: 실패 이유와 영향 범위를 말하되, 외부 API 오류나 내부 아이콘 이름 같은 기술 텍스트를 홈 본문에 그대로 노출하지 않는다.
 - Success: 무엇이 완료됐는지와 다음 확인 화면을 제안한다.
@@ -158,7 +159,7 @@
 - Framework/styling system: Streamlit + repo-local CSS.
 - Design-token constraints: 기존 CSS 변수 유지.
 - Markup constraints: 서로 다른 `st.markdown()` 호출 사이에서 HTML wrapper를 열고 닫지 않는다. 빈 카드·깨진 grid가 보이면 먼저 이 규칙을 확인한다.
-- Performance constraints: 홈은 저장된 데이터만 조회해 빠르게 렌더링한다. 수집·분석은 `데이터 갱신`에서 대상 종목과 실행 범위를 사용자가 확인한 뒤 수행한다.
+- Performance constraints: 홈과 관심종목은 저장된 데이터만 조회해 빠르게 렌더링한다. 수집·분석은 `데이터 갱신`에서 대상 종목과 실행 범위를 사용자가 확인한 뒤 수행한다.
 - Compatibility constraints: 기존 tests와 탭 라우팅 alias를 유지한다.
 - Test/screenshot expectations: 변경 후 `pytest` 전체 통과를 기준으로 한다.
 

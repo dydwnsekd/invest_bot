@@ -702,3 +702,20 @@
 - 검증
   - `PYTHONPATH=. .venv/bin/pytest -q`
   - 결과: `281 passed`
+
+### 2026-08-22 / Watchlist data freshness state
+
+- 배경
+  - 관심종목을 조회하는 순간 자동 수집·분석·리포트 생성까지 실행하면, 조회와 데이터 변경의 경계가 불명확하고 외부 API 오류가 화면 진입 경험을 방해할 수 있었음
+- 변경 사항
+  - `streamlit_watchlist.py`
+    - 관심종목을 저장된 snapshot 조회 화면으로 전환하고 자동 최신화 호출 제거
+    - 가격·수급·분석·신호·리포트의 최신 저장 기준일을 종목별로 비교해 `최신`, `분석 갱신 필요`, `데이터 갱신 필요` 상태와 사유를 표시
+    - 갱신 필요 종목을 선택한 채 `데이터 갱신` 탭으로 이동하도록 연결
+  - `streamlit_styles.py`
+    - 상태별 대비와 기준일을 함께 읽을 수 있는 관심종목 상태 카드 스타일 추가
+  - `DESIGN.md` / `docs/tasks/04_dashboard.md`
+    - 관심종목 읽기 전용 정책과 명시적 갱신 흐름을 현재 구현에 맞게 갱신
+- 검증
+  - `PYTHONPATH=. .venv/bin/pytest -q`
+  - 결과: `283 passed`
