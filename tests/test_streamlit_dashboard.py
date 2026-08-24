@@ -318,6 +318,7 @@ def test_overview_trust_status_prioritizes_failed_tests() -> None:
     )
 
     assert status.label == "테스트 실패 2건"
+    assert status.data_status.label == "기준일 확인됨"
 
 
 def test_overview_trust_status_identifies_mismatched_report_and_signal_dates() -> None:
@@ -333,6 +334,45 @@ def test_overview_trust_status_identifies_mismatched_report_and_signal_dates() -
 
     assert status.label == "기준일 불일치"
     assert "2026-08-13" in status.detail
+
+
+def test_overview_next_actions_prioritize_tests_then_stale_data_before_reports() -> None:
+    report_rows = [(SimpleNamespace(), pd.Series({"date": "2026-08-07"}))]
+    signal_rows = [(SimpleNamespace(), pd.Series({"date": "2026-08-07"}))]
+    test_report = SimpleNamespace(failed=2)
+    trust_status = streamlit_overview_module.build_overview_trust_status(
+        report_rows,
+        signal_rows,
+        test_report=test_report,
+        today=date(2026, 8, 17),
+    )
+
+    actions = streamlit_overview_module.build_overview_next_actions(
+        SimpleNamespace(log_exists=True, last_failed_count=0),
+        test_report,
+        trust_status,
+    )
+
+    assert [title for title, _, _ in actions] == ["시스템 검증", "데이터 갱신"]
+    assert all(title not in {"투자 리포트 확인", "백테스트"} for title, _, _ in actions)
+
+
+def test_overview_next_actions_offer_report_then_backtest_only_when_trust_is_confirmed() -> None:
+    rows = [(SimpleNamespace(), pd.Series({"date": "2026-08-14"}))]
+    trust_status = streamlit_overview_module.build_overview_trust_status(
+        rows,
+        rows,
+        test_report=None,
+        today=date(2026, 8, 17),
+    )
+
+    actions = streamlit_overview_module.build_overview_next_actions(
+        SimpleNamespace(log_exists=True, last_failed_count=0),
+        None,
+        trust_status,
+    )
+
+    assert [title for title, _, _ in actions] == ["투자 리포트 확인", "백테스트"]
 
 
 def test_overview_navigation_sets_the_requested_tab(monkeypatch: pytest.MonkeyPatch) -> None:

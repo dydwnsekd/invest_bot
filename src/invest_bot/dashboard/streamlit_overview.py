@@ -18,11 +18,20 @@ from invest_bot.dashboard.streamlit_formatters import (
 
 
 @dataclass(frozen=True, slots=True)
+class OverviewDataStatus:
+    label: str
+    detail: str
+    report_date: date | None
+    signal_date: date | None
+
+
+@dataclass(frozen=True, slots=True)
 class OverviewTrustStatus:
     label: str
     detail: str
     report_date: date | None
     signal_date: date | None
+    data_status: OverviewDataStatus
 
 
 def render_overview_tab(
@@ -50,7 +59,7 @@ def render_overview_tab(
         render_watch_targets(report_rows, signal_rows, service=service)
 
     with top_right:
-        render_next_action_panel(schedule_status, test_report)
+        render_next_action_panel(schedule_status, test_report, trust_status)
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
         render_quick_start_panel()
 
@@ -100,23 +109,43 @@ def build_overview_trust_status(
     signal_date = latest_row_date(signal_rows)
     reference_today = today or date.today()
     latest_expected_date = latest_weekday(reference_today)
+    data_status = build_overview_data_status(report_date, signal_date, latest_expected_date=latest_expected_date)
 
     if test_report and test_report.failed:
+        detail = "저장된 테스트 결과에 실패 항목이 있습니다. 투자 판단 전에 시스템 검증을 확인해 주세요."
+        if data_status.label != "기준일 확인됨":
+            detail = f"{detail} 또한 {data_status.detail}"
         return OverviewTrustStatus(
             label=f"테스트 실패 {test_report.failed}건",
-            detail="저장된 테스트 결과에 실패 항목이 있습니다. 투자 판단 전에 시스템 검증을 확인해 주세요.",
+            detail=detail,
             report_date=report_date,
             signal_date=signal_date,
+            data_status=data_status,
         )
+    return OverviewTrustStatus(
+        label=data_status.label,
+        detail=data_status.detail,
+        report_date=report_date,
+        signal_date=signal_date,
+        data_status=data_status,
+    )
+
+
+def build_overview_data_status(
+    report_date: date | None,
+    signal_date: date | None,
+    *,
+    latest_expected_date: date,
+) -> OverviewDataStatus:
     if report_date is None:
-        return OverviewTrustStatus(
+        return OverviewDataStatus(
             label="리포트 없음",
             detail="표시할 투자 리포트가 없습니다. 데이터 갱신에서 전체 파이프라인을 실행해 주세요.",
             report_date=None,
             signal_date=signal_date,
         )
     if report_date < latest_expected_date - timedelta(days=3):
-        return OverviewTrustStatus(
+        return OverviewDataStatus(
             label="기준일 확인 필요",
             detail=(
                 f"최신 리포트 기준일은 {format_reference_date(report_date)}입니다. "
@@ -127,13 +156,13 @@ def build_overview_trust_status(
         )
     if signal_date is None or signal_date != report_date:
         signal_detail = "전략 신호가 없습니다." if signal_date is None else f"전략 신호 기준일은 {format_reference_date(signal_date)}입니다."
-        return OverviewTrustStatus(
+        return OverviewDataStatus(
             label="기준일 불일치",
             detail=f"리포트 기준일은 {format_reference_date(report_date)}이고, {signal_detail} 두 결과를 함께 확인해 주세요.",
             report_date=report_date,
             signal_date=signal_date,
         )
-    return OverviewTrustStatus(
+    return OverviewDataStatus(
         label="기준일 확인됨",
         detail=f"리포트와 전략 신호의 기준일은 {format_reference_date(report_date)}입니다.",
         report_date=report_date,
@@ -288,23 +317,16 @@ def select_watch_targets(report_rows, signal_rows) -> list[tuple[DatasetPreview,
     return candidates
 
 
-def render_next_action_panel(schedule_status, test_report: TestReportPreview | None) -> None:
+def render_next_action_panel(
+    schedule_status,
+    test_report: TestReportPreview | None,
+    trust_status: OverviewTrustStatus,
+) -> None:
     with st.container(border=True):
         st.markdown('<h3 class="section-title">다음 행동</h3>', unsafe_allow_html=True)
-        st.markdown('<div class="section-copy">현재 상태에 따라 먼저 할 일을 안내합니다.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-copy">신뢰 상태를 기준으로 우선순위가 높은 작업부터 안내합니다.</div>', unsafe_allow_html=True)
 
-        actions: list[tuple[str, str, str]] = []
-        if schedule_status is None or not getattr(schedule_status, "log_exists", False):
-            actions.append(("데이터 갱신", "정기 수집 로그가 없으면 먼저 데이터 갱신에서 수집과 리포트 생성을 실행하세요.", "데이터 갱신"))
-        elif getattr(schedule_status, "last_failed_count", 0):
-            actions.append(("수집 실패 확인", "최근 정기 수집에 실패가 있어 데이터 갱신에서 실패 종목을 다시 실행하세요.", "데이터 갱신"))
-        else:
-            actions.append(("투자 리포트 확인", "데이터가 준비되어 있으니 투자 리포트에서 종목별 판단을 읽어보세요.", "투자 리포트"))
-
-        if test_report and test_report.failed:
-            actions.append(("시스템 검증", "테스트 실패가 있으니 시스템 검증에서 실패 항목을 먼저 확인하세요.", "시스템 검증"))
-        else:
-            actions.append(("백테스트", "관심 있는 전략은 백테스트에서 과거 성과를 확인하세요.", "백테스트"))
+        actions = build_overview_next_actions(schedule_status, test_report, trust_status)
 
         for index, (title, copy, target_tab) in enumerate(actions):
             st.markdown(
@@ -318,6 +340,35 @@ def render_next_action_panel(schedule_status, test_report: TestReportPreview | N
             )
             if st.button(f"{title} 열기", key=f"overview_next_action_{index}", width="stretch"):
                 navigate_to_tab(target_tab)
+
+
+def build_overview_next_actions(
+    schedule_status,
+    test_report: TestReportPreview | None,
+    trust_status: OverviewTrustStatus,
+) -> list[tuple[str, str, str]]:
+    actions: list[tuple[str, str, str]] = []
+    tests_failed = bool(test_report and test_report.failed)
+    data_needs_attention = trust_status.data_status.label != "기준일 확인됨"
+    schedule_needs_attention = schedule_status is None or not getattr(schedule_status, "log_exists", False)
+    schedule_failed = bool(schedule_status and getattr(schedule_status, "last_failed_count", 0))
+
+    if tests_failed:
+        actions.append(("시스템 검증", "테스트 실패가 있으니 시스템 검증에서 실패 항목을 먼저 확인하세요.", "시스템 검증"))
+
+    if data_needs_attention:
+        actions.append(("데이터 갱신", trust_status.data_status.detail, "데이터 갱신"))
+    elif schedule_needs_attention:
+        actions.append(("데이터 갱신", "정기 수집 로그가 없으면 데이터 갱신에서 수집과 리포트 생성을 실행하세요.", "데이터 갱신"))
+    elif schedule_failed:
+        actions.append(("수집 실패 확인", "최근 정기 수집에 실패가 있어 데이터 갱신에서 실패 종목을 다시 실행하세요.", "데이터 갱신"))
+    elif not tests_failed:
+        actions.append(("투자 리포트 확인", "데이터와 전략 신호의 기준일이 확인되었습니다. 투자 리포트에서 종목별 판단을 읽어보세요.", "투자 리포트"))
+
+    if not tests_failed and not data_needs_attention and not schedule_needs_attention and not schedule_failed:
+        actions.append(("백테스트", "관심 있는 전략은 백테스트에서 과거 성과를 확인하세요.", "백테스트"))
+
+    return actions
 
 
 def navigate_to_tab(tab_name: str) -> None:
