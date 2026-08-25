@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 import tomllib
 from pathlib import Path
 from types import SimpleNamespace
@@ -334,6 +334,38 @@ def test_overview_trust_status_identifies_mismatched_report_and_signal_dates() -
 
     assert status.label == "기준일 불일치"
     assert "2026-08-13" in status.detail
+
+
+def test_overview_trust_time_helpers_separate_market_collection_and_analysis_times() -> None:
+    rows = [(SimpleNamespace(), pd.Series({"date": "2026-08-14"}))]
+    status = streamlit_overview_module.build_overview_trust_status(
+        rows,
+        rows,
+        test_report=None,
+        today=date(2026, 8, 17),
+    )
+    analysis_created_at = streamlit_overview_module.latest_preview_created_at(
+        [
+            SimpleNamespace(created_at=datetime(2026, 8, 14, 3, 30, tzinfo=UTC)),
+            SimpleNamespace(created_at=datetime(2026, 8, 14, 4, 15, tzinfo=UTC)),
+        ]
+    )
+
+    assert streamlit_overview_module.format_market_reference_date(status.data_status) == "2026-08-14"
+    assert streamlit_overview_module.format_collection_finished_at(
+        SimpleNamespace(last_finished_at="2026-08-14T11:10:00")
+    ) == "2026-08-14 11:10"
+    assert streamlit_overview_module.format_processing_created_at(analysis_created_at) == "2026-08-14 04:15"
+
+
+def test_overview_market_reference_marks_mismatched_dates_explicitly() -> None:
+    status = streamlit_overview_module.build_overview_data_status(
+        date(2026, 8, 14),
+        date(2026, 8, 13),
+        latest_expected_date=date(2026, 8, 14),
+    )
+
+    assert streamlit_overview_module.format_market_reference_date(status) == "기준일 불일치"
 
 
 def test_overview_next_actions_prioritize_tests_then_stale_data_before_reports() -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from html import escape
 
 import pandas as pd
@@ -44,11 +44,20 @@ def render_overview_tab(
 ) -> None:
     report_previews = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
     signal_previews = [preview for preview in snapshot.processed_previews if preview.name == "golden_cross_signals"]
+    analysis_previews = [
+        preview
+        for preview in snapshot.processed_previews
+        if preview.name in {"daily_prices_indicators", "golden_cross_signals", "market_reports"}
+    ]
     report_rows = collect_latest_rows(report_previews, read_preview_frame=read_preview_frame)
     signal_rows = collect_latest_rows(signal_previews, read_preview_frame=read_preview_frame)
     trust_status = build_overview_trust_status(report_rows, signal_rows, test_report)
 
-    render_overview_trust_status(trust_status)
+    render_overview_trust_status(
+        trust_status,
+        schedule_status=schedule_status,
+        analysis_created_at=latest_preview_created_at(analysis_previews),
+    )
     render_investor_briefing_metrics(snapshot, report_rows, signal_rows, trust_status)
 
     top_left, top_right = st.columns([1.35, 1], gap="large")
@@ -191,11 +200,54 @@ def format_reference_date(value: date) -> str:
     return value.strftime("%Y-%m-%d")
 
 
-def render_overview_trust_status(status: OverviewTrustStatus) -> None:
-    if status.label == "기준일 확인됨":
-        st.info(f"데이터 기준일 · {status.detail}")
-        return
-    st.warning(f"데이터 확인 필요 · {status.detail}")
+def render_overview_trust_status(
+    status: OverviewTrustStatus,
+    *,
+    schedule_status,
+    analysis_created_at: datetime | None,
+) -> None:
+    with st.container(border=True):
+        st.markdown('<h3 class="section-title">데이터 신뢰 상태</h3>', unsafe_allow_html=True)
+        if status.label == "기준일 확인됨":
+            st.info(f"데이터 상태 · {status.detail}")
+        else:
+            st.warning(f"데이터 확인 필요 · {status.detail}")
+
+        status_columns = st.columns(3)
+        status_columns[0].metric("시장 기준일", format_market_reference_date(status.data_status))
+        status_columns[1].metric("마지막 수집 완료", format_collection_finished_at(schedule_status))
+        status_columns[2].metric("마지막 분석 생성", format_processing_created_at(analysis_created_at))
+
+        if status.report_date != status.signal_date:
+            st.caption(
+                "리포트 기준일 "
+                f"{format_reference_date(status.report_date) if status.report_date else '없음'} · "
+                "전략 신호 기준일 "
+                f"{format_reference_date(status.signal_date) if status.signal_date else '없음'}"
+            )
+
+
+def format_market_reference_date(status: OverviewDataStatus) -> str:
+    if status.report_date is not None and status.report_date == status.signal_date:
+        return format_reference_date(status.report_date)
+    if status.report_date is None and status.signal_date is None:
+        return "정보 없음"
+    return "기준일 불일치"
+
+
+def format_collection_finished_at(schedule_status) -> str:
+    if schedule_status is None:
+        return "정보 없음"
+    return compact_datetime(str(getattr(schedule_status, "last_finished_at", "")))
+
+
+def format_processing_created_at(value: datetime | None) -> str:
+    return compact_datetime(value.isoformat() if value is not None else "")
+
+
+def latest_preview_created_at(previews: list[DatasetPreview]) -> datetime | None:
+    values = [preview.created_at for preview in previews if preview.created_at is not None]
+    return max(values) if values else None
 
 
 def render_investor_briefing_metrics(snapshot, report_rows, signal_rows, trust_status: OverviewTrustStatus) -> None:

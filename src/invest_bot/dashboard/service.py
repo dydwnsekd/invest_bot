@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from xml.etree import ElementTree
 
 import pandas as pd
 
 from invest_bot.config.settings import AppSettings
+from invest_bot.db.contracts import DatasetFrameRecord
 from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.frame_storage import DbFrameStorage
 from invest_bot.db.repositories import SqlAlchemyStockRepository
@@ -42,6 +44,7 @@ class DatasetPreview:
     symbol: str
     symbol_name: str
     recommended_columns: list[str]
+    created_at: datetime | None = None
 
 
 @dataclass(slots=True)
@@ -382,6 +385,7 @@ class DashboardDataService:
                     symbol=symbol,
                     symbol_name=symbol_name,
                     recommended_columns=recommended,
+                    created_at=datetime.fromtimestamp(latest_file.stat().st_mtime, tz=UTC),
                 )
             )
 
@@ -396,9 +400,9 @@ class DashboardDataService:
         symbol_name_map = self._load_symbol_name_map()
         for dataset in datasets:
             latest_records = self._list_latest_records(dataset)
-            for filename in latest_records:
-                frame = storage.load(dataset, filename)
-                symbol = self._extract_symbol(Path(filename))
+            for record in latest_records:
+                frame = storage.load(dataset, record.filename)
+                symbol = self._extract_symbol(Path(record.filename))
                 symbol_name = symbol_name_map.get(symbol, "")
                 enriched = self._enrich_frame(frame, symbol=symbol, symbol_name=symbol_name)
                 guide = self.DATASET_GUIDES.get(
@@ -422,7 +426,7 @@ class DashboardDataService:
                     DatasetPreview(
                         name=dataset,
                         display_name=guide.title,
-                        path=storage.root_dir / dataset / filename,
+                        path=storage.root_dir / dataset / record.filename,
                         row_count=len(enriched),
                         columns=list(enriched.columns),
                         summary=guide.summary,
@@ -431,6 +435,7 @@ class DashboardDataService:
                         symbol=symbol,
                         symbol_name=symbol_name,
                         recommended_columns=recommended,
+                        created_at=record.created_at,
                     )
                 )
         return previews
@@ -487,12 +492,12 @@ class DashboardDataService:
         storage = self.get_dataset_storage()
         if storage is not None:
             mapping: dict[str, str] = {}
-            previews = self._list_latest_records("stock_info")
-            for item in previews:
-                frame = storage.load("stock_info", item)
+            records = self._list_latest_records("stock_info")
+            for record in records:
+                frame = storage.load("stock_info", record.filename)
                 if frame.empty:
                     continue
-                code = str(frame.iloc[0].get("pdno", "")).strip() or Path(item).stem
+                code = str(frame.iloc[0].get("pdno", "")).strip() or Path(record.filename).stem
                 code = self._normalize_symbol(code)
                 name = str(frame.iloc[0].get("prdt_abrv_name", "")).strip()
                 if code and self._is_meaningful_symbol_name(code, name):
@@ -518,12 +523,12 @@ class DashboardDataService:
                 mapping[code] = name
         return mapping
 
-    def _list_latest_records(self, dataset: str) -> list[str]:
+    def _list_latest_records(self, dataset: str) -> list[DatasetFrameRecord]:
         storage = self.get_dataset_storage()
         if storage is None:
             return []
         entries = storage.repository.list_latest([dataset])
-        return [entry.filename for entry in entries if entry.dataset == dataset]
+        return [entry for entry in entries if entry.dataset == dataset]
 
     @staticmethod
     def _normalize_symbol(value: object) -> str:
