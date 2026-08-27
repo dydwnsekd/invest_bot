@@ -733,3 +733,18 @@
     - 테스트 실패와 오래된 데이터가 함께 있을 때의 행동 순서, 정상 상태에서의 리포트·백테스트 순서를 검증
   - `DESIGN.md` / `docs/tasks/04_dashboard.md`
     - 홈의 상태 기반 행동 우선순위를 현재 구현에 맞게 갱신
+
+### 2026-08-25 / Home data reference and processing times
+
+- 배경
+  - 시장 데이터가 어느 거래일 기준인지와 실제 수집·분석 작업이 언제 완료됐는지가 한 화면에서 분리되어 보이지 않아, 데이터 최신성 판단이 어려웠음
+- 변경 사항
+  - `service.py`
+    - dataset preview에 artifact 실제 저장 시각을 포함해 DB snapshot과 로컬 CSV 모두에서 분석 생성 시각을 확인 가능하게 함
+  - `streamlit_overview.py`
+    - 홈의 데이터 신뢰 상태에 `시장 기준일`, `마지막 수집 완료`, `마지막 분석 생성`을 분리 표시
+    - 리포트와 전략 신호 기준일이 다르면 단일 시장 기준일 대신 불일치 상태와 각각의 날짜를 함께 노출
+  - `tests/test_streamlit_dashboard.py`
+    - 시장 기준일, 수집 완료 시각, 분석 생성 시각의 형식 및 기준일 불일치 표시를 검증
+  - `DESIGN.md` / `docs/tasks/04_dashboard.md`
+    - 시간 정보의 의미와 표시 규칙을 현재 구현에 맞게 갱신
