@@ -673,6 +673,24 @@ def apply_custom_style() -> None:
             font-variant-numeric: tabular-nums;
         }
 
+        .watchlist-status-card__times {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem 0.7rem;
+            margin-top: 0.55rem;
+            padding-top: 0.55rem;
+            border-top: 1px solid rgba(203, 213, 225, 0.16);
+            color: var(--app-text-muted);
+            font-family: var(--font-label);
+            font-size: 0.75rem;
+        }
+
+        .watchlist-status-card__times strong {
+            color: var(--app-text-soft);
+            font-family: "Inter", "IBM Plex Sans", var(--font-ui);
+            font-variant-numeric: tabular-nums;
+        }
+
         .backtest-flow-card {
             margin-bottom: 0.85rem;
         }

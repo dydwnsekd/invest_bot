@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from html import escape
 from pathlib import Path
 
@@ -13,6 +13,7 @@ import streamlit as st
 from invest_bot.config.settings import AppSettings
 from invest_bot.dashboard.report_favorites import ReportFavoritesStore
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.dashboard.streamlit_formatters import compact_datetime
 from invest_bot.dashboard.streamlit_reports import (
     build_candidate_pending_selection_key,
     build_report_entries,
@@ -47,10 +48,18 @@ class WatchlistDataStatus:
     indicator_date: date | None
     signal_date: date | None
     report_date: date | None
+    collection_created_at: datetime | None = None
+    analysis_created_at: datetime | None = None
 
     @property
     def needs_update(self) -> bool:
         return self.label != "최신"
+
+
+@dataclass(frozen=True, slots=True)
+class WatchlistProcessingTimes:
+    collection_created_at: datetime | None = None
+    analysis_created_at: datetime | None = None
 
 
 def render_watchlist_tab(
@@ -73,7 +82,8 @@ def render_watchlist_tab(
         st.info("아직 저장된 관심종목이 없습니다. 투자 리포트 탭에서 관심종목을 추가해 보세요.")
         return
 
-    statuses = build_watchlist_data_statuses(service, favorite_symbols)
+    processing_times = build_watchlist_processing_times(snapshot, favorite_symbols)
+    statuses = build_watchlist_data_statuses(service, favorite_symbols, processing_times=processing_times)
     render_watchlist_data_status(statuses)
 
     report_previews = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
@@ -196,6 +206,10 @@ def _render_watchlist_status_card(status: WatchlistDataStatus) -> str:
         f"<span>{escape(label)} <strong>{escape(_format_status_date(value))}</strong></span>"
         for label, value in fields
     )
+    time_items = (
+        f"<span>수집 저장 <strong>{escape(_format_status_timestamp(status.collection_created_at))}</strong></span>"
+        f"<span>분석 생성 <strong>{escape(_format_status_timestamp(status.analysis_created_at))}</strong></span>"
+    )
     return f"""
         <article class="watchlist-status-card{state_class}">
           <div class="watchlist-status-card__heading">
@@ -204,6 +218,7 @@ def _render_watchlist_status_card(status: WatchlistDataStatus) -> str:
           </div>
           <p>{escape(status.detail)}</p>
           <div class="watchlist-status-card__dates">{date_items}</div>
+          <div class="watchlist-status-card__times">{time_items}</div>
         </article>
     """
 
@@ -226,10 +241,16 @@ def build_watchlist_data_statuses(
     favorite_symbols: set[str],
     *,
     today: date | None = None,
+    processing_times: Mapping[str, WatchlistProcessingTimes] | None = None,
 ) -> list[WatchlistDataStatus]:
     target_date = _latest_expected_market_date(today or date.today())
     return [
-        build_watchlist_data_status(service, symbol, target_date=target_date)
+        build_watchlist_data_status(
+            service,
+            symbol,
+            target_date=target_date,
+            processing_times=(processing_times or {}).get(symbol),
+        )
         for symbol in sorted(favorite_symbols)
     ]
 
@@ -239,7 +260,9 @@ def build_watchlist_data_status(
     symbol: str,
     *,
     target_date: date,
+    processing_times: WatchlistProcessingTimes | None = None,
 ) -> WatchlistDataStatus:
+    processing_times = processing_times or WatchlistProcessingTimes()
     daily_date = _load_latest_dataset_date(service, "daily_prices", symbol, ("trade_date", "stck_bsop_date", "date"))
     investor_date = _load_latest_dataset_date(
         service,
@@ -268,6 +291,8 @@ def build_watchlist_data_status(
             indicator_date=indicator_date,
             signal_date=signal_date,
             report_date=report_date,
+            collection_created_at=processing_times.collection_created_at,
+            analysis_created_at=processing_times.analysis_created_at,
         )
 
     assert daily_date is not None
@@ -292,6 +317,8 @@ def build_watchlist_data_status(
             indicator_date=indicator_date,
             signal_date=signal_date,
             report_date=report_date,
+            collection_created_at=processing_times.collection_created_at,
+            analysis_created_at=processing_times.analysis_created_at,
         )
 
     return WatchlistDataStatus(
@@ -303,11 +330,41 @@ def build_watchlist_data_status(
         indicator_date=indicator_date,
         signal_date=signal_date,
         report_date=report_date,
+        collection_created_at=processing_times.collection_created_at,
+        analysis_created_at=processing_times.analysis_created_at,
     )
 
 
 def _format_status_date(value: date | None) -> str:
     return value.isoformat() if value is not None else "없음"
+
+
+def _format_status_timestamp(value: datetime | None) -> str:
+    return compact_datetime(value.isoformat() if value is not None else "")
+
+
+def build_watchlist_processing_times(snapshot, favorite_symbols: set[str]) -> dict[str, WatchlistProcessingTimes]:
+    collection_datasets = {"daily_prices", "investor_daily", "investor_daily_summary"}
+    analysis_datasets = {"daily_prices_indicators", "golden_cross_signals", "market_reports"}
+    collection_times: dict[str, datetime] = {}
+    analysis_times: dict[str, datetime] = {}
+
+    for preview in getattr(snapshot, "raw_previews", []):
+        if preview.symbol not in favorite_symbols or preview.name not in collection_datasets or preview.created_at is None:
+            continue
+        collection_times[preview.symbol] = max(collection_times.get(preview.symbol, preview.created_at), preview.created_at)
+    for preview in getattr(snapshot, "processed_previews", []):
+        if preview.symbol not in favorite_symbols or preview.name not in analysis_datasets or preview.created_at is None:
+            continue
+        analysis_times[preview.symbol] = max(analysis_times.get(preview.symbol, preview.created_at), preview.created_at)
+
+    return {
+        symbol: WatchlistProcessingTimes(
+            collection_created_at=collection_times.get(symbol),
+            analysis_created_at=analysis_times.get(symbol),
+        )
+        for symbol in favorite_symbols
+    }
 
 
 def render_watchlist_overview(

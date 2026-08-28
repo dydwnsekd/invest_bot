@@ -88,6 +88,7 @@ from invest_bot.dashboard.streamlit_reports import (
 )
 from invest_bot.dashboard.streamlit_watchlist import (
     WATCHLIST_SELECTION_KEY,
+    build_watchlist_processing_times,
     build_watchlist_data_statuses,
     build_watchlist_overview_entries,
     refresh_favorite_symbols_if_needed,
@@ -2153,6 +2154,27 @@ def test_watchlist_data_statuses_distinguish_current_data_source_and_output_gaps
     assert "분석, 신호, 리포트" in status_by_symbol["000660"].detail
     assert status_by_symbol["005380"].label == "데이터 갱신 필요"
     assert "최신 영업일(2026-08-21)" in status_by_symbol["005380"].detail
+
+
+def test_watchlist_processing_times_keep_collection_and_analysis_artifacts_separate() -> None:
+    snapshot = SimpleNamespace(
+        raw_previews=[
+            SimpleNamespace(symbol="005930", name="daily_prices", created_at=datetime(2026, 8, 21, 1, 10, tzinfo=UTC)),
+            SimpleNamespace(symbol="005930", name="investor_daily_summary", created_at=datetime(2026, 8, 21, 1, 30, tzinfo=UTC)),
+        ],
+        processed_previews=[
+            SimpleNamespace(symbol="005930", name="daily_prices_indicators", created_at=datetime(2026, 8, 21, 2, 0, tzinfo=UTC)),
+            SimpleNamespace(symbol="005930", name="market_reports", created_at=datetime(2026, 8, 21, 2, 20, tzinfo=UTC)),
+            SimpleNamespace(symbol="000660", name="market_reports", created_at=datetime(2026, 8, 21, 2, 40, tzinfo=UTC)),
+        ],
+    )
+
+    times = build_watchlist_processing_times(snapshot, {"005930", "000660"})
+
+    assert times["005930"].collection_created_at == datetime(2026, 8, 21, 1, 30, tzinfo=UTC)
+    assert times["005930"].analysis_created_at == datetime(2026, 8, 21, 2, 20, tzinfo=UTC)
+    assert times["000660"].collection_created_at is None
+    assert times["000660"].analysis_created_at == datetime(2026, 8, 21, 2, 40, tzinfo=UTC)
 
 
 def test_watchlist_data_status_opens_refresh_with_only_outdated_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
