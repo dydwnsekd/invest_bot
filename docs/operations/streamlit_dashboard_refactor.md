@@ -748,3 +748,18 @@
     - 시장 기준일, 수집 완료 시각, 분석 생성 시각의 형식 및 기준일 불일치 표시를 검증
   - `DESIGN.md` / `docs/tasks/04_dashboard.md`
     - 시간 정보의 의미와 표시 규칙을 현재 구현에 맞게 갱신
+
+### 2026-08-28 / Watchlist processing times
+
+- 배경
+  - 관심종목 카드가 가격·수급·분석·신호·리포트의 시장 기준일만 보여줘, 실제로 해당 종목의 수집과 분석이 언제 저장됐는지 바로 알기 어려웠음
+- 변경 사항
+  - `streamlit_watchlist.py`
+    - 종목별 원천 데이터 artifact의 최근 저장 시각을 `수집 저장`, 지표·신호·리포트 artifact의 최근 저장 시각을 `분석 생성`으로 분리 표시
+    - 저장 시각이 없는 종목은 `-`로 표시해 데이터가 없음을 구분
+  - `streamlit_styles.py`
+    - 기준일과 처리 시각을 시각적으로 분리하는 상태 카드 하단 영역 추가
+  - `tests/test_streamlit_dashboard.py`
+    - 종목별 수집/분석 artifact 시각 집계 회귀 테스트 추가
+  - `DESIGN.md` / `docs/tasks/04_dashboard.md`
+    - 관심종목 처리 시각의 표시 원칙을 현재 구현에 맞게 갱신
