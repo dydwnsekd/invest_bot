@@ -692,6 +692,110 @@ def test_apply_time_window_filters_inclusive_range_after_normalization() -> None
     assert filtered["date"].dt.strftime("%Y-%m-%d").tolist() == ["2026-02-15"]
 
 
+def test_stock_comparison_aligns_common_trading_days_and_indexes_each_symbol() -> None:
+    comparison = streamlit_charts_module.build_stock_comparison_frame(
+        {
+            "삼성전자 (005930)": pd.DataFrame(
+                [
+                    {"date": "2026-01-02", "close": 100},
+                    {"date": "2026-01-03", "close": 110},
+                    {"date": "2026-01-05", "close": 120},
+                ]
+            ),
+            "SK하이닉스 (000660)": pd.DataFrame(
+                [
+                    {"date": "2026-01-02", "close": 50},
+                    {"date": "2026-01-05", "close": 60},
+                ]
+            ),
+        }
+    )
+
+    assert comparison.unavailable_labels == ()
+    assert comparison.frame["date"].dt.strftime("%Y-%m-%d").tolist() == ["2026-01-02", "2026-01-05"]
+
+    indexed = streamlit_charts_module.normalize_stock_comparison_frame(comparison.frame)
+
+    assert indexed["삼성전자 (005930)"].tolist() == [100.0, 120.0]
+    assert indexed["SK하이닉스 (000660)"].tolist() == [100.0, 120.0]
+
+
+def test_stock_comparison_reports_symbols_without_usable_close_prices() -> None:
+    comparison = streamlit_charts_module.build_stock_comparison_frame(
+        {
+            "삼성전자 (005930)": pd.DataFrame([{"date": "2026-01-02", "close": 100}]),
+            "데이터 없음 (999999)": pd.DataFrame([{"date": "2026-01-02", "volume": 1000}]),
+        }
+    )
+
+    assert comparison.unavailable_labels == ("데이터 없음 (999999)",)
+    assert comparison.frame.columns.tolist() == ["date", "삼성전자 (005930)"]
+
+
+def test_render_data_tab_compares_selected_symbols_from_saved_daily_price_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(selected_value="005930", multiselect_values=["005930", "000660"])
+    monkeypatch.setattr(streamlit_data_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_data_module, "render_dataset_summary_card", lambda *args, **kwargs: None)
+
+    rendered: list[tuple[object, str]] = []
+    monkeypatch.setattr(streamlit_data_module, "build_stock_comparison_chart", lambda frame, **kwargs: frame.copy())
+    monkeypatch.setattr(
+        streamlit_data_module,
+        "render_chart",
+        lambda chart, *, key_prefix: rendered.append((chart, key_prefix)),
+    )
+    previews = [
+        _make_dataset_preview("daily_prices", "005930", "삼성전자", "005930_prices.csv"),
+        _make_dataset_preview("daily_prices", "000660", "SK하이닉스", "000660_prices.csv"),
+    ]
+    frames = {
+        "005930": pd.DataFrame(
+            [
+                {"date": "2026-01-02", "close": 100},
+                {"date": "2026-01-05", "close": 120},
+            ]
+        ),
+        "000660": pd.DataFrame(
+            [
+                {"date": "2026-01-02", "close": 50},
+                {"date": "2026-01-05", "close": 60},
+            ]
+        ),
+    }
+
+    streamlit_data_module.render_data_tab(
+        SimpleNamespace(raw_previews=previews, processed_previews=[]),
+        DashboardDataService(),
+        read_preview_frame=lambda preview: frames[preview.symbol],
+    )
+
+    assert "비교할 종목 (2~3개)" in fake_st.multiselect_labels
+    assert "비교 기준" in fake_st.radio_labels
+    assert rendered[0][1] == "data_comparison"
+    rendered_frame = rendered[0][0]
+    assert rendered_frame["삼성전자 (005930)"].tolist() == [100.0, 120.0]
+    assert rendered_frame["SK하이닉스 (000660)"].tolist() == [100.0, 120.0]
+    assert any("저장된 데이터만 조회합니다" in message for message in fake_st.caption_calls)
+
+
+def test_render_data_tab_explains_that_stock_comparison_needs_two_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(selected_value="005930", multiselect_values=["005930"])
+    monkeypatch.setattr(streamlit_data_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_data_module, "render_dataset_summary_card", lambda *args, **kwargs: None)
+    previews = [
+        _make_dataset_preview("daily_prices", "005930", "삼성전자", "005930_prices.csv"),
+        _make_dataset_preview("daily_prices", "000660", "SK하이닉스", "000660_prices.csv"),
+    ]
+
+    streamlit_data_module.render_data_tab(
+        SimpleNamespace(raw_previews=previews, processed_previews=[]),
+        DashboardDataService(),
+        read_preview_frame=lambda _preview: pd.DataFrame([{"date": "2026-01-02", "close": 100}]),
+    )
+
+    assert fake_st.info_messages == ["비교할 종목을 2개 이상 선택해 주세요."]
+
+
 def test_build_chart_uses_plotly_library_for_close_ma_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeFigure:
         def __init__(self):

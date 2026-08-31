@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from typing import Mapping
 
 import altair as alt
 import pandas as pd
@@ -128,6 +129,13 @@ NORMALIZED_STOCK_COLUMN_MAP = {
     "acml_vol": "volume",
 }
 FLOW_ROW_TITLE = "수급"
+COMPARISON_COLOR_RANGE = ["#38bdf8", "#f59e0b", "#a78bfa"]
+
+
+@dataclass(frozen=True, slots=True)
+class StockComparisonData:
+    frame: pd.DataFrame
+    unavailable_labels: tuple[str, ...] = ()
 
 
 def available_chart_presets(dataset_name: str, frame: pd.DataFrame) -> list[ChartPreset]:
@@ -381,6 +389,103 @@ def apply_time_window(
     start_date, end_date = normalize_range_dates(range_dates, min_date=min_date, max_date=max_date)
     mask = normalized["date"].dt.date.between(start_date, end_date)
     return normalized.loc[mask].reset_index(drop=True)
+
+
+def build_stock_comparison_frame(price_frames: Mapping[str, pd.DataFrame]) -> StockComparisonData:
+    """Align usable close-price series on dates shared by every selected symbol."""
+
+    merged: pd.DataFrame | None = None
+    unavailable_labels: list[str] = []
+
+    for label, source_frame in price_frames.items():
+        normalized = prepare_time_series_frame(source_frame, max_points=len(source_frame))
+        if normalized.empty or "close" not in normalized.columns:
+            unavailable_labels.append(label)
+            continue
+
+        series = (
+            normalized.loc[:, ["date", "close"]]
+            .assign(close=lambda frame: pd.to_numeric(frame["close"], errors="coerce"))
+            .dropna(subset=["date", "close"])
+            .drop_duplicates(subset=["date"], keep="last")
+            .rename(columns={"close": label})
+        )
+        if series.empty:
+            unavailable_labels.append(label)
+            continue
+
+        merged = series if merged is None else merged.merge(series, on="date", how="inner")
+
+    if merged is None:
+        return StockComparisonData(frame=pd.DataFrame(columns=["date"]), unavailable_labels=tuple(unavailable_labels))
+    return StockComparisonData(
+        frame=merged.sort_values("date").reset_index(drop=True),
+        unavailable_labels=tuple(unavailable_labels),
+    )
+
+
+def normalize_stock_comparison_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """Convert each selected series to an index whose first shared day equals 100."""
+
+    if frame.empty:
+        return frame.copy()
+
+    normalized = frame.copy()
+    for column in comparison_value_columns(normalized):
+        start_value = pd.to_numeric(normalized[column], errors="coerce").iloc[0]
+        if pd.isna(start_value) or start_value == 0:
+            return pd.DataFrame(columns=frame.columns)
+        normalized[column] = pd.to_numeric(normalized[column], errors="coerce") / start_value * 100
+    return normalized
+
+
+def comparison_value_columns(frame: pd.DataFrame) -> list[str]:
+    return [column for column in frame.columns if column != "date"]
+
+
+def build_stock_comparison_chart(
+    frame: pd.DataFrame,
+    *,
+    basis: str,
+    height: int = 360,
+    library: str | None = None,
+):
+    columns = comparison_value_columns(frame)
+    if frame.empty or len(columns) < 2:
+        return None
+
+    resolved_library = library or preferred_chart_library()
+    if resolved_library == "plotly" and go is not None:
+        figure = go.Figure()
+        for index, column in enumerate(columns):
+            figure.add_trace(
+                go.Scatter(
+                    x=frame["date"],
+                    y=frame[column],
+                    mode="lines",
+                    name=column,
+                    line=dict(width=2.4, color=COMPARISON_COLOR_RANGE[index % len(COMPARISON_COLOR_RANGE)]),
+                    hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:,.2f}<extra></extra>",
+                )
+            )
+        yaxis_title = "기준값 100" if basis == "indexed" else "종가 (원)"
+        apply_plotly_interaction_layout(figure, height=height, yaxis_title=yaxis_title)
+        return figure
+
+    long_frame = frame.melt(id_vars="date", value_vars=columns, var_name="종목", value_name="값")
+    y_title = "기준값 100" if basis == "indexed" else "종가 (원)"
+    return (
+        alt.Chart(long_frame)
+        .mark_line(point=False)
+        .encode(
+            x=alt.X("date:T", title="날짜"),
+            y=alt.Y("값:Q", title=y_title),
+            color=alt.Color("종목:N", scale=alt.Scale(range=COMPARISON_COLOR_RANGE)),
+            tooltip=[alt.Tooltip("date:T", title="날짜"), alt.Tooltip("종목:N", title="종목"), alt.Tooltip("값:Q", title=y_title, format=",.2f")],
+        )
+        .properties(height=height)
+        .interactive()
+    )
 
 
 def infer_date_column(frame: pd.DataFrame) -> str | None:

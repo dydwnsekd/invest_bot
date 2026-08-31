@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 from html import escape
-
 from typing import Iterable
 
 import streamlit as st
 
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
-from invest_bot.dashboard.streamlit_charts import render_chart_selector
+from invest_bot.dashboard.streamlit_charts import (
+    apply_time_window,
+    build_stock_comparison_chart,
+    build_stock_comparison_frame,
+    normalize_stock_comparison_frame,
+    render_chart,
+    render_chart_selector,
+    render_range_controls,
+    resolve_range_state,
+)
 from invest_bot.dashboard.streamlit_formatters import format_frame_for_display, format_symbol_display
 from invest_bot.dashboard.streamlit_state import load_professional_chart_frame_for_symbol
 
@@ -63,6 +71,8 @@ def render_data_tab(snapshot, service: DashboardDataService, *, read_preview_fra
             unsafe_allow_html=True,
         )
 
+    render_stock_comparison_section(previews, read_preview_frame=read_preview_frame)
+
     for preview in selected_previews:
         render_dataset_summary_card(preview, service, read_preview_frame=read_preview_frame)
 
@@ -97,6 +107,103 @@ def previews_for_symbol(previews: Iterable[DatasetPreview], symbol: str) -> list
     if matched:
         return matched
     return list(previews)
+
+
+def latest_daily_price_previews(previews: Iterable[DatasetPreview]) -> dict[str, DatasetPreview]:
+    latest_by_symbol: dict[str, DatasetPreview] = {}
+    for preview in previews:
+        symbol = normalized_preview_symbol(preview)
+        if preview.name != "daily_prices" or symbol == "__COMMON__":
+            continue
+        current = latest_by_symbol.get(symbol)
+        if current is None or _preview_recency_key(preview) > _preview_recency_key(current):
+            latest_by_symbol[symbol] = preview
+    return latest_by_symbol
+
+
+def _preview_recency_key(preview: DatasetPreview) -> tuple[float, str]:
+    created_at = preview.created_at
+    timestamp = created_at.timestamp() if created_at is not None else float("-inf")
+    return (timestamp, preview.path.name)
+
+
+def comparison_default_symbols(symbol_options: list[str], selected_symbol: str) -> list[str]:
+    defaults = [selected_symbol] if selected_symbol in symbol_options else []
+    defaults.extend(symbol for symbol in symbol_options if symbol not in defaults)
+    return defaults[:2]
+
+
+def render_stock_comparison_section(previews: Iterable[DatasetPreview], *, read_preview_frame) -> None:
+    daily_previews = latest_daily_price_previews(previews)
+    symbol_options = list(daily_previews)
+    if len(symbol_options) < 2:
+        return
+
+    with st.container(border=True):
+        st.markdown("#### 종목 비교")
+        st.caption("같은 거래일의 종가를 기준으로 최대 3개 종목의 흐름을 비교합니다. 이 화면은 저장된 데이터만 조회합니다.")
+        selected_symbol = st.session_state.get("data_symbol_filter", symbol_options[0])
+        selected_symbols = st.multiselect(
+            "비교할 종목 (2~3개)",
+            options=symbol_options,
+            default=comparison_default_symbols(symbol_options, selected_symbol),
+            format_func=lambda symbol: format_symbol_option(symbol, daily_previews.values()),
+            max_selections=3,
+            key="data_comparison_symbols",
+        )
+        if len(selected_symbols) < 2:
+            st.info("비교할 종목을 2개 이상 선택해 주세요.")
+            return
+
+        price_frames = {
+            format_symbol_option(symbol, daily_previews.values()): read_preview_frame(daily_previews[symbol])
+            for symbol in selected_symbols
+        }
+        comparison = build_stock_comparison_frame(price_frames)
+        if comparison.unavailable_labels:
+            st.warning(
+                "종가 또는 날짜 데이터가 부족해 비교에서 제외했습니다: "
+                + ", ".join(comparison.unavailable_labels)
+            )
+        if len(comparison.frame.columns) < 3:
+            st.info("공통 거래일을 가진 종목 2개 이상이 있어야 비교 차트를 표시할 수 있습니다.")
+            return
+        if comparison.frame.empty:
+            st.info("선택한 종목 사이에 공통 거래일이 없어 비교 차트를 표시할 수 없습니다.")
+            return
+
+        selected_preset, selected_dates = render_range_controls(comparison.frame, key_prefix="data_comparison")
+        range_state = resolve_range_state(
+            comparison.frame,
+            key_prefix="data_comparison",
+            selected_preset=selected_preset,
+            selected_dates=selected_dates,
+        )
+        filtered_frame = apply_time_window(comparison.frame, range_state.dates)
+        basis = st.radio(
+            "비교 기준",
+            options=["indexed", "price"],
+            index=0,
+            format_func=lambda value: "시작일 = 100" if value == "indexed" else "원가격 종가",
+            horizontal=True,
+            key="data_comparison_basis",
+        )
+        chart_frame = normalize_stock_comparison_frame(filtered_frame) if basis == "indexed" else filtered_frame
+        if chart_frame.empty:
+            st.info("선택한 기간의 시작 종가를 기준값으로 바꿀 수 없어 비교 차트를 표시할 수 없습니다.")
+            return
+
+        st.caption(
+            f"실제 비교 기간: {range_state.dates[0].isoformat()} ~ {range_state.dates[1].isoformat()} · "
+            f"공통 거래일 {len(chart_frame)}일"
+        )
+        if basis == "indexed":
+            st.caption("시작일 = 100: 선택 기간 첫 공통 거래일의 종가를 100으로 환산한 상대 흐름입니다.")
+        else:
+            st.caption("원가격 종가: 종목별 실제 종가(원)입니다. 가격대가 다른 종목은 변화율보다 절대 가격 차이가 크게 보일 수 있습니다.")
+        chart = build_stock_comparison_chart(chart_frame, basis=basis, height=360)
+        if chart is not None:
+            render_chart(chart, key_prefix="data_comparison")
 
 
 def render_dataset_summary_card(preview: DatasetPreview, service: DashboardDataService, *, read_preview_frame) -> None:
