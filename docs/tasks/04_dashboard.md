@@ -28,6 +28,7 @@
 - [x] 보조 라벨 글자 크기와 가격·날짜·지표 숫자 정렬 가독성 개선
 - [x] 해석 모아보기와 전략 판단 근거 카드 UI 줄바꿈 처리
 - [x] 투자 리포트 / 데이터 보기 탭 공통 인터랙티브 차트와 조회 기간 조절
+- [x] 데이터 보기 탭에서 최대 3개 종목의 공통 거래일 종가를 시작일 100 또는 원가격 기준으로 비교
 - [x] stock dataset용 전문가형 주가 차트(일봉/주봉/월봉, 수급 panel fallback 포함)
 - [x] 리포트 즐겨찾기 저장
 - [x] 관심종목 전용 탭 추가
@@ -53,7 +54,6 @@
 
 ## 남은 항목
 
-- [ ] 종목 비교 차트
 - [ ] 일별 mark-to-market equity curve
 - [ ] 백테스트 artifact history / reload
 - [ ] 전략 파라미터 튜닝 진입 UX
@@ -305,8 +305,6 @@
 ## 현재 잔여 작업
 
 - 사용자/account ownership이 필요한 shared watchlist 확장 여부 결정
-- 종목 비교 차트
-- 최신 수집/분석 시각 강조
 - 일별 mark-to-market equity curve
 - 백테스트 artifact history / reload
 - 전략 파라미터 튜닝 진입 UX
