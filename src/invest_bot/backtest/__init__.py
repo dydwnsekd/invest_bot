@@ -15,7 +15,13 @@ from .readiness import (
     build_run_readiness_gate,
     check_backtest_readiness,
 )
-from .runner import BacktestResult, DEFAULT_BACKTEST_RUNNER, NormalizedSignalBacktestRunner
+from .runner import (
+    DEFAULT_BACKTEST_RUNNER,
+    DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
+    BacktestResult,
+    NormalizedSignalBacktestRunner,
+    build_daily_mark_to_market_equity_curve,
+)
 from .strategy_registry import (
     BACKTEST_STRATEGY_IDS,
     BACKTEST_STRATEGY_SPECS,
@@ -36,12 +42,14 @@ __all__ = [
     "BacktestStrategySpec",
     "DEFAULT_BACKTEST_ADAPTER_REGISTRY",
     "DEFAULT_BACKTEST_RUNNER",
+    "DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY",
     "DatasetRequirement",
     "GOLDEN_CROSS_SIGNALS",
     "NormalizedSignalBacktestRunner",
     "RunReadinessGate",
     "StrategyReadiness",
     "build_run_readiness_gate",
+    "build_daily_mark_to_market_equity_curve",
     "build_strategy_signal_rows",
     "check_backtest_readiness",
     "get_backtest_strategy_spec",

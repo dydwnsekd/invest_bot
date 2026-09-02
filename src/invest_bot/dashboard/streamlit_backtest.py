@@ -12,6 +12,8 @@ import streamlit as st
 from invest_bot.backtest import (
     DEFAULT_BACKTEST_ADAPTER_REGISTRY,
     DEFAULT_BACKTEST_RUNNER,
+    DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
+    build_daily_mark_to_market_equity_curve,
     check_backtest_readiness,
     list_backtest_strategy_specs,
 )
@@ -375,6 +377,7 @@ def _execute_backtests(
 ) -> dict[str, object]:
     summaries: list[pd.DataFrame] = []
     trades: list[pd.DataFrame] = []
+    daily_equity_curves: list[pd.DataFrame] = []
     batch_now = datetime.now(UTC)
 
     for item in selected_items:
@@ -393,11 +396,22 @@ def _execute_backtests(
             summary["symbol_name"] = item.symbol_name
             trade_frame = enrich_trades(raw_result.trades, context)
             trade_frame["symbol_name"] = item.symbol_name
+            daily_equity_curve = build_daily_mark_to_market_equity_curve(
+                adapter_output.signal_rows,
+                raw_result.trades,
+            )
+            daily_equity_curve["symbol"] = item.symbol
+            daily_equity_curve["symbol_name"] = item.symbol_name
+            daily_equity_curve["strategy_id"] = adapter_output.strategy_id
+            daily_equity_curve["strategy_name"] = adapter_output.strategy_name
+            daily_equity_curve["series_label"] = f"{item.symbol_name or item.symbol} · {adapter_output.strategy_name}"
             summaries.append(summary)
             trades.append(trade_frame)
+            daily_equity_curves.append(daily_equity_curve)
 
     summary_frame = pd.concat(summaries, ignore_index=True) if summaries else pd.DataFrame()
     trade_frame = pd.concat(trades, ignore_index=True) if trades else pd.DataFrame()
+    daily_equity_frame = pd.concat(daily_equity_curves, ignore_index=True) if daily_equity_curves else pd.DataFrame()
     comparison_frame = _build_comparison_frame(summary_frame)
     chart_frame = _build_cumulative_trade_return_frame(trade_frame)
 
@@ -406,6 +420,7 @@ def _execute_backtests(
         "comparison_frame": comparison_frame,
         "trade_frame": trade_frame,
         "chart_frame": chart_frame,
+        "daily_equity_frame": daily_equity_frame,
         "selected_symbols": [item.symbol for item in selected_items],
         "selected_strategy_ids": list(selected_strategy_ids),
         "generated_at": batch_now.isoformat(),
@@ -511,6 +526,7 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
     comparison_frame = result_bundle.get("comparison_frame")
     trade_frame = result_bundle.get("trade_frame")
     chart_frame = result_bundle.get("chart_frame")
+    daily_equity_frame = result_bundle.get("daily_equity_frame")
 
     st.markdown("#### 전략 요약 카드")
     if isinstance(summary_frame, pd.DataFrame) and not summary_frame.empty:
@@ -559,6 +575,37 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
         st.altair_chart(chart, width="stretch")
     else:
         st.info("완료된 거래가 없어 누적 수익률 차트를 아직 그릴 수 없습니다.")
+
+    st.markdown("#### 일별 평가금액")
+    st.caption(
+        f"가상 초기자금 {format_number(DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY)}원 · "
+        "신호 다음 거래일 종가 체결 · 수수료·세금·슬리피지 미반영"
+    )
+    if isinstance(daily_equity_frame, pd.DataFrame) and not daily_equity_frame.empty:
+        start_date = pd.to_datetime(daily_equity_frame["date"], errors="coerce").min()
+        end_date = pd.to_datetime(daily_equity_frame["date"], errors="coerce").max()
+        if pd.notna(start_date) and pd.notna(end_date):
+            st.caption(f"평가 기간: {start_date.date().isoformat()} ~ {end_date.date().isoformat()} · 종목·전략별 개별 평가")
+        daily_equity_chart = (
+            alt.Chart(daily_equity_frame)
+            .mark_line()
+            .encode(
+                x=alt.X("date:T", title="거래일"),
+                y=alt.Y("equity:Q", title="평가금액(원)"),
+                color=alt.Color("series_label:N", title="전략"),
+                tooltip=[
+                    alt.Tooltip("date:T", title="거래일"),
+                    alt.Tooltip("series_label:N", title="종목 · 전략"),
+                    alt.Tooltip("equity:Q", title="평가금액(원)", format=",.0f"),
+                    alt.Tooltip("equity_return_pct:Q", title="누적 수익률(%)", format=".2f"),
+                    alt.Tooltip("position_state:N", title="상태"),
+                ],
+            )
+            .properties(height=320)
+        )
+        st.altair_chart(daily_equity_chart, width="stretch")
+    else:
+        st.info("평가할 일별 가격 데이터가 없어 일별 평가금액 차트를 아직 그릴 수 없습니다.")
 
     st.markdown("#### 거래 로그")
     if isinstance(trade_frame, pd.DataFrame) and not trade_frame.empty:

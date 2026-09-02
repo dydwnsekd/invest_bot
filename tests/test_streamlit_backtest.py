@@ -255,13 +255,16 @@ def test_render_backtest_tab_runs_and_renders_result_sections(monkeypatch: pytes
     assert not result_bundle["comparison_frame"].empty
     assert not result_bundle["trade_frame"].empty
     assert not result_bundle["chart_frame"].empty
+    assert not result_bundle["daily_equity_frame"].empty
     assert fake_st.dataframe_calls >= 3
-    assert len(fake_st.altair_chart_calls) == 1
+    assert len(fake_st.altair_chart_calls) == 2
     assert any("전략 요약 카드" in body for body in fake_st.markdown_calls)
     assert any("backtest-result-interpretation" in body for body in fake_st.markdown_calls)
     assert any("전략 비교표" in body for body in fake_st.markdown_calls)
     assert any("거래 순서 누적 수익률" in body for body in fake_st.markdown_calls)
+    assert any("일별 평가금액" in body for body in fake_st.markdown_calls)
     assert any("거래 로그" in body for body in fake_st.markdown_calls)
+    assert any("수수료·세금·슬리피지 미반영" in body for body in fake_st.caption_calls)
 
 
 def test_build_backtest_result_interpretation_explains_sample_and_risk() -> None:

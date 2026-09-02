@@ -5,6 +5,11 @@ from dataclasses import dataclass
 import pandas as pd
 
 
+DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY = 1_000_000.0
+DAILY_EQUITY_COLUMNS = ["date", "equity", "equity_return_pct", "position_state"]
+MARK_TO_MARKET_TRADE_COLUMNS = ("entry_date", "entry_price", "exit_date", "exit_price")
+
+
 @dataclass(slots=True)
 class BacktestResult:
     trades: pd.DataFrame
@@ -160,6 +165,92 @@ class NormalizedSignalBacktestRunner:
 
 
 DEFAULT_BACKTEST_RUNNER = NormalizedSignalBacktestRunner()
+
+
+def build_daily_mark_to_market_equity_curve(
+    signal_rows: pd.DataFrame,
+    trades: pd.DataFrame,
+    *,
+    initial_equity: float = DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
+) -> pd.DataFrame:
+    """Value one fully invested position at each signal-row close without trading costs."""
+
+    price_frame = _normalized_price_frame(signal_rows)
+    if price_frame.empty:
+        return pd.DataFrame(columns=DAILY_EQUITY_COLUMNS)
+
+    trade_rows = _normalized_trade_rows(trades)
+    closed_equity = float(initial_equity)
+    trade_index = 0
+    active_trade: pd.Series | None = None
+    active_trade_base_equity = closed_equity
+    rows: list[dict[str, object]] = []
+
+    for _, price_row in price_frame.iterrows():
+        current_date = pd.Timestamp(price_row["date"])
+        current_close = float(price_row["close"])
+
+        if active_trade is None and trade_index < len(trade_rows):
+            candidate = trade_rows.iloc[trade_index]
+            if current_date >= candidate["entry_date"]:
+                active_trade = candidate
+                active_trade_base_equity = closed_equity
+
+        equity = closed_equity
+        position_state = "현금"
+        if active_trade is not None:
+            equity = active_trade_base_equity * (current_close / float(active_trade["entry_price"]))
+            position_state = "보유"
+            if current_date >= active_trade["exit_date"]:
+                closed_equity = equity
+                position_state = "청산"
+                active_trade = None
+                trade_index += 1
+
+        rows.append(
+            {
+                "date": current_date,
+                "equity": equity,
+                "equity_return_pct": ((equity / float(initial_equity)) - 1.0) * 100.0,
+                "position_state": position_state,
+            }
+        )
+
+    return pd.DataFrame(rows, columns=DAILY_EQUITY_COLUMNS)
+
+
+def _normalized_price_frame(signal_rows: pd.DataFrame) -> pd.DataFrame:
+    if signal_rows.empty or not {"date", "close"}.issubset(signal_rows.columns):
+        return pd.DataFrame(columns=["date", "close"])
+    return (
+        signal_rows.loc[:, ["date", "close"]]
+        .assign(
+            date=lambda frame: pd.to_datetime(frame["date"], errors="coerce"),
+            close=lambda frame: pd.to_numeric(frame["close"], errors="coerce"),
+        )
+        .dropna(subset=["date", "close"])
+        .drop_duplicates(subset=["date"], keep="last")
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+
+
+def _normalized_trade_rows(trades: pd.DataFrame) -> pd.DataFrame:
+    if trades.empty or not set(MARK_TO_MARKET_TRADE_COLUMNS).issubset(trades.columns):
+        return pd.DataFrame(columns=list(MARK_TO_MARKET_TRADE_COLUMNS))
+    return (
+        trades.loc[:, list(MARK_TO_MARKET_TRADE_COLUMNS)]
+        .assign(
+            entry_date=lambda frame: pd.to_datetime(frame["entry_date"], errors="coerce"),
+            exit_date=lambda frame: pd.to_datetime(frame["exit_date"], errors="coerce"),
+            entry_price=lambda frame: pd.to_numeric(frame["entry_price"], errors="coerce"),
+            exit_price=lambda frame: pd.to_numeric(frame["exit_price"], errors="coerce"),
+        )
+        .dropna(subset=list(MARK_TO_MARKET_TRADE_COLUMNS))
+        .loc[lambda frame: frame["entry_price"] > 0]
+        .sort_values(["entry_date", "exit_date"])
+        .reset_index(drop=True)
+    )
 
 
 def _first_present(series: pd.Series | None) -> object | None:

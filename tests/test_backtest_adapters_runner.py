@@ -6,7 +6,9 @@ import pytest
 from invest_bot.backtest import (
     BacktestDataReadinessError,
     DEFAULT_BACKTEST_RUNNER,
+    DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
     GOLDEN_CROSS_SIGNALS,
+    build_daily_mark_to_market_equity_curve,
     build_strategy_signal_rows,
 )
 from invest_bot.backtest.strategy_registry import DAILY_PRICES_INDICATORS, INVESTOR_DAILY
@@ -217,3 +219,39 @@ def test_runner_preserves_next_day_close_semantics_and_final_close() -> None:
     assert result.trades.iloc[1]["exit_reason"] == "final_close"
     assert result.summary.iloc[0]["strategy_id"] == "golden-cross"
     assert result.summary.iloc[0]["trade_count"] == 2
+
+    equity_curve = build_daily_mark_to_market_equity_curve(rows, result.trades)
+
+    assert equity_curve["date"].dt.strftime("%Y-%m-%d").tolist() == [
+        "2026-04-01",
+        "2026-04-02",
+        "2026-04-03",
+        "2026-04-04",
+        "2026-04-05",
+        "2026-04-06",
+        "2026-04-07",
+    ]
+    assert equity_curve["position_state"].tolist() == ["현금", "현금", "보유", "보유", "청산", "현금", "청산"]
+    assert equity_curve.iloc[0]["equity"] == pytest.approx(DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY)
+    assert equity_curve.iloc[-1]["equity"] == pytest.approx(
+        DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY * (1 + (result.summary.iloc[0]["total_return_pct"] / 100))
+    )
+
+
+def test_daily_mark_to_market_curve_stays_flat_without_completed_trades() -> None:
+    signal_rows = pd.DataFrame(
+        [
+            {"date": "2026-04-01", "close": 100, "signal": "hold"},
+            {"date": "2026-04-02", "close": 110, "signal": "hold"},
+            {"date": "2026-04-03", "close": 90, "signal": "hold"},
+        ]
+    )
+
+    equity_curve = build_daily_mark_to_market_equity_curve(signal_rows, pd.DataFrame())
+
+    assert equity_curve["equity"].tolist() == [
+        DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
+        DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
+        DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
+    ]
+    assert equity_curve["position_state"].tolist() == ["현금", "현금", "현금"]
