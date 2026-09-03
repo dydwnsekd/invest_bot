@@ -120,6 +120,7 @@
   - 관심종목 상태 카드의 기준일과 마지막 수집 저장·분석 생성 시각.
   - 백테스트 flow, selection, readiness, result cards.
   - 백테스트 결과 해석 문장.
+  - 백테스트 거래 순서 누적 수익률과 분리된 일별 평가금액 곡선, 초기자금·체결·비용 가정 안내.
 - Variants and states:
   - selected navigation: 왼쪽 강조선 + 밝은 텍스트.
   - empty/error/success: Streamlit status primitives 사용.

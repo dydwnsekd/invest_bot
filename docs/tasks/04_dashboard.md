@@ -37,6 +37,7 @@
 - [x] `준비 확인 -> 준비 실행 -> 백테스트 실행 -> 결과 확인` 흐름 추가
 - [x] 준비 상태 panel과 전략별 차단 사유 표시
 - [x] 백테스트 결과 요약 카드 / 비교표 / 거래 순서 누적 수익률 차트 / 거래 로그 표시
+- [x] 백테스트 일별 평가금액 곡선과 초기자금·체결 기준·비용 미반영 가정 표시
 - [x] 테스트 결과 표시
 - [x] 데이터 수집 실행
 - [x] 데이터 갱신 / 백테스트 준비 / CLI / 스케줄러 수집 기본일수 365일 통일
@@ -54,7 +55,6 @@
 
 ## 남은 항목
 
-- [ ] 일별 mark-to-market equity curve
 - [ ] 백테스트 artifact history / reload
 - [ ] 전략 파라미터 튜닝 진입 UX
 - [ ] 포트폴리오 / multi-symbol aggregation view
@@ -305,7 +305,6 @@
 ## 현재 잔여 작업
 
 - 사용자/account ownership이 필요한 shared watchlist 확장 여부 결정
-- 일별 mark-to-market equity curve
 - 백테스트 artifact history / reload
 - 전략 파라미터 튜닝 진입 UX
 - 포트폴리오 / multi-symbol aggregation view
