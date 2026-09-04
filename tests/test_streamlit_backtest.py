@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -7,7 +9,7 @@ import pytest
 
 import invest_bot.dashboard.streamlit_backtest as streamlit_backtest_module
 import invest_bot.dashboard.streamlit_dashboard as streamlit_dashboard_module
-from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
 from invest_bot.dashboard.streamlit_backtest import (
     BACKTEST_RESULTS_KEY,
     LoadedBacktestInputs,
@@ -63,9 +65,16 @@ class _FakeSessionState(dict):
 
 
 class _FakeStreamlit:
-    def __init__(self, *, multiselect_queue: list[list[str]] | None = None, button_values: dict[str, bool] | None = None):
+    def __init__(
+        self,
+        *,
+        multiselect_queue: list[list[str]] | None = None,
+        button_values: dict[str, bool] | None = None,
+        selectbox_values: dict[str, str] | None = None,
+    ):
         self.multiselect_queue = list(multiselect_queue or [])
         self.button_values = button_values or {}
+        self.selectbox_values = selectbox_values or {}
         self.session_state = _FakeSessionState()
         self.warning_messages: list[str] = []
         self.info_messages: list[str] = []
@@ -78,6 +87,7 @@ class _FakeStreamlit:
         self.button_labels: list[str] = []
         self.number_input_labels: list[str] = []
         self.date_input_labels: list[str] = []
+        self.selectbox_labels: list[str] = []
         self.dataframe_calls = 0
         self.altair_chart_calls: list[object] = []
 
@@ -115,6 +125,13 @@ class _FakeStreamlit:
 
     def number_input(self, label: str, value=0, key: str | None = None, **kwargs):
         self.number_input_labels.append(label)
+        if key is not None:
+            self.session_state[key] = value
+        return value
+
+    def selectbox(self, label: str, options: list[str], index: int = 0, key: str | None = None, **kwargs):
+        self.selectbox_labels.append(label)
+        value = self.selectbox_values.get(key or label, options[index])
         if key is not None:
             self.session_state[key] = value
         return value
@@ -189,7 +206,7 @@ def test_render_backtest_tab_shows_blocked_feedback_for_unready_selection(monkey
         symbol_lookup=SimpleNamespace(list_entries=lambda: [SymbolEntry(symbol="005930", symbol_name="삼성전자")]),
     )
 
-    assert fake_st.multiselect_labels == ["종목 선택", "전략 선택"]
+    assert fake_st.multiselect_labels[:2] == ["종목 선택", "전략 선택"]
     assert fake_st.session_state["action_message_type"] == "warning"
     assert "백테스트 실행 차단" in str(fake_st.session_state["action_message"])
     assert BACKTEST_RESULTS_KEY not in fake_st.session_state
@@ -418,6 +435,195 @@ def test_execute_backtests_reuses_one_batch_run_group_id(monkeypatch: pytest.Mon
     }
     assert result["generated_at"] == "2026-07-20T01:02:03+00:00"
     assert _SteppedDateTime.calls == 1
+
+
+class _FakeHistoryStorage:
+    def __init__(self, frames: dict[tuple[str, str], pd.DataFrame]) -> None:
+        self.frames = frames
+        self.root_dir = Path("/virtual/history")
+
+    def load(self, dataset: str, filename: str) -> pd.DataFrame:
+        try:
+            return self.frames[(dataset, filename)].copy()
+        except KeyError as error:
+            raise FileNotFoundError(filename) from error
+
+
+def _history_preview(dataset: str, filename: str, *, created_at: datetime) -> DatasetPreview:
+    return DatasetPreview(
+        name=dataset,
+        display_name=dataset,
+        path=Path("/virtual/history") / dataset / filename,
+        row_count=1,
+        columns=[],
+        summary="",
+        purpose="",
+        first_look="",
+        symbol="005930",
+        symbol_name="삼성전자",
+        recommended_columns=[],
+        created_at=created_at,
+    )
+
+
+def test_saved_backtest_history_loads_same_summary_trades_and_daily_equity(monkeypatch: pytest.MonkeyPatch) -> None:
+    older_run_id = "005930_golden-cross_20260720T010203Z"
+    latest_run_id = "005930_golden-cross_20260721T020304Z"
+    summaries_filename = "005930_backtest_summaries.csv"
+    trades_filename = f"{latest_run_id}_backtest_trades.csv"
+    signal_filename = "005930_signal.csv"
+    summary_frame = pd.DataFrame(
+        [
+            {
+                "run_id": older_run_id,
+                "run_group_id": "backtest_group_20260720T010203Z",
+                "symbol": "005930",
+                "strategy_id": "golden-cross",
+                "strategy_name": "Golden Cross",
+                "total_return_pct": 3.0,
+                "trade_count": 1,
+                "win_rate_pct": 100.0,
+                "signal_source_dataset": "golden_cross_signals",
+                "signal_source_filename": signal_filename,
+            },
+            {
+                "run_id": latest_run_id,
+                "run_group_id": "backtest_group_20260721T020304Z",
+                "symbol": "005930",
+                "strategy_id": "golden-cross",
+                "strategy_name": "Golden Cross",
+                "total_return_pct": 5.9,
+                "trade_count": 1,
+                "win_rate_pct": 100.0,
+                "signal_source_dataset": "golden_cross_signals",
+                "signal_source_filename": signal_filename,
+            },
+        ]
+    )
+    trade_frame = pd.DataFrame(
+        [
+            {
+                "run_id": latest_run_id,
+                "symbol": "005930",
+                "strategy_id": "golden-cross",
+                "strategy_name": "Golden Cross",
+                "entry_signal_date": "2026-04-02",
+                "entry_date": "2026-04-03",
+                "entry_price": 102.0,
+                "exit_signal_date": "2026-04-04",
+                "exit_date": "2026-04-05",
+                "exit_price": 108.0,
+                "return_pct": 5.8823529412,
+                "holding_days": 2,
+                "exit_reason": "sell_signal",
+            }
+        ]
+    )
+    signal_frame = pd.DataFrame(
+        [
+            {"date": "2026-04-01", "close": 100, "signal": "hold"},
+            {"date": "2026-04-02", "close": 101, "signal": "buy"},
+            {"date": "2026-04-03", "close": 102, "signal": "hold"},
+            {"date": "2026-04-04", "close": 106, "signal": "sell"},
+            {"date": "2026-04-05", "close": 108, "signal": "hold"},
+        ]
+    )
+    storage = _FakeHistoryStorage(
+        {
+            ("backtest_summaries", summaries_filename): summary_frame,
+            ("backtest_trades", trades_filename): trade_frame,
+            ("golden_cross_signals", signal_filename): signal_frame,
+        }
+    )
+    service = DashboardDataService(dataset_storage=storage)
+    previews = {
+        "backtest_summaries": [_history_preview("backtest_summaries", summaries_filename, created_at=datetime(2026, 7, 21, 2, 3, 4, tzinfo=UTC))],
+        "backtest_trades": [_history_preview("backtest_trades", trades_filename, created_at=datetime(2026, 7, 21, 2, 3, 4, tzinfo=UTC))],
+    }
+    monkeypatch.setattr(service, "list_backtest_history_previews", lambda dataset: previews[dataset])
+
+    entries, messages = streamlit_backtest_module._load_backtest_history_entries(service)
+    assert messages == ()
+    assert [entry["run_id"] for entry in entries] == [latest_run_id, older_run_id]
+    assert [entry["run_id"] for entry in streamlit_backtest_module._filter_backtest_history_entries(entries, ["005930"], ["golden-cross"])] == [
+        latest_run_id,
+        older_run_id,
+    ]
+    assert streamlit_backtest_module._filter_backtest_history_entries(entries, ["000660"], []) == []
+
+    bundle, load_messages = streamlit_backtest_module._load_backtest_history_result(service, entries[0])
+    assert load_messages == ()
+    assert bundle is not None
+    assert bundle["summary_frame"].iloc[0]["total_return_pct"] == 5.9
+    assert bundle["trade_frame"].iloc[0]["entry_date"] == "2026-04-03"
+    assert bundle["daily_equity_frame"]["date"].tolist() == list(pd.to_datetime(signal_frame["date"]))
+    assert bundle["daily_equity_frame"].iloc[-1]["equity"] == pytest.approx(1_058_823.529412)
+
+
+def test_selecting_saved_backtest_history_does_not_run_backtest(monkeypatch: pytest.MonkeyPatch) -> None:
+    run_id = "005930_golden-cross_20260721T020304Z"
+    summary_filename = f"{run_id}_backtest_summary.csv"
+    trade_filename = f"{run_id}_backtest_trades.csv"
+    signal_filename = "005930_signal.csv"
+    summary_frame = pd.DataFrame(
+        [
+            {
+                "run_id": run_id,
+                "symbol": "005930",
+                "strategy_id": "golden-cross",
+                "strategy_name": "Golden Cross",
+                "total_return_pct": 5.9,
+                "trade_count": 1,
+                "win_rate_pct": 100.0,
+                "signal_source_dataset": "golden_cross_signals",
+                "signal_source_filename": signal_filename,
+            }
+        ]
+    )
+    storage = _FakeHistoryStorage(
+        {
+            ("backtest_summaries", summary_filename): summary_frame,
+            ("backtest_trades", trade_filename): pd.DataFrame(),
+            ("golden_cross_signals", signal_filename): pd.DataFrame(
+                [
+                    {"date": "2026-04-01", "close": 100, "signal": "hold"},
+                    {"date": "2026-04-02", "close": 101, "signal": "hold"},
+                ]
+            ),
+        }
+    )
+    service = DashboardDataService(dataset_storage=storage)
+    preview_map = {
+        "backtest_summaries": [_history_preview("backtest_summaries", summary_filename, created_at=datetime(2026, 7, 21, 2, 3, 4, tzinfo=UTC))],
+        "backtest_trades": [_history_preview("backtest_trades", trade_filename, created_at=datetime(2026, 7, 21, 2, 3, 4, tzinfo=UTC))],
+    }
+    monkeypatch.setattr(service, "list_backtest_history_previews", lambda dataset: preview_map[dataset])
+    entries, _ = streamlit_backtest_module._load_backtest_history_entries(service)
+    fake_st = _FakeStreamlit(
+        multiselect_queue=[["005930"], ["golden-cross"]],
+        selectbox_values={streamlit_backtest_module.BACKTEST_HISTORY_SELECTION_KEY: entries[0]["entry_id"]},
+    )
+    monkeypatch.setattr(streamlit_backtest_module, "st", fake_st)
+    monkeypatch.setattr(
+        streamlit_backtest_module,
+        "_load_backtest_inputs",
+        lambda service, symbol: _loaded_inputs(indicator=None, investor=None),
+    )
+    monkeypatch.setattr(
+        streamlit_backtest_module,
+        "_execute_backtests",
+        lambda *args, **kwargs: pytest.fail("저장 이력 선택은 백테스트를 실행하면 안 됩니다."),
+    )
+
+    streamlit_backtest_module.render_backtest_tab(
+        SimpleNamespace(raw_previews=[], processed_previews=[]),
+        service,
+        symbol_lookup=SimpleNamespace(list_entries=lambda: [SymbolEntry(symbol="005930", symbol_name="삼성전자")]),
+    )
+
+    assert fake_st.selectbox_labels == ["확인할 저장 이력"]
+    assert any("선택한 저장 이력 결과" in body for body in fake_st.markdown_calls)
+    assert fake_st.session_state.get(BACKTEST_RESULTS_KEY) is None
 
 
 

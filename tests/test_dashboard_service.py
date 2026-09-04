@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from datetime import datetime
+
 import pandas as pd
 
 from invest_bot.dashboard.service import DashboardDataService
@@ -148,3 +151,27 @@ def test_dashboard_service_describes_strategy_fields_in_market_report_metadata()
     assert service.COLUMN_META["rsi_strategy_signal"].label == "RSI 전략 판단"
     assert service.COLUMN_META["trend_filter_signal"].label == "추세 필터 전략 판단"
     assert service.COLUMN_META["mean_reversion_signal"].label == "평균회귀 전략 판단"
+
+
+def test_dashboard_service_lists_all_backtest_history_artifacts_newest_first() -> None:
+    test_dir = make_test_dir("dashboard_service_backtest_history")
+    processed_storage = CsvStorage(test_dir / "processed")
+    older = processed_storage.save(
+        "backtest_summaries",
+        "005930_golden-cross_20260720T010203Z_backtest_summary.csv",
+        pd.DataFrame([{"run_id": "005930_golden-cross_20260720T010203Z", "symbol": "005930"}]),
+    )
+    newer = processed_storage.save(
+        "backtest_summaries",
+        "005930_golden-cross_20260721T020304Z_backtest_summary.csv",
+        pd.DataFrame([{"run_id": "005930_golden-cross_20260721T020304Z", "symbol": "005930"}]),
+    )
+    os.utime(older.path, (datetime(2026, 7, 20).timestamp(), datetime(2026, 7, 20).timestamp()))
+    os.utime(newer.path, (datetime(2026, 7, 21).timestamp(), datetime(2026, 7, 21).timestamp()))
+
+    service = DashboardDataService(raw_root=test_dir / "raw", processed_root=test_dir / "processed")
+    previews = service.list_backtest_history_previews()
+
+    assert [preview.path.name for preview in previews] == [newer.path.name, older.path.name]
+    assert all(preview.name == "backtest_summaries" for preview in previews)
+    assert service.load_preview_frame(previews[0]).iloc[0]["run_id"] == "005930_golden-cross_20260721T020304Z"

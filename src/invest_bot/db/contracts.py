@@ -119,6 +119,8 @@ class DatasetFrameRepository(Protocol):
 
     def list_latest(self, datasets: Sequence[str]) -> Sequence[DatasetFrameRecord]: ...
 
+    def list_for_dataset(self, dataset: str) -> Sequence[DatasetFrameRecord]: ...
+
 
 @runtime_checkable
 class ReportFavoriteSymbolRepository(Protocol):

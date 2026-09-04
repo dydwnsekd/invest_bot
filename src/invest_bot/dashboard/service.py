@@ -277,6 +277,39 @@ class DashboardDataService:
         except FileNotFoundError:
             return pd.DataFrame()
 
+    def list_backtest_history_previews(self, dataset: str = "backtest_summaries") -> list[DatasetPreview]:
+        """Return every persisted backtest artifact, newest first, without changing it."""
+        if dataset not in {"backtest_summaries", "backtest_trades"}:
+            raise ValueError(f"Unsupported backtest history dataset: {dataset}")
+
+        storage = self.get_dataset_storage()
+        if storage is not None:
+            records = storage.repository.list_for_dataset(dataset)
+            return self._build_backtest_history_db_previews(dataset, records)
+
+        dataset_dir = self.processed_root / dataset
+        if not dataset_dir.exists():
+            return []
+        symbol_name_map = self._load_symbol_name_map()
+        previews: list[DatasetPreview] = []
+        for csv_file in sorted(dataset_dir.glob("*.csv"), key=lambda path: path.stat().st_mtime, reverse=True):
+            try:
+                frame = pd.read_csv(csv_file)
+            except pd.errors.EmptyDataError:
+                frame = pd.DataFrame()
+            symbol = self._extract_symbol(csv_file)
+            previews.append(
+                self._build_backtest_history_preview(
+                    dataset=dataset,
+                    path=csv_file,
+                    frame=frame,
+                    symbol=symbol,
+                    symbol_name=symbol_name_map.get(symbol, ""),
+                    created_at=datetime.fromtimestamp(csv_file.stat().st_mtime, tz=UTC),
+                )
+            )
+        return previews
+
     def get_dataset_storage(self):
         if self.dataset_storage is None and self._default_db_storage:
             self.dataset_storage = DbFrameStorage.from_settings(self._settings)
@@ -439,6 +472,68 @@ class DashboardDataService:
                     )
                 )
         return previews
+
+    def _build_backtest_history_db_previews(
+        self,
+        dataset: str,
+        records: list[DatasetFrameRecord],
+    ) -> list[DatasetPreview]:
+        storage = self.get_dataset_storage()
+        if storage is None:
+            return []
+        symbol_name_map = self._load_symbol_name_map()
+        previews: list[DatasetPreview] = []
+        for record in records:
+            try:
+                frame = storage.load(dataset, record.filename)
+            except FileNotFoundError:
+                continue
+            symbol = self._normalize_symbol(record.symbol) or self._extract_symbol(Path(record.filename))
+            previews.append(
+                self._build_backtest_history_preview(
+                    dataset=dataset,
+                    path=storage.root_dir / dataset / record.filename,
+                    frame=frame,
+                    symbol=symbol,
+                    symbol_name=symbol_name_map.get(symbol, ""),
+                    created_at=record.created_at,
+                )
+            )
+        return previews
+
+    def _build_backtest_history_preview(
+        self,
+        *,
+        dataset: str,
+        path: Path,
+        frame: pd.DataFrame,
+        symbol: str,
+        symbol_name: str,
+        created_at: datetime,
+    ) -> DatasetPreview:
+        display_name = "백테스트 실행 요약" if dataset == "backtest_summaries" else "백테스트 거래 로그"
+        summary = "저장된 백테스트 결과를 실행 시점별로 다시 확인할 수 있습니다."
+        purpose = "과거 실행 결과를 비교하고, 다시 계산하지 않고 같은 결과를 불러옵니다."
+        first_look = "실행 시각, 종목, 전략, 데이터 원본과 수익률을 먼저 확인하세요."
+        recommended_columns = [
+            column
+            for column in ("run_id", "symbol", "strategy_name", "total_return_pct", "trade_count")
+            if column in frame.columns
+        ]
+        return DatasetPreview(
+            name=dataset,
+            display_name=display_name,
+            path=path,
+            row_count=len(frame),
+            columns=list(frame.columns),
+            summary=summary,
+            purpose=purpose,
+            first_look=first_look,
+            symbol=symbol,
+            symbol_name=symbol_name,
+            recommended_columns=recommended_columns,
+            created_at=created_at,
+        )
 
     @staticmethod
     def _extract_symbol(file_path: Path) -> str:

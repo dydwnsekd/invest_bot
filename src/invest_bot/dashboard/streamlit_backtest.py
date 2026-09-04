@@ -48,6 +48,10 @@ BACKTEST_SELECTED_STRATEGIES_KEY = "backtest_selected_strategies"
 BACKTEST_RESULTS_KEY = "backtest_results"
 BACKTEST_BLOCKED_REASONS_KEY = "backtest_blocked_reasons"
 BACKTEST_COLLECTION_PERIOD_KEY = "backtest_prepare_collection_period"
+BACKTEST_HISTORY_SELECTION_KEY = "backtest_history_selection"
+BACKTEST_HISTORY_NONE_OPTION = "__backtest_history_none__"
+BACKTEST_HISTORY_SYMBOL_FILTER_KEY = "backtest_history_symbol_filter"
+BACKTEST_HISTORY_STRATEGY_FILTER_KEY = "backtest_history_strategy_filter"
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,8 +167,15 @@ def render_backtest_tab(
                 loaded_inputs=loaded_inputs,
             )
 
+    history_results = _render_backtest_history_panel(service)
+    if isinstance(history_results, dict):
+        st.markdown("#### 선택한 저장 이력 결과")
+        _render_results_panel(service, history_results)
+
     stored_results = st.session_state.get(BACKTEST_RESULTS_KEY)
     if isinstance(stored_results, dict):
+        if isinstance(history_results, dict):
+            st.markdown("#### 이번 세션 실행 결과")
         _render_results_panel(service, stored_results)
 
 
@@ -204,6 +215,277 @@ def _render_backtest_selection_summary(
         """,
         unsafe_allow_html=True,
     )
+
+
+def _render_backtest_history_panel(service: DashboardDataService) -> dict[str, object] | None:
+    with st.container(border=True):
+        st.markdown("#### 저장된 실행 이력")
+        st.caption("이력을 선택하면 저장된 요약과 거래 로그만 읽습니다. 선택만으로 백테스트를 다시 실행하지 않습니다.")
+        entries, load_messages = _load_backtest_history_entries(service)
+        for message in load_messages:
+            st.warning(message)
+        if not entries:
+            st.info("아직 불러올 저장된 백테스트 실행 이력이 없습니다.")
+            return None
+
+        filter_columns = st.columns(2, gap="small")
+        selected_symbols = filter_columns[0].multiselect(
+            "이력 종목 필터",
+            options=sorted({str(entry["symbol"]) for entry in entries if entry.get("symbol")}),
+            key=BACKTEST_HISTORY_SYMBOL_FILTER_KEY,
+        )
+        selected_strategies = filter_columns[1].multiselect(
+            "이력 전략 필터",
+            options=sorted({str(entry["strategy_id"]) for entry in entries if entry.get("strategy_id")}),
+            format_func=lambda strategy_id: next(
+                (
+                    str(entry["strategy_name"])
+                    for entry in entries
+                    if entry.get("strategy_id") == strategy_id and entry.get("strategy_name")
+                ),
+                strategy_id,
+            ),
+            key=BACKTEST_HISTORY_STRATEGY_FILTER_KEY,
+        )
+        filtered_entries = _filter_backtest_history_entries(entries, selected_symbols, selected_strategies)
+        if not filtered_entries:
+            st.info("선택한 종목·전략 조건과 일치하는 저장 이력이 없습니다. 필터를 조정해 주세요.")
+            return None
+
+        st.dataframe(_build_backtest_history_table(filtered_entries), width="stretch", hide_index=True)
+        entries_by_id = {str(entry["entry_id"]): entry for entry in filtered_entries}
+        options = [BACKTEST_HISTORY_NONE_OPTION, *entries_by_id]
+        if st.session_state.get(BACKTEST_HISTORY_SELECTION_KEY) not in options:
+            st.session_state[BACKTEST_HISTORY_SELECTION_KEY] = BACKTEST_HISTORY_NONE_OPTION
+        selected_entry_id = st.selectbox(
+            "확인할 저장 이력",
+            options=options,
+            format_func=lambda entry_id: (
+                "저장된 실행 이력을 선택하세요"
+                if entry_id == BACKTEST_HISTORY_NONE_OPTION
+                else _format_backtest_history_option(entries_by_id[entry_id])
+            ),
+            key=BACKTEST_HISTORY_SELECTION_KEY,
+        )
+        if selected_entry_id == BACKTEST_HISTORY_NONE_OPTION:
+            return None
+
+        selected_entry = entries_by_id.get(str(selected_entry_id))
+        if selected_entry is None:
+            st.warning("선택한 실행 이력을 찾을 수 없습니다. 목록을 다시 선택해 주세요.")
+            return None
+        result_bundle, result_messages = _load_backtest_history_result(service, selected_entry)
+        for message in result_messages:
+            st.warning(message)
+        if result_bundle is None:
+            st.warning("선택한 실행 이력의 요약 결과를 읽을 수 없습니다.")
+            return None
+        st.caption(
+            f"저장된 실행 시각: {_format_history_timestamp(selected_entry.get('run_at'))} · "
+            f"데이터 원본: {selected_entry.get('source_label') or '기록 없음'}"
+        )
+        return result_bundle
+
+
+def _load_backtest_history_entries(service: DashboardDataService) -> tuple[list[dict[str, object]], tuple[str, ...]]:
+    try:
+        previews = service.list_backtest_history_previews("backtest_summaries")
+    except Exception as error:  # noqa: BLE001 - history is optional dashboard context
+        return [], (f"저장된 실행 이력 목록을 읽지 못했습니다: {error}",)
+
+    entries: list[dict[str, object]] = []
+    messages: list[str] = []
+    for preview in previews:
+        try:
+            frame = service.load_preview_frame(preview)
+        except Exception as error:  # noqa: BLE001 - show the artifact issue without blocking the tab
+            messages.append(f"저장 이력 파일을 읽지 못했습니다 ({preview.path.name}): {error}")
+            continue
+        if frame.empty:
+            messages.append(f"저장 이력 파일에 표시할 요약 결과가 없습니다: {preview.path.name}")
+            continue
+        for row_index, (_, row) in enumerate(frame.iterrows()):
+            run_id = _history_text(row, "run_id")
+            symbol = _history_text(row, "symbol") or str(getattr(preview, "symbol", "")).strip()
+            strategy_id = _history_text(row, "strategy_id")
+            strategy_name = _history_text(row, "strategy_name") or strategy_id or "전략 정보 없음"
+            symbol_name = _history_text(row, "symbol_name") or str(getattr(preview, "symbol_name", "")).strip()
+            source_label = _history_text(row, "signal_source_filename") or _history_text(row, "price_source_filename")
+            run_at = _parse_history_run_timestamp(run_id) or getattr(preview, "created_at", None)
+            entries.append(
+                {
+                    "entry_id": f"{preview.path.name}:{row_index}:{run_id or 'legacy'}",
+                    "preview": preview,
+                    "summary_frame": pd.DataFrame([row.to_dict()]),
+                    "run_id": run_id,
+                    "run_group_id": _history_text(row, "run_group_id"),
+                    "symbol": symbol,
+                    "symbol_name": symbol_name,
+                    "strategy_id": strategy_id,
+                    "strategy_name": strategy_name,
+                    "source_label": source_label,
+                    "run_at": run_at,
+                }
+            )
+    entries.sort(key=lambda entry: entry.get("run_at") or datetime.min.replace(tzinfo=UTC), reverse=True)
+    return entries, tuple(messages)
+
+
+def _filter_backtest_history_entries(
+    entries: list[dict[str, object]],
+    selected_symbols: list[str],
+    selected_strategy_ids: list[str],
+) -> list[dict[str, object]]:
+    symbol_filter = set(selected_symbols)
+    strategy_filter = set(selected_strategy_ids)
+    return [
+        entry
+        for entry in entries
+        if (not symbol_filter or str(entry.get("symbol", "")) in symbol_filter)
+        and (not strategy_filter or str(entry.get("strategy_id", "")) in strategy_filter)
+    ]
+
+
+def _load_backtest_history_result(
+    service: DashboardDataService,
+    entry: dict[str, object],
+) -> tuple[dict[str, object] | None, tuple[str, ...]]:
+    summary_frame = entry.get("summary_frame")
+    if not isinstance(summary_frame, pd.DataFrame) or summary_frame.empty:
+        return None, ("저장된 실행 이력에 요약 결과가 없습니다.",)
+
+    summary_frame = summary_frame.copy()
+    if "symbol_name" not in summary_frame.columns:
+        summary_frame["symbol_name"] = str(entry.get("symbol_name", ""))
+    elif summary_frame["symbol_name"].isna().all():
+        summary_frame["symbol_name"] = str(entry.get("symbol_name", ""))
+
+    messages: list[str] = []
+    trade_frame, trade_messages = _load_history_trade_frame(service, str(entry.get("run_id", "")))
+    messages.extend(trade_messages)
+    daily_equity_frame, daily_message = _load_history_daily_equity_frame(service, summary_frame, entry, trade_frame)
+    return {
+        "summary_frame": summary_frame,
+        "comparison_frame": _build_comparison_frame(summary_frame),
+        "trade_frame": trade_frame,
+        "chart_frame": _build_cumulative_trade_return_frame(trade_frame),
+        "daily_equity_frame": daily_equity_frame,
+        "daily_equity_notice": daily_message,
+        "history_warnings": tuple(messages),
+    }, tuple()
+
+
+def _load_history_trade_frame(service: DashboardDataService, run_id: str) -> tuple[pd.DataFrame, tuple[str, ...]]:
+    if not run_id:
+        return pd.DataFrame(), ("이 실행 이력에는 run_id가 없어 연결된 거래 로그를 확인할 수 없습니다.",)
+    frames: list[pd.DataFrame] = []
+    messages: list[str] = []
+    try:
+        previews = service.list_backtest_history_previews("backtest_trades")
+    except Exception as error:  # noqa: BLE001
+        return pd.DataFrame(), (f"저장된 거래 로그 목록을 읽지 못했습니다: {error}",)
+    for preview in previews:
+        if run_id not in preview.path.name:
+            continue
+        try:
+            frame = service.load_preview_frame(preview)
+        except Exception as error:  # noqa: BLE001
+            messages.append(f"거래 로그 파일을 읽지 못했습니다 ({preview.path.name}): {error}")
+            continue
+        if "run_id" not in frame.columns:
+            messages.append(f"거래 로그에 run_id가 없어 이력과 연결할 수 없습니다: {preview.path.name}")
+            continue
+        matched = frame[frame["run_id"].astype(str) == run_id].copy()
+        if not matched.empty:
+            frames.append(matched)
+    if not frames:
+        messages.append("연결된 거래 로그가 없어 누적 수익률과 거래 내역은 표시하지 않습니다.")
+        return pd.DataFrame(), tuple(messages)
+    return pd.concat(frames, ignore_index=True), tuple(messages)
+
+
+def _load_history_daily_equity_frame(
+    service: DashboardDataService,
+    summary_frame: pd.DataFrame,
+    entry: dict[str, object],
+    trade_frame: pd.DataFrame,
+) -> tuple[pd.DataFrame, str | None]:
+    summary_row = summary_frame.iloc[0]
+    dataset = _history_text(summary_row, "signal_source_dataset")
+    filename = _history_text(summary_row, "signal_source_filename")
+    if not dataset or not filename:
+        return pd.DataFrame(), "저장된 신호 원본 정보가 없어 이 실행 이력의 일별 평가금액은 복원할 수 없습니다."
+    if Path(filename).name != filename:
+        return pd.DataFrame(), "저장된 신호 원본 파일명이 올바르지 않아 일별 평가금액을 복원하지 않았습니다."
+    try:
+        storage = service.get_dataset_storage()
+        if storage is not None:
+            signal_frame = storage.load(dataset, filename)
+        else:
+            candidates = (service.processed_root / dataset / filename, service.raw_root / dataset / filename)
+            signal_path = next((path for path in candidates if path.exists()), None)
+            if signal_path is None:
+                raise FileNotFoundError(filename)
+            signal_frame = pd.read_csv(signal_path)
+    except (FileNotFoundError, pd.errors.EmptyDataError) as error:
+        return pd.DataFrame(), f"신호 원본을 찾을 수 없어 일별 평가금액을 복원하지 못했습니다: {error}"
+    except Exception as error:  # noqa: BLE001
+        return pd.DataFrame(), f"신호 원본을 읽지 못해 일별 평가금액을 복원하지 못했습니다: {error}"
+    try:
+        daily_equity_frame = build_daily_mark_to_market_equity_curve(signal_frame, trade_frame)
+    except Exception as error:  # noqa: BLE001
+        return pd.DataFrame(), f"저장된 신호로 일별 평가금액을 계산하지 못했습니다: {error}"
+    if daily_equity_frame.empty:
+        return daily_equity_frame, "저장된 신호에는 일별 평가금액을 계산할 가격 데이터가 없습니다."
+    symbol = str(entry.get("symbol", ""))
+    symbol_name = str(entry.get("symbol_name", ""))
+    strategy_id = str(entry.get("strategy_id", ""))
+    strategy_name = str(entry.get("strategy_name", ""))
+    daily_equity_frame["symbol"] = symbol
+    daily_equity_frame["symbol_name"] = symbol_name
+    daily_equity_frame["strategy_id"] = strategy_id
+    daily_equity_frame["strategy_name"] = strategy_name
+    daily_equity_frame["series_label"] = f"{symbol_name or symbol} · {strategy_name or strategy_id}"
+    return daily_equity_frame, None
+
+
+def _build_backtest_history_table(entries: list[dict[str, object]]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "실행 시각": _format_history_timestamp(entry.get("run_at")),
+                "종목": f"{entry.get('symbol_name') or entry.get('symbol') or '정보 없음'} ({entry.get('symbol') or '-'})",
+                "전략": entry.get("strategy_name") or entry.get("strategy_id") or "정보 없음",
+                "데이터 원본": entry.get("source_label") or "기록 없음",
+            }
+            for entry in entries
+        ]
+    )
+
+
+def _format_backtest_history_option(entry: dict[str, object]) -> str:
+    symbol = entry.get("symbol_name") or entry.get("symbol") or "정보 없음"
+    strategy = entry.get("strategy_name") or entry.get("strategy_id") or "전략 정보 없음"
+    return f"{_format_history_timestamp(entry.get('run_at'))} · {symbol} · {strategy}"
+
+
+def _format_history_timestamp(value: object) -> str:
+    if isinstance(value, datetime):
+        return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    return "실행 시각 기록 없음"
+
+
+def _parse_history_run_timestamp(run_id: str) -> datetime | None:
+    timestamp = run_id.rsplit("_", 1)[-1] if "_" in run_id else ""
+    try:
+        return datetime.strptime(timestamp, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _history_text(row: pd.Series, column: str) -> str:
+    value = row.get(column, "")
+    return "" if pd.isna(value) else str(value).strip()
 
 
 def _resolve_symbol_entries(snapshot, symbol_lookup: SymbolLookup) -> list[SymbolEntry]:
@@ -527,6 +809,12 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
     trade_frame = result_bundle.get("trade_frame")
     chart_frame = result_bundle.get("chart_frame")
     daily_equity_frame = result_bundle.get("daily_equity_frame")
+    daily_equity_notice = result_bundle.get("daily_equity_notice")
+    history_warnings = result_bundle.get("history_warnings")
+
+    if isinstance(history_warnings, tuple):
+        for message in history_warnings:
+            st.warning(str(message))
 
     st.markdown("#### 전략 요약 카드")
     if isinstance(summary_frame, pd.DataFrame) and not summary_frame.empty:
@@ -605,7 +893,11 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
         )
         st.altair_chart(daily_equity_chart, width="stretch")
     else:
-        st.info("평가할 일별 가격 데이터가 없어 일별 평가금액 차트를 아직 그릴 수 없습니다.")
+        st.info(
+            str(daily_equity_notice)
+            if isinstance(daily_equity_notice, str) and daily_equity_notice
+            else "평가할 일별 가격 데이터가 없어 일별 평가금액 차트를 아직 그릴 수 없습니다."
+        )
 
     st.markdown("#### 거래 로그")
     if isinstance(trade_frame, pd.DataFrame) and not trade_frame.empty:

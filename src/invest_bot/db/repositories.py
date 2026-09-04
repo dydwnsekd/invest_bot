@@ -275,6 +275,26 @@ class SqlAlchemyDatasetFrameRepository:
                     )
         return records
 
+    def list_for_dataset(self, dataset: str) -> Sequence[DatasetFrameRecord]:
+        with self.session_factory() as session:
+            rows = session.scalars(
+                select(DatasetFrame)
+                .where(DatasetFrame.dataset == dataset)
+                .order_by(DatasetFrame.as_of_date.desc(), DatasetFrame.created_at.desc(), DatasetFrame.id.desc())
+            ).all()
+            return [
+                DatasetFrameRecord(
+                    dataset=row.dataset,
+                    filename=row.filename,
+                    frame_json=row.frame_json,
+                    row_count=row.row_count,
+                    created_at=row.created_at,
+                    symbol=row.symbol or "",
+                    as_of_date=row.as_of_date,
+                )
+                for row in rows
+            ]
+
 
 class SqlAlchemyReportFavoriteSymbolRepository:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
