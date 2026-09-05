@@ -55,7 +55,7 @@
 
 ## 남은 항목
 
-- [ ] 백테스트 artifact history / reload
+- [x] 백테스트 artifact history / reload
 - [ ] 전략 파라미터 튜닝 진입 UX
 - [ ] 포트폴리오 / multi-symbol aggregation view
 - [ ] 대시보드 설정 저장 고도화
@@ -305,7 +305,6 @@
 ## 현재 잔여 작업
 
 - 사용자/account ownership이 필요한 shared watchlist 확장 여부 결정
-- 백테스트 artifact history / reload
 - 전략 파라미터 튜닝 진입 UX
 - 포트폴리오 / multi-symbol aggregation view
 - 대시보드 설정 저장 고도화

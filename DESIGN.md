@@ -121,6 +121,7 @@
   - 백테스트 flow, selection, readiness, result cards.
   - 백테스트 결과 해석 문장.
   - 백테스트 거래 순서 누적 수익률과 분리된 일별 평가금액 곡선, 초기자금·체결·비용 가정 안내.
+  - 백테스트 저장 실행 이력 표·종목/전략 필터·선택 컨트롤. 실행 시각·종목·전략·원본 파일을 먼저 보여주고, 선택은 저장 결과만 읽으며 재실행하지 않는다.
 - Variants and states:
   - selected navigation: 왼쪽 강조선 + 밝은 텍스트.
   - empty/error/success: Streamlit status primitives 사용.
@@ -158,6 +159,7 @@
   - 관심종목의 수집·분석 시각은 각각 원천 데이터와 지표·신호·리포트 artifact의 최근 저장 시각으로 표시한다.
   - `매수 관점`/`매도 관점`은 종합 신호로 표기하고, 전략 합의도·기준일·데이터 충족 상태·위험 요인을 같은 화면에서 함께 제공한다.
   - 수익 가능성을 암시하는 신뢰도 대신 확인 가능한 데이터 충족 상태와 전략 신호 수를 사용한다.
+  - 저장 이력은 실행 시각·종목·전략·데이터 원본을 먼저 표시하고, 원본 또는 거래 로그가 없으면 복원할 수 없는 결과 영역과 이유를 함께 안내한다.
   - 화살표/아이콘 문자가 깨질 수 있는 표현을 피한다.
   - Streamlit이 `stIconMaterial`에 아이콘 이름을 ligature text로 넣는 구조를 고려해, 전역 `span`/폰트 CSS를 수정할 때는 반드시 `[data-testid="stIconMaterial"]`의 Material Symbols 폰트와 `liga` 설정을 다시 보장한다.
   - status, expander, sidebar 등 Streamlit 기본 아이콘을 사용하는 UI를 추가하거나 수정하면 아이콘 이름(`keyboard_arrow_down`, `expand_more` 등)이 화면 텍스트로 노출되지 않는지 CSS 회귀 테스트를 함께 유지한다.
