@@ -17,6 +17,7 @@ from invest_bot.strategy import (
 from invest_bot.strategy.base import StrategyResult
 
 from .readiness import RunReadinessGate, build_run_readiness_gate
+from .parameters import resolve_backtest_parameters
 from .strategy_registry import (
     BACKTEST_STRATEGY_SPECS,
     DAILY_PRICES_INDICATORS,
@@ -42,7 +43,7 @@ class BacktestDataReadinessError(ValueError):
         super().__init__("; ".join(gate.blocking_reasons) or "backtest data is not ready")
 
 
-AdapterFn = Callable[[Mapping[str, pd.DataFrame | None], BacktestStrategySpec], pd.DataFrame]
+AdapterFn = Callable[[Mapping[str, pd.DataFrame | None], BacktestStrategySpec, Mapping[str, float]], pd.DataFrame]
 
 
 class BacktestStrategyAdapterRegistry:
@@ -65,14 +66,21 @@ class BacktestStrategyAdapterRegistry:
         datasets: Mapping[str, pd.DataFrame | None],
         *,
         registry: Mapping[str, BacktestStrategySpec] = BACKTEST_STRATEGY_SPECS,
+        parameters: Mapping[str, object] | None = None,
     ) -> BacktestAdapterOutput:
         spec = registry[strategy_id]
-        if strategy_id != "golden-cross" or DAILY_PRICES_INDICATORS in datasets:
+        resolved_parameters = resolve_backtest_parameters(strategy_id, parameters)
+        golden_cross_uses_saved_signal_only = (
+            strategy_id == "golden-cross"
+            and resolved_parameters == {"short_window": 5.0, "long_window": 20.0}
+            and DAILY_PRICES_INDICATORS not in datasets
+        )
+        if not golden_cross_uses_saved_signal_only:
             gate = build_run_readiness_gate([strategy_id], datasets, registry=registry)
             if not gate.can_run:
                 raise BacktestDataReadinessError(gate)
 
-        signal_rows = self._adapters[strategy_id](datasets, spec)
+        signal_rows = self._adapters[strategy_id](datasets, spec, resolved_parameters)
         return BacktestAdapterOutput(
             strategy_id=strategy_id,
             strategy_name=spec.strategy_name,
@@ -86,26 +94,48 @@ def build_strategy_signal_rows(
     datasets: Mapping[str, pd.DataFrame | None],
     *,
     registry: Mapping[str, BacktestStrategySpec] = BACKTEST_STRATEGY_SPECS,
+    parameters: Mapping[str, object] | None = None,
 ) -> pd.DataFrame:
     """Build normalized signal rows for one registered strategy."""
 
-    return DEFAULT_BACKTEST_ADAPTER_REGISTRY.build_signal_rows(strategy_id, datasets, registry=registry).signal_rows
+    return DEFAULT_BACKTEST_ADAPTER_REGISTRY.build_signal_rows(
+        strategy_id,
+        datasets,
+        registry=registry,
+        parameters=parameters,
+    ).signal_rows
 
 
-def _adapt_golden_cross(datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec) -> pd.DataFrame:
+def _adapt_golden_cross(
+    datasets: Mapping[str, pd.DataFrame | None],
+    spec: BacktestStrategySpec,
+    parameters: Mapping[str, float],
+) -> pd.DataFrame:
     signal_frame = datasets.get(GOLDEN_CROSS_SIGNALS)
-    if signal_frame is not None and {"date", "close", "signal"}.issubset(signal_frame.columns):
+    if (
+        parameters == {"short_window": 5.0, "long_window": 20.0}
+        and signal_frame is not None
+        and {"date", "close", "signal"}.issubset(signal_frame.columns)
+    ):
         return _normalize_existing_signal_frame(signal_frame, spec)
 
     frame = _prepare_price_frame(datasets.get(DAILY_PRICES_INDICATORS))
-    strategy = GoldenCrossStrategy()
     result = frame.copy()
+    short_window = int(parameters["short_window"])
+    long_window = int(parameters["long_window"])
+    short_column = f"ma_{short_window}"
+    long_column = f"ma_{long_window}"
+    if short_column not in result.columns:
+        result[short_column] = result["close"].rolling(window=short_window, min_periods=short_window).mean()
+    if long_column not in result.columns:
+        result[long_column] = result["close"].rolling(window=long_window, min_periods=long_window).mean()
+    strategy = GoldenCrossStrategy(short_column=short_column, long_column=long_column)
     result["signal"] = "hold"
     result["signal_reason"] = "At least two rows are required to detect a crossover."
     result["strategy_id"] = spec.strategy_id
     result["strategy_name"] = spec.strategy_name
-    result["prev_ma_5"] = result["ma_5"].shift(1)
-    result["prev_ma_20"] = result["ma_20"].shift(1)
+    result[f"prev_{short_column}"] = result[short_column].shift(1)
+    result[f"prev_{long_column}"] = result[long_column].shift(1)
 
     for index in range(1, len(result)):
         signal_result = strategy.evaluate_frame(result.iloc[index - 1 : index + 1])
@@ -114,29 +144,59 @@ def _adapt_golden_cross(datasets: Mapping[str, pd.DataFrame | None], spec: Backt
     return result
 
 
-def _adapt_rsi(datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec) -> pd.DataFrame:
-    return _apply_row_strategy(_prepare_price_frame(datasets[DAILY_PRICES_INDICATORS]), spec, RSIStrategy())
+def _adapt_rsi(datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec, parameters: Mapping[str, float]) -> pd.DataFrame:
+    return _apply_row_strategy(
+        _prepare_price_frame(datasets[DAILY_PRICES_INDICATORS]),
+        spec,
+        RSIStrategy(buy_threshold=parameters["buy_threshold"], sell_threshold=parameters["sell_threshold"]),
+    )
 
 
-def _adapt_trend_filter(datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec) -> pd.DataFrame:
+def _adapt_trend_filter(
+    datasets: Mapping[str, pd.DataFrame | None],
+    spec: BacktestStrategySpec,
+    parameters: Mapping[str, float],
+) -> pd.DataFrame:
     frame = _prepare_price_frame(datasets[DAILY_PRICES_INDICATORS])
     frame["prev_close"] = frame["close"].shift(1)
     return _apply_row_strategy(frame, spec, TrendFilterStrategy())
 
 
-def _adapt_mean_reversion(datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec) -> pd.DataFrame:
-    return _apply_row_strategy(_prepare_price_frame(datasets[DAILY_PRICES_INDICATORS]), spec, MeanReversionStrategy())
+def _adapt_mean_reversion(
+    datasets: Mapping[str, pd.DataFrame | None],
+    spec: BacktestStrategySpec,
+    parameters: Mapping[str, float],
+) -> pd.DataFrame:
+    return _apply_row_strategy(
+        _prepare_price_frame(datasets[DAILY_PRICES_INDICATORS]),
+        spec,
+        MeanReversionStrategy(buy_ratio=parameters["buy_ratio"], sell_ratio=parameters["sell_ratio"]),
+    )
 
 
-def _adapt_disparity(datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec) -> pd.DataFrame:
-    return _apply_row_strategy(_prepare_price_frame(datasets[DAILY_PRICES_INDICATORS]), spec, DisparityStrategy())
+def _adapt_disparity(
+    datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec, parameters: Mapping[str, float]
+) -> pd.DataFrame:
+    return _apply_row_strategy(
+        _prepare_price_frame(datasets[DAILY_PRICES_INDICATORS]),
+        spec,
+        DisparityStrategy(buy_below=parameters["buy_below"], sell_above=parameters["sell_above"]),
+    )
 
 
-def _adapt_momentum(datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec) -> pd.DataFrame:
-    return _apply_row_strategy(_prepare_price_frame(datasets[DAILY_PRICES_INDICATORS]), spec, MomentumStrategy())
+def _adapt_momentum(datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec, parameters: Mapping[str, float]) -> pd.DataFrame:
+    return _apply_row_strategy(
+        _prepare_price_frame(datasets[DAILY_PRICES_INDICATORS]),
+        spec,
+        MomentumStrategy(buy_above=parameters["buy_above"], sell_below=parameters["sell_below"]),
+    )
 
 
-def _adapt_investor_flow(datasets: Mapping[str, pd.DataFrame | None], spec: BacktestStrategySpec) -> pd.DataFrame:
+def _adapt_investor_flow(
+    datasets: Mapping[str, pd.DataFrame | None],
+    spec: BacktestStrategySpec,
+    parameters: Mapping[str, float],
+) -> pd.DataFrame:
     frame = _prepare_price_frame(datasets[DAILY_PRICES_INDICATORS])
     investor_frame = _prepare_investor_frame(datasets[INVESTOR_DAILY])
     merged = frame.merge(investor_frame, on="date", how="left", validate="one_to_one")

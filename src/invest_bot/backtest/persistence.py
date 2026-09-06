@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import pandas as pd
 
@@ -25,6 +25,8 @@ SUMMARY_PROVENANCE_COLUMNS = (
     "price_source_dataset",
     "price_source_filename",
     "input_sources_json",
+    "strategy_parameters_json",
+    "combination_settings_json",
 )
 
 
@@ -70,6 +72,14 @@ class BacktestPersistenceContext:
     strategy_id: str
     strategy_name: str
     input_sources: BacktestInputSources
+    strategy_parameters: Mapping[str, float]
+    combination_settings: Mapping[str, Any]
+
+    def strategy_parameters_json(self) -> str:
+        return json.dumps(dict(self.strategy_parameters), ensure_ascii=False, sort_keys=True)
+
+    def combination_settings_json(self) -> str:
+        return json.dumps(dict(self.combination_settings), ensure_ascii=False, sort_keys=True)
 
 
 def build_timestamp_slug(now: datetime) -> str:
@@ -82,6 +92,8 @@ def build_context(
     strategy_id: str,
     strategy_name: str,
     input_sources: BacktestInputSources,
+    strategy_parameters: Mapping[str, float] | None = None,
+    combination_settings: Mapping[str, Any] | None = None,
     now: datetime | None = None,
 ) -> BacktestPersistenceContext:
     resolved_now = now or datetime.now(UTC)
@@ -94,6 +106,8 @@ def build_context(
         strategy_id=strategy_id,
         strategy_name=strategy_name,
         input_sources=input_sources,
+        strategy_parameters=dict(strategy_parameters or {}),
+        combination_settings=dict(combination_settings or {}),
     )
 
 
@@ -118,6 +132,8 @@ def enrich_trades(frame: pd.DataFrame, context: BacktestPersistenceContext) -> p
     result["symbol"] = context.symbol
     result["strategy_id"] = context.strategy_id
     result["strategy_name"] = context.strategy_name
+    result["strategy_parameters_json"] = context.strategy_parameters_json()
+    result["combination_settings_json"] = context.combination_settings_json()
     result["output_type"] = BACKTEST_TRADES_OUTPUT
     return result
 
@@ -130,6 +146,8 @@ def enrich_summary(frame: pd.DataFrame, context: BacktestPersistenceContext) -> 
     result["symbol"] = context.symbol
     result["strategy_id"] = context.strategy_id
     result["strategy_name"] = context.strategy_name
+    result["strategy_parameters_json"] = context.strategy_parameters_json()
+    result["combination_settings_json"] = context.combination_settings_json()
     result["output_type"] = BACKTEST_SUMMARY_OUTPUT
     result["indicator_source_dataset"] = context.input_sources.indicator_source_dataset
     result["indicator_source_filename"] = context.input_sources.indicator_source_filename

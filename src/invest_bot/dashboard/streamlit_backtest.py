@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from html import escape
@@ -13,9 +14,21 @@ from invest_bot.backtest import (
     DEFAULT_BACKTEST_ADAPTER_REGISTRY,
     DEFAULT_BACKTEST_RUNNER,
     DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
+    COMBINATION_MODE_AND,
+    COMBINATION_MODE_LABELS,
+    COMBINATION_MODE_OR,
+    COMBINATION_MODE_WEIGHTED,
+    BacktestCombinationSettings,
     build_daily_mark_to_market_equity_curve,
     check_backtest_readiness,
+    default_backtest_parameters,
+    format_backtest_parameters,
+    is_default_backtest_parameters,
+    list_backtest_parameter_definitions,
     list_backtest_strategy_specs,
+    resolve_backtest_parameters,
+    combine_strategy_signal_rows,
+    resolve_backtest_combination_settings,
 )
 from invest_bot.backtest.adapters import GOLDEN_CROSS_SIGNALS
 from invest_bot.backtest.persistence import BacktestInputSources, build_context, enrich_summary, enrich_trades
@@ -52,6 +65,10 @@ BACKTEST_HISTORY_SELECTION_KEY = "backtest_history_selection"
 BACKTEST_HISTORY_NONE_OPTION = "__backtest_history_none__"
 BACKTEST_HISTORY_SYMBOL_FILTER_KEY = "backtest_history_symbol_filter"
 BACKTEST_HISTORY_STRATEGY_FILTER_KEY = "backtest_history_strategy_filter"
+BACKTEST_PARAMETERS_KEY = "backtest_strategy_parameters"
+BACKTEST_PARAMETERS_RESET_KEY = "backtest_strategy_parameters_reset"
+BACKTEST_COMBINATION_MODE_KEY = "backtest_combination_mode"
+BACKTEST_COMBINATION_WEIGHTS_KEY = "backtest_combination_weights"
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +159,9 @@ def render_backtest_tab(
         lookback_days = collection_days_from_period(collection_period)
         st.caption("준비 실행은 자동으로 돌지 않습니다. 버튼을 눌렀을 때만 수집, 지표 계산, 골든크로스 신호 생성을 순서대로 수행합니다.")
 
+        parameter_settings, parameter_errors = _render_backtest_parameter_panel(selected_strategy_ids, strategy_labels)
+        combination_settings, combination_errors = _render_backtest_combination_panel(selected_strategy_ids, strategy_labels)
+
         selected_items = [
             ResolvedSymbol(raw_input=symbol, symbol=symbol, symbol_name=selection_map[symbol].symbol_name)
             for symbol in selected_symbols
@@ -156,6 +176,10 @@ def render_backtest_tab(
 
         _render_backtest_selection_summary(selected_items, selected_strategy_ids, strategy_labels, int(lookback_days))
         _render_readiness_panel(readiness_payload)
+        for error in parameter_errors:
+            st.warning(f"실험 설정 확인 필요: {error}")
+        for error in combination_errors:
+            st.warning(f"전략 조합 확인 필요: {error}")
 
         action_columns = st.columns(2, gap="small")
         if action_columns[0].button("준비 실행", width="stretch", type="primary"):
@@ -165,6 +189,8 @@ def render_backtest_tab(
                 selected_items=selected_items,
                 selected_strategy_ids=selected_strategy_ids,
                 loaded_inputs=loaded_inputs,
+                strategy_parameters=parameter_settings,
+                combination_settings=combination_settings,
             )
 
     history_results = _render_backtest_history_panel(service)
@@ -215,6 +241,105 @@ def _render_backtest_selection_summary(
         """,
         unsafe_allow_html=True,
     )
+
+
+def _render_backtest_parameter_panel(
+    selected_strategy_ids: list[str],
+    strategy_labels: dict[str, str],
+) -> tuple[dict[str, dict[str, float]], tuple[str, ...]]:
+    st.markdown("#### 실험 설정")
+    st.caption("기본값은 현재 전략과 동일합니다. 값을 바꾸면 과거 데이터에서만 실험하며, 최적값 추천이나 자동 탐색은 하지 않습니다.")
+    if st.button("실험 설정 기본값으로 되돌리기", key=BACKTEST_PARAMETERS_RESET_KEY):
+        _reset_backtest_parameter_settings(selected_strategy_ids)
+        st.rerun()
+    current_settings = st.session_state.get(BACKTEST_PARAMETERS_KEY, {})
+    stored_settings = current_settings if isinstance(current_settings, dict) else {}
+    resolved_settings: dict[str, dict[str, float]] = {}
+    errors: list[str] = []
+
+    for strategy_id in selected_strategy_ids:
+        definitions = list_backtest_parameter_definitions(strategy_id)
+        if not definitions:
+            st.info(f"{strategy_labels.get(strategy_id, strategy_id)} 전략은 현재 조절 가능한 실험 설정이 없습니다.")
+            resolved_settings[strategy_id] = {}
+            continue
+        st.markdown(f"**{strategy_labels.get(strategy_id, strategy_id)} 설정**")
+        previous_values = stored_settings.get(strategy_id, {})
+        raw_values: dict[str, object] = {}
+        input_columns = st.columns(len(definitions), gap="small")
+        for column, definition in zip(input_columns, definitions, strict=True):
+            widget_key = f"backtest_parameter_{strategy_id}_{definition.key}"
+            fallback_value = definition.default
+            if isinstance(previous_values, dict):
+                fallback_value = previous_values.get(definition.key, fallback_value)
+            raw_values[definition.key] = column.number_input(
+                definition.label,
+                min_value=float(definition.minimum),
+                max_value=float(definition.maximum),
+                value=float(fallback_value),
+                step=float(definition.step),
+                key=widget_key,
+                help=definition.description,
+            )
+        try:
+            resolved = resolve_backtest_parameters(strategy_id, raw_values)
+            resolved_settings[strategy_id] = resolved
+            status = "기본 전략 설정" if is_default_backtest_parameters(strategy_id, resolved) else "실험 설정 적용"
+            st.caption(f"{status}: {format_backtest_parameters(strategy_id, resolved)}")
+        except ValueError as error:
+            errors.append(f"{strategy_labels.get(strategy_id, strategy_id)} · {error}")
+
+    st.session_state[BACKTEST_PARAMETERS_KEY] = resolved_settings
+    return resolved_settings, tuple(errors)
+
+
+def _reset_backtest_parameter_settings(selected_strategy_ids: list[str]) -> None:
+    restored = {
+        strategy_id: default_backtest_parameters(strategy_id)
+        for strategy_id in selected_strategy_ids
+    }
+    st.session_state[BACKTEST_PARAMETERS_KEY] = restored
+    for strategy_id, values in restored.items():
+        for parameter_key, value in values.items():
+            st.session_state[f"backtest_parameter_{strategy_id}_{parameter_key}"] = value
+
+
+def _render_backtest_combination_panel(
+    selected_strategy_ids: list[str],
+    strategy_labels: dict[str, str],
+) -> tuple[BacktestCombinationSettings | None, tuple[str, ...]]:
+    st.markdown("#### 복수 전략 조합")
+    if len(selected_strategy_ids) < 2:
+        st.info("전략을 두 개 이상 선택하면 AND, OR, 가중치 방식으로 조합 결과를 단일 전략 결과와 함께 비교할 수 있습니다.")
+        return None, ()
+
+    st.caption("기본 AND는 모두 같은 방향일 때만 신호를 냅니다. OR은 한 전략의 신호를 반영하고, 가중치는 매수 +·매도 - 점수를 더해 0점이면 관망합니다.")
+    mode = st.selectbox(
+        "조합 방식",
+        options=[COMBINATION_MODE_AND, COMBINATION_MODE_OR, COMBINATION_MODE_WEIGHTED],
+        format_func=lambda value: COMBINATION_MODE_LABELS[value],
+        key=BACKTEST_COMBINATION_MODE_KEY,
+    )
+    raw_weights: dict[str, object] = {}
+    if mode == COMBINATION_MODE_WEIGHTED:
+        st.caption("권장 시작값은 모든 전략 1.0입니다. 이는 성과 예측이 아닌 중립 비교 기준이며, 합계가 1일 필요는 없습니다.")
+        saved_weights = st.session_state.get(BACKTEST_COMBINATION_WEIGHTS_KEY, {})
+        if not isinstance(saved_weights, dict):
+            saved_weights = {}
+        for strategy_id in selected_strategy_ids:
+            raw_weights[strategy_id] = st.number_input(
+                f"{strategy_labels.get(strategy_id, strategy_id)} 가중치",
+                min_value=0.1,
+                max_value=3.0,
+                value=float(saved_weights.get(strategy_id, 1.0)),
+                step=0.1,
+                key=f"backtest_combination_weight_{strategy_id}",
+            )
+        st.session_state[BACKTEST_COMBINATION_WEIGHTS_KEY] = raw_weights
+    try:
+        return resolve_backtest_combination_settings(selected_strategy_ids, mode, raw_weights), ()
+    except ValueError as error:
+        return None, (str(error),)
 
 
 def _render_backtest_history_panel(service: DashboardDataService) -> dict[str, object] | None:
@@ -614,11 +739,17 @@ def _run_backtest_action(
     selected_items: list[ResolvedSymbol],
     selected_strategy_ids: list[str],
     loaded_inputs: dict[str, LoadedBacktestInputs],
+    strategy_parameters: dict[str, dict[str, float]],
+    combination_settings: BacktestCombinationSettings | None,
 ) -> None:
     try:
         resolved_items = require_selected_items(selected_items)
         if not selected_strategy_ids:
             raise ValueError("백테스트 전략을 하나 이상 선택해 주세요.")
+        resolved_parameters = {
+            strategy_id: resolve_backtest_parameters(strategy_id, strategy_parameters.get(strategy_id))
+            for strategy_id in selected_strategy_ids
+        }
 
         blocking_reasons: list[str] = []
         for item in resolved_items:
@@ -641,7 +772,13 @@ def _run_backtest_action(
             return
 
         st.session_state[BACKTEST_BLOCKED_REASONS_KEY] = ()
-        result_bundle = _execute_backtests(resolved_items, selected_strategy_ids, loaded_inputs)
+        result_bundle = _execute_backtests(
+            resolved_items,
+            selected_strategy_ids,
+            loaded_inputs,
+            strategy_parameters=resolved_parameters,
+            combination_settings=combination_settings,
+        )
         st.session_state[BACKTEST_RESULTS_KEY] = result_bundle
         set_action_message(
             f"백테스트 실행 완료: {summarize_selected_items(resolved_items)} · 전략 {len(selected_strategy_ids)}개",
@@ -656,6 +793,9 @@ def _execute_backtests(
     selected_items: list[ResolvedSymbol],
     selected_strategy_ids: list[str],
     loaded_inputs: dict[str, LoadedBacktestInputs],
+    *,
+    strategy_parameters: dict[str, dict[str, float]] | None = None,
+    combination_settings: BacktestCombinationSettings | None = None,
 ) -> dict[str, object]:
     summaries: list[pd.DataFrame] = []
     trades: list[pd.DataFrame] = []
@@ -664,20 +804,32 @@ def _execute_backtests(
 
     for item in selected_items:
         inputs = loaded_inputs[item.symbol]
+        signal_frames: dict[str, pd.DataFrame] = {}
         for strategy_id in selected_strategy_ids:
-            adapter_output = DEFAULT_BACKTEST_ADAPTER_REGISTRY.build_signal_rows(strategy_id, inputs.adapter_datasets())
+            parameters = resolve_backtest_parameters(strategy_id, (strategy_parameters or {}).get(strategy_id))
+            adapter_output = DEFAULT_BACKTEST_ADAPTER_REGISTRY.build_signal_rows(
+                strategy_id,
+                inputs.adapter_datasets(),
+                parameters=parameters,
+            )
             raw_result = DEFAULT_BACKTEST_RUNNER.run(item.symbol, adapter_output.signal_rows)
+            signal_frames[strategy_id] = adapter_output.signal_rows
             context = build_context(
                 symbol=item.symbol,
                 strategy_id=adapter_output.strategy_id,
                 strategy_name=adapter_output.strategy_name,
-                input_sources=_build_input_sources_for_strategy(strategy_id, inputs),
+                input_sources=_build_input_sources_for_strategy(strategy_id, inputs, parameters),
+                strategy_parameters=parameters,
                 now=batch_now,
             )
             summary = enrich_summary(raw_result.summary, context)
             summary["symbol_name"] = item.symbol_name
+            parameter_status = "기본 전략 설정" if is_default_backtest_parameters(strategy_id, parameters) else "실험 설정"
+            parameter_summary = f"{parameter_status}: {format_backtest_parameters(strategy_id, parameters)}"
+            summary["strategy_parameter_summary"] = parameter_summary
             trade_frame = enrich_trades(raw_result.trades, context)
             trade_frame["symbol_name"] = item.symbol_name
+            trade_frame["strategy_parameter_summary"] = parameter_summary
             daily_equity_curve = build_daily_mark_to_market_equity_curve(
                 adapter_output.signal_rows,
                 raw_result.trades,
@@ -690,6 +842,47 @@ def _execute_backtests(
             summaries.append(summary)
             trades.append(trade_frame)
             daily_equity_curves.append(daily_equity_curve)
+
+        if combination_settings is not None:
+            combined_rows = combine_strategy_signal_rows(signal_frames, combination_settings)
+            combined_result = DEFAULT_BACKTEST_RUNNER.run(item.symbol, combined_rows)
+            combination_metadata = {
+                "mode": combination_settings.mode,
+                "weights": dict(combination_settings.weights),
+                "component_strategy_ids": list(signal_frames),
+            }
+            combination_context = build_context(
+                symbol=item.symbol,
+                strategy_id=combination_settings.strategy_id,
+                strategy_name=combination_settings.strategy_name,
+                input_sources=BacktestInputSources(
+                    indicator_source_dataset=DAILY_PRICES_INDICATORS,
+                    indicator_source_filename=inputs.indicator.filename,
+                    investor_source_dataset=INVESTOR_DAILY,
+                    investor_source_filename=inputs.investor.filename,
+                    price_source_dataset="daily_prices",
+                    price_source_filename=inputs.price.filename,
+                ),
+                combination_settings=combination_metadata,
+                now=batch_now,
+            )
+            combination_summary = enrich_summary(combined_result.summary, combination_context)
+            combination_summary["symbol_name"] = item.symbol_name
+            combination_summary["strategy_parameter_summary"] = "조합 전략: 개별 전략 설정은 위 비교 결과에서 확인"
+            combination_summary["combination_summary"] = combination_settings.summary()
+            combination_trades = enrich_trades(combined_result.trades, combination_context)
+            combination_trades["symbol_name"] = item.symbol_name
+            combination_trades["strategy_parameter_summary"] = "조합 전략"
+            combination_trades["combination_summary"] = combination_settings.summary()
+            combination_equity = build_daily_mark_to_market_equity_curve(combined_rows, combined_result.trades)
+            combination_equity["symbol"] = item.symbol
+            combination_equity["symbol_name"] = item.symbol_name
+            combination_equity["strategy_id"] = combination_settings.strategy_id
+            combination_equity["strategy_name"] = combination_settings.strategy_name
+            combination_equity["series_label"] = f"{item.symbol_name or item.symbol} · {combination_settings.strategy_name}"
+            summaries.append(combination_summary)
+            trades.append(combination_trades)
+            daily_equity_curves.append(combination_equity)
 
     summary_frame = pd.concat(summaries, ignore_index=True) if summaries else pd.DataFrame()
     trade_frame = pd.concat(trades, ignore_index=True) if trades else pd.DataFrame()
@@ -705,16 +898,29 @@ def _execute_backtests(
         "daily_equity_frame": daily_equity_frame,
         "selected_symbols": [item.symbol for item in selected_items],
         "selected_strategy_ids": list(selected_strategy_ids),
+        "strategy_parameters": strategy_parameters or {
+            strategy_id: default_backtest_parameters(strategy_id) for strategy_id in selected_strategy_ids
+        },
+        "combination_settings": combination_settings.as_json() if combination_settings is not None else None,
         "generated_at": batch_now.isoformat(),
     }
 
 
-def _build_input_sources_for_strategy(strategy_id: str, inputs: LoadedBacktestInputs) -> BacktestInputSources:
+def _build_input_sources_for_strategy(
+    strategy_id: str,
+    inputs: LoadedBacktestInputs,
+    parameters: dict[str, float],
+) -> BacktestInputSources:
+    uses_saved_golden_cross_signal = (
+        strategy_id == "golden-cross"
+        and is_default_backtest_parameters(strategy_id, parameters)
+        and inputs.golden_cross_signal.filename is not None
+    )
     return BacktestInputSources(
         indicator_source_dataset=DAILY_PRICES_INDICATORS,
         indicator_source_filename=inputs.indicator.filename,
-        signal_source_dataset=GOLDEN_CROSS_SIGNALS if strategy_id == "golden-cross" and inputs.golden_cross_signal.filename else None,
-        signal_source_filename=inputs.golden_cross_signal.filename if strategy_id == "golden-cross" else None,
+        signal_source_dataset=GOLDEN_CROSS_SIGNALS if uses_saved_golden_cross_signal else None,
+        signal_source_filename=inputs.golden_cross_signal.filename if uses_saved_golden_cross_signal else None,
         investor_source_dataset=INVESTOR_DAILY,
         investor_source_filename=inputs.investor.filename,
         price_source_dataset="daily_prices",
@@ -730,6 +936,8 @@ def _build_comparison_frame(summary_frame: pd.DataFrame) -> pd.DataFrame:
         "symbol_name",
         "strategy_id",
         "strategy_name",
+        "strategy_parameter_summary",
+        "combination_summary",
         "trade_count",
         "win_rate_pct",
         "average_return_pct",
@@ -803,6 +1011,44 @@ def build_backtest_result_interpretation(row: pd.Series) -> str:
     return " ".join(messages)
 
 
+def _strategy_parameter_summary_from_row(row: pd.Series) -> str:
+    explicit_summary = _history_text(row, "strategy_parameter_summary")
+    if explicit_summary:
+        return explicit_summary
+    strategy_id = _history_text(row, "strategy_id")
+    raw_parameters = _history_text(row, "strategy_parameters_json")
+    if not strategy_id:
+        return "저장 당시 설정 기록 없음"
+    try:
+        values = json.loads(raw_parameters) if raw_parameters else None
+        summary = format_backtest_parameters(strategy_id, values)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return "저장 당시 설정 기록을 해석할 수 없음"
+    prefix = "기본 전략 설정" if is_default_backtest_parameters(strategy_id, values) else "실험 설정"
+    return f"{prefix}: {summary}"
+
+
+def _combination_summary_from_row(row: pd.Series) -> str:
+    explicit_summary = _history_text(row, "combination_summary")
+    if explicit_summary:
+        return explicit_summary
+    raw_settings = _history_text(row, "combination_settings_json")
+    if not raw_settings:
+        return ""
+    try:
+        settings = json.loads(raw_settings)
+        mode = settings.get("mode")
+        weights = settings.get("weights")
+        if mode not in COMBINATION_MODE_LABELS or not isinstance(weights, dict):
+            return ""
+        return BacktestCombinationSettings(
+            mode=mode,
+            weights={strategy_id: float(weight) for strategy_id, weight in weights.items()},
+        ).summary()
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return "저장 당시 조합 규칙을 해석할 수 없음"
+
+
 def _render_results_panel(service: DashboardDataService, result_bundle: dict[str, object]) -> None:
     summary_frame = result_bundle.get("summary_frame")
     comparison_frame = result_bundle.get("comparison_frame")
@@ -822,12 +1068,16 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
         for _, row in summary_frame.head(6).iterrows():
             label = f"{row.get('symbol_name') or row.get('symbol')} · {row.get('strategy_name')}"
             interpretation = build_backtest_result_interpretation(row)
+            parameter_summary = _strategy_parameter_summary_from_row(row)
+            combination_summary = _combination_summary_from_row(row)
             cards.append(
                 f"""
                 <div class="backtest-result-card">
                   <strong>{escape(str(label))}</strong>
                   <div class="backtest-result-value">{escape(format_number(row.get('total_return_pct', 0.0)))}%</div>
                   <p>거래 {int(row.get('trade_count', 0))}건 · 승률 {escape(format_number(row.get('win_rate_pct', 0.0)))}% · 최대낙폭 {escape(format_number(row.get('max_drawdown_pct', 0.0)))}%</p>
+                  <p>설정: {escape(parameter_summary)}</p>
+                  {f'<p>조합 규칙: {escape(combination_summary)}</p>' if combination_summary else ''}
                   <p class="backtest-result-interpretation">{escape(interpretation)}</p>
                 </div>
                 """,
@@ -909,6 +1159,8 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
                     "symbol_name",
                     "strategy_id",
                     "strategy_name",
+                    "strategy_parameter_summary",
+                    "combination_summary",
                     "entry_signal_date",
                     "entry_date",
                     "entry_price",

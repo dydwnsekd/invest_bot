@@ -71,10 +71,12 @@ class _FakeStreamlit:
         multiselect_queue: list[list[str]] | None = None,
         button_values: dict[str, bool] | None = None,
         selectbox_values: dict[str, str] | None = None,
+        number_input_values: dict[str, float] | None = None,
     ):
         self.multiselect_queue = list(multiselect_queue or [])
         self.button_values = button_values or {}
         self.selectbox_values = selectbox_values or {}
+        self.number_input_values = number_input_values or {}
         self.session_state = _FakeSessionState()
         self.warning_messages: list[str] = []
         self.info_messages: list[str] = []
@@ -125,6 +127,7 @@ class _FakeStreamlit:
 
     def number_input(self, label: str, value=0, key: str | None = None, **kwargs):
         self.number_input_labels.append(label)
+        value = self.number_input_values.get(key or label, value)
         if key is not None:
             self.session_state[key] = value
         return value
@@ -268,7 +271,11 @@ def test_render_backtest_tab_runs_and_renders_result_sections(monkeypatch: pytes
     result_bundle = fake_st.session_state[BACKTEST_RESULTS_KEY]
     assert fake_st.session_state["action_message_type"] == "success"
     assert isinstance(result_bundle["summary_frame"], pd.DataFrame)
-    assert len(result_bundle["summary_frame"]) == 2
+    assert len(result_bundle["summary_frame"]) == 3
+    assert set(result_bundle["summary_frame"]["strategy_id"]) == {"golden-cross", "rsi", "combination-and"}
+    assert result_bundle["combination_settings"] == '{"mode": "and", "weights": {"golden-cross": 1.0, "rsi": 1.0}}'
+    combined_summary = result_bundle["summary_frame"].query("strategy_id == 'combination-and'").iloc[0]
+    assert combined_summary["combination_settings_json"] == '{"component_strategy_ids": ["golden-cross", "rsi"], "mode": "and", "weights": {"golden-cross": 1.0, "rsi": 1.0}}'
     assert not result_bundle["comparison_frame"].empty
     assert not result_bundle["trade_frame"].empty
     assert not result_bundle["chart_frame"].empty
@@ -281,6 +288,7 @@ def test_render_backtest_tab_runs_and_renders_result_sections(monkeypatch: pytes
     assert any("거래 순서 누적 수익률" in body for body in fake_st.markdown_calls)
     assert any("일별 평가금액" in body for body in fake_st.markdown_calls)
     assert any("거래 로그" in body for body in fake_st.markdown_calls)
+    assert any("조합 규칙" in body for body in fake_st.markdown_calls)
     assert any("수수료·세금·슬리피지 미반영" in body for body in fake_st.caption_calls)
 
 
@@ -435,6 +443,103 @@ def test_execute_backtests_reuses_one_batch_run_group_id(monkeypatch: pytest.Mon
     }
     assert result["generated_at"] == "2026-07-20T01:02:03+00:00"
     assert _SteppedDateTime.calls == 1
+
+
+def test_execute_backtests_records_custom_parameter_settings() -> None:
+    indicator_frame = pd.DataFrame(
+        [
+            {"date": "2026-04-01", "close": 100, "ma_5": 98, "ma_20": 99, "ma_60": 97, "rsi_14": 35, "momentum_20": 0},
+            {"date": "2026-04-02", "close": 101, "ma_5": 100, "ma_20": 99, "ma_60": 97, "rsi_14": 50, "momentum_20": 0},
+            {"date": "2026-04-03", "close": 103, "ma_5": 101, "ma_20": 100, "ma_60": 98, "rsi_14": 65, "momentum_20": 0},
+        ]
+    )
+
+    result = streamlit_backtest_module._execute_backtests(
+        [SimpleNamespace(symbol="005930", symbol_name="삼성전자")],
+        ["rsi"],
+        {"005930": _loaded_inputs(indicator=indicator_frame, price=indicator_frame[["date", "close"]].copy())},
+        strategy_parameters={"rsi": {"buy_threshold": 40, "sell_threshold": 60}},
+    )
+
+    summary = result["summary_frame"].iloc[0]
+    assert summary["strategy_parameters_json"] == '{"buy_threshold": 40.0, "sell_threshold": 60.0}'
+    assert "실험 설정" in summary["strategy_parameter_summary"]
+    assert result["strategy_parameters"] == {"rsi": {"buy_threshold": 40.0, "sell_threshold": 60.0}}
+
+
+def test_parameter_panel_explains_defaults_and_rejects_reversed_golden_cross(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(
+        number_input_values={
+            "backtest_parameter_golden-cross_short_window": 20,
+            "backtest_parameter_golden-cross_long_window": 10,
+        }
+    )
+    monkeypatch.setattr(streamlit_backtest_module, "st", fake_st)
+
+    settings, errors = streamlit_backtest_module._render_backtest_parameter_panel(
+        ["golden-cross", "trend-filter"],
+        {"golden-cross": "Golden Cross", "trend-filter": "Trend Filter"},
+    )
+
+    assert settings["trend-filter"] == {}
+    assert "단기 이동평균 기간" in fake_st.number_input_labels
+    assert "장기 이동평균 기간" in fake_st.number_input_labels
+    assert any("단기 이동평균 기간은 장기 이동평균 기간보다 짧아야" in error for error in errors)
+    assert any("조절 가능한 실험 설정이 없습니다" in message for message in fake_st.info_messages)
+
+
+def test_reset_backtest_parameter_settings_restores_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    fake_st.session_state["backtest_parameter_rsi_buy_threshold"] = 40
+    fake_st.session_state["backtest_parameter_rsi_sell_threshold"] = 60
+    monkeypatch.setattr(streamlit_backtest_module, "st", fake_st)
+
+    streamlit_backtest_module._reset_backtest_parameter_settings(["rsi", "trend-filter"])
+
+    assert fake_st.session_state["backtest_parameter_rsi_buy_threshold"] == 30
+    assert fake_st.session_state["backtest_parameter_rsi_sell_threshold"] == 70
+    assert fake_st.session_state[streamlit_backtest_module.BACKTEST_PARAMETERS_KEY] == {
+        "rsi": {"buy_threshold": 30, "sell_threshold": 70},
+        "trend-filter": {},
+    }
+
+
+def test_combination_panel_uses_and_by_default_and_exposes_neutral_weight_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit(
+        selectbox_values={streamlit_backtest_module.BACKTEST_COMBINATION_MODE_KEY: "weighted"},
+        number_input_values={
+            "backtest_combination_weight_rsi": 1.5,
+            "backtest_combination_weight_momentum": 0.5,
+        },
+    )
+    monkeypatch.setattr(streamlit_backtest_module, "st", fake_st)
+
+    weighted_settings, errors = streamlit_backtest_module._render_backtest_combination_panel(
+        ["rsi", "momentum"],
+        {"rsi": "RSI", "momentum": "Momentum"},
+    )
+
+    assert errors == ()
+    assert weighted_settings is not None
+    assert weighted_settings.mode == "weighted"
+    assert dict(weighted_settings.weights) == {"rsi": 1.5, "momentum": 0.5}
+    assert fake_st.number_input_labels[-2:] == ["RSI 가중치", "Momentum 가중치"]
+    assert any("성과 예측이 아닌 중립 비교 기준" in caption for caption in fake_st.caption_calls)
+
+
+def test_combination_summary_is_restored_from_persisted_metadata() -> None:
+    summary = streamlit_backtest_module._combination_summary_from_row(
+        pd.Series(
+            {
+                "combination_settings_json": (
+                    '{"component_strategy_ids": ["rsi", "momentum"], "mode": "weighted", '
+                    '"weights": {"momentum": 0.5, "rsi": 1.5}}'
+                )
+            }
+        )
+    )
+
+    assert summary == "가중치: 매수는 +, 매도는 -로 합산하며 0점은 관망 · momentum 0.5 · rsi 1.5"
 
 
 class _FakeHistoryStorage:
