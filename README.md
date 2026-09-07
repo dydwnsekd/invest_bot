@@ -675,7 +675,7 @@ data/processed/test_reports/
 - [x] 다중 종목 배치 수집
 - [x] 정기 수집 스케줄링 초안
 - [ ] 일별 mark-to-market equity curve
-- [ ] 백테스트 artifact history / reload
+- [ ] 백테스트 artifact history / reload정
 - [ ] 전략 파라미터 튜닝
 - [ ] 포트폴리오 / multi-symbol aggregation
 - [ ] 모의투자 주문 실행

@@ -8,12 +8,29 @@ from .adapters import (
     BacktestStrategyAdapterRegistry,
     build_strategy_signal_rows,
 )
+from .combination import (
+    COMBINATION_MODE_AND,
+    COMBINATION_MODE_LABELS,
+    COMBINATION_MODE_OR,
+    COMBINATION_MODE_WEIGHTED,
+    BacktestCombinationSettings,
+    combine_strategy_signal_rows,
+    resolve_backtest_combination_settings,
+)
 from .readiness import (
     BacktestReadinessResult,
     RunReadinessGate,
     StrategyReadiness,
     build_run_readiness_gate,
     check_backtest_readiness,
+)
+from .parameters import (
+    BacktestParameterDefinition,
+    default_backtest_parameters,
+    format_backtest_parameters,
+    is_default_backtest_parameters,
+    list_backtest_parameter_definitions,
+    resolve_backtest_parameters,
 )
 from .runner import (
     DEFAULT_BACKTEST_RUNNER,
@@ -34,8 +51,14 @@ from .strategy_registry import (
 __all__ = [
     "BACKTEST_STRATEGY_IDS",
     "BACKTEST_STRATEGY_SPECS",
+    "COMBINATION_MODE_AND",
+    "COMBINATION_MODE_LABELS",
+    "COMBINATION_MODE_OR",
+    "COMBINATION_MODE_WEIGHTED",
     "BacktestAdapterOutput",
+    "BacktestCombinationSettings",
     "BacktestDataReadinessError",
+    "BacktestParameterDefinition",
     "BacktestReadinessResult",
     "BacktestResult",
     "BacktestStrategyAdapterRegistry",
@@ -52,6 +75,13 @@ __all__ = [
     "build_daily_mark_to_market_equity_curve",
     "build_strategy_signal_rows",
     "check_backtest_readiness",
+    "default_backtest_parameters",
+    "format_backtest_parameters",
     "get_backtest_strategy_spec",
+    "is_default_backtest_parameters",
+    "list_backtest_parameter_definitions",
     "list_backtest_strategy_specs",
+    "combine_strategy_signal_rows",
+    "resolve_backtest_combination_settings",
+    "resolve_backtest_parameters",
 ]
