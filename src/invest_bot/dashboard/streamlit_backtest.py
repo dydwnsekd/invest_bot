@@ -19,7 +19,11 @@ from invest_bot.backtest import (
     COMBINATION_MODE_OR,
     COMBINATION_MODE_WEIGHTED,
     BacktestCombinationSettings,
+    PORTFOLIO_DATE_POLICY,
+    PORTFOLIO_REBALANCING_METHOD,
+    PORTFOLIO_WEIGHTING_METHOD,
     build_daily_mark_to_market_equity_curve,
+    build_equal_weight_portfolios,
     check_backtest_readiness,
     default_backtest_parameters,
     format_backtest_parameters,
@@ -69,6 +73,7 @@ BACKTEST_PARAMETERS_KEY = "backtest_strategy_parameters"
 BACKTEST_PARAMETERS_RESET_KEY = "backtest_strategy_parameters_reset"
 BACKTEST_COMBINATION_MODE_KEY = "backtest_combination_mode"
 BACKTEST_COMBINATION_WEIGHTS_KEY = "backtest_combination_weights"
+BACKTEST_PORTFOLIO_STRATEGY_KEY = "backtest_portfolio_strategy"
 
 
 @dataclass(frozen=True, slots=True)
@@ -887,6 +892,10 @@ def _execute_backtests(
     summary_frame = pd.concat(summaries, ignore_index=True) if summaries else pd.DataFrame()
     trade_frame = pd.concat(trades, ignore_index=True) if trades else pd.DataFrame()
     daily_equity_frame = pd.concat(daily_equity_curves, ignore_index=True) if daily_equity_curves else pd.DataFrame()
+    portfolio_result = build_equal_weight_portfolios(
+        daily_equity_frame,
+        selected_symbols=[item.symbol for item in selected_items],
+    )
     comparison_frame = _build_comparison_frame(summary_frame)
     chart_frame = _build_cumulative_trade_return_frame(trade_frame)
 
@@ -896,6 +905,10 @@ def _execute_backtests(
         "trade_frame": trade_frame,
         "chart_frame": chart_frame,
         "daily_equity_frame": daily_equity_frame,
+        "portfolio_equity_frame": portfolio_result.equity_frame,
+        "portfolio_summary_frame": portfolio_result.summary_frame,
+        "portfolio_constituent_frame": portfolio_result.constituent_frame,
+        "portfolio_notices": portfolio_result.notices,
         "selected_symbols": [item.symbol for item in selected_items],
         "selected_strategy_ids": list(selected_strategy_ids),
         "strategy_parameters": strategy_parameters or {
@@ -1149,6 +1162,8 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
             else "평가할 일별 가격 데이터가 없어 일별 평가금액 차트를 아직 그릴 수 없습니다."
         )
 
+    _render_portfolio_aggregation_panel(service, result_bundle)
+
     st.markdown("#### 거래 로그")
     if isinstance(trade_frame, pd.DataFrame) and not trade_frame.empty:
         trade_display = trade_frame[
@@ -1177,6 +1192,149 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
         st.dataframe(format_frame_for_display(trade_display, service), width="stretch", hide_index=True)
     else:
         st.info("이번 실행에서 생성된 거래 로그가 없습니다.")
+
+
+def _render_portfolio_aggregation_panel(service: DashboardDataService, result_bundle: dict[str, object]) -> None:
+    st.markdown("#### 포트폴리오 집계")
+    with st.container(border=True):
+        _render_portfolio_aggregation_content(service, result_bundle)
+
+
+def _render_portfolio_aggregation_content(service: DashboardDataService, result_bundle: dict[str, object]) -> None:
+    summary_frame = result_bundle.get("portfolio_summary_frame")
+    equity_frame = result_bundle.get("portfolio_equity_frame")
+    constituent_frame = result_bundle.get("portfolio_constituent_frame")
+    notices = result_bundle.get("portfolio_notices")
+
+    if isinstance(notices, tuple):
+        for notice in notices:
+            st.info(str(notice))
+    if not isinstance(summary_frame, pd.DataFrame) or summary_frame.empty:
+        if isinstance(constituent_frame, pd.DataFrame) and not constituent_frame.empty:
+            st.markdown("##### 제외 또는 미계산 사유")
+            st.dataframe(
+                _format_portfolio_constituent_frame(constituent_frame, service),
+                width="stretch",
+                hide_index=True,
+            )
+        if not isinstance(notices, tuple):
+            st.info("포트폴리오는 종목을 두 개 이상 선택한 이번 세션 실행 결과에서 계산합니다.")
+        return
+    if not isinstance(equity_frame, pd.DataFrame) or equity_frame.empty:
+        st.info("포트폴리오 평가금액을 계산할 공통 거래일이 없습니다.")
+        return
+
+    strategy_ids = summary_frame["strategy_id"].astype(str).tolist()
+    if st.session_state.get(BACKTEST_PORTFOLIO_STRATEGY_KEY) not in strategy_ids:
+        st.session_state.pop(BACKTEST_PORTFOLIO_STRATEGY_KEY, None)
+    strategy_labels = {
+        str(row["strategy_id"]): str(row.get("strategy_name") or row["strategy_id"])
+        for _, row in summary_frame.iterrows()
+    }
+    selected_strategy_id = st.selectbox(
+        "포트폴리오 집계 대상 전략",
+        options=strategy_ids,
+        format_func=lambda strategy_id: strategy_labels[strategy_id],
+        key=BACKTEST_PORTFOLIO_STRATEGY_KEY,
+    )
+    portfolio_summary = summary_frame[summary_frame["strategy_id"].astype(str) == selected_strategy_id].iloc[0]
+    portfolio_equity = equity_frame[equity_frame["strategy_id"].astype(str) == selected_strategy_id].copy()
+    portfolio_constituents = (
+        constituent_frame[constituent_frame["strategy_id"].astype(str) == selected_strategy_id].copy()
+        if isinstance(constituent_frame, pd.DataFrame) and "strategy_id" in constituent_frame.columns
+        else pd.DataFrame()
+    )
+
+    st.caption(
+        f"{PORTFOLIO_WEIGHTING_METHOD} · {PORTFOLIO_REBALANCING_METHOD} · {PORTFOLIO_DATE_POLICY} · "
+        "첫 공통 거래일에 종목별 평가액을 같은 초기자금 기준으로 다시 맞춘 비교 결과입니다."
+    )
+    metrics = st.columns(3, gap="small")
+    metrics[0].metric("포트폴리오 수익률", f"{format_number(portfolio_summary.get('total_return_pct', 0.0))}%")
+    metrics[1].metric("포함 종목", f"{int(portfolio_summary.get('included_symbol_count', 0))}개")
+    metrics[2].metric("제외 종목", f"{int(portfolio_summary.get('excluded_symbol_count', 0))}개")
+
+    portfolio_chart = (
+        alt.Chart(portfolio_equity)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("date:T", title="거래일"),
+            y=alt.Y("equity:Q", title="포트폴리오 평가금액(원)"),
+            tooltip=[
+                alt.Tooltip("date:T", title="거래일"),
+                alt.Tooltip("equity:Q", title="평가금액(원)", format=",.0f"),
+                alt.Tooltip("equity_return_pct:Q", title="누적 수익률(%)", format=".2f"),
+                alt.Tooltip("constituent_count:Q", title="포함 종목 수"),
+            ],
+        )
+        .properties(height=280)
+    )
+    st.altair_chart(portfolio_chart, width="stretch")
+
+    st.markdown("##### 종목별 비중과 수익 기여도")
+    if portfolio_constituents.empty:
+        st.info("포트폴리오에 포함·제외된 종목 정보를 찾을 수 없습니다.")
+        return
+    st.dataframe(
+        _format_portfolio_constituent_frame(portfolio_constituents, service),
+        width="stretch",
+        hide_index=True,
+    )
+    unavailable_constituents = (
+        constituent_frame[
+            ~constituent_frame["strategy_id"].astype(str).isin(summary_frame["strategy_id"].astype(str))
+        ].copy()
+        if isinstance(constituent_frame, pd.DataFrame) and "strategy_id" in constituent_frame.columns
+        else pd.DataFrame()
+    )
+    if not unavailable_constituents.empty:
+        st.markdown("##### 계산하지 않은 전략의 제외 사유")
+        st.dataframe(
+            _format_portfolio_constituent_frame(unavailable_constituents, service),
+            width="stretch",
+            hide_index=True,
+        )
+
+
+def _format_portfolio_constituent_frame(frame: pd.DataFrame, service: DashboardDataService) -> pd.DataFrame:
+    display_columns = [
+        "strategy_name",
+        "symbol",
+        "symbol_name",
+        "status",
+        "reason",
+        "weight_pct",
+        "constituent_return_pct",
+        "contribution_pct_point",
+        "start_equity",
+        "end_equity",
+    ]
+    source = frame[[column for column in display_columns if column in frame.columns]].copy()
+    display = format_frame_for_display(source, service)
+    for column in ("weight_pct", "constituent_return_pct", "contribution_pct_point"):
+        if column in source.columns:
+            display[column] = source[column].map(
+                lambda value: "-" if pd.isna(value) else f"{format_number(value)}%"
+            )
+    for column in ("start_equity", "end_equity"):
+        if column in source.columns:
+            display[column] = source[column].map(
+                lambda value: "-" if pd.isna(value) else f"{format_number(value)}원"
+            )
+    return display.rename(
+        columns={
+            "strategy_name": "전략",
+            "symbol": "종목코드",
+            "symbol_name": "종목명",
+            "status": "집계 상태",
+            "reason": "포함·제외 사유",
+            "weight_pct": "비중",
+            "constituent_return_pct": "종목 수익률",
+            "contribution_pct_point": "수익 기여도",
+            "start_equity": "배정 초기자금",
+            "end_equity": "배정 최종금액",
+        }
+    )
 
 
 def _load_backtest_inputs(service: DashboardDataService, symbol: str) -> LoadedBacktestInputs:

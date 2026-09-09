@@ -467,6 +467,111 @@ def test_execute_backtests_records_custom_parameter_settings() -> None:
     assert result["strategy_parameters"] == {"rsi": {"buy_threshold": 40.0, "sell_threshold": 60.0}}
 
 
+def test_execute_backtests_builds_equal_weight_portfolio_for_multiple_symbols() -> None:
+    first_indicator = pd.DataFrame(
+        [
+            {"date": "2026-04-01", "close": 100, "ma_5": 98, "ma_20": 99, "ma_60": 97, "rsi_14": 50, "momentum_20": 0},
+            {"date": "2026-04-02", "close": 101, "ma_5": 100, "ma_20": 99, "ma_60": 97, "rsi_14": 25, "momentum_20": 0},
+            {"date": "2026-04-03", "close": 103, "ma_5": 101, "ma_20": 100, "ma_60": 98, "rsi_14": 50, "momentum_20": 0},
+            {"date": "2026-04-04", "close": 107, "ma_5": 99, "ma_20": 100, "ma_60": 98, "rsi_14": 75, "momentum_20": 0},
+            {"date": "2026-04-05", "close": 110, "ma_5": 98, "ma_20": 100, "ma_60": 98, "rsi_14": 50, "momentum_20": 0},
+        ]
+    )
+    second_indicator = first_indicator.assign(close=[200, 198, 202, 205, 210])
+    second_inputs = LoadedBacktestInputs(
+        symbol="000660",
+        indicator=LoadedDataset("daily_prices_indicators", "000660_indicators.csv", second_indicator),
+        investor=LoadedDataset("investor_daily", "000660_investor.csv", None),
+        price=LoadedDataset("daily_prices", "000660_prices.csv", second_indicator[["date", "close"]].copy()),
+        golden_cross_signal=LoadedDataset("golden_cross_signals", "000660_signals.csv", None),
+    )
+
+    result = streamlit_backtest_module._execute_backtests(
+        [
+            SimpleNamespace(symbol="005930", symbol_name="삼성전자"),
+            SimpleNamespace(symbol="000660", symbol_name="SK하이닉스"),
+        ],
+        ["rsi"],
+        {
+            "005930": _loaded_inputs(indicator=first_indicator, price=first_indicator[["date", "close"]].copy()),
+            "000660": second_inputs,
+        },
+    )
+
+    portfolio_summary = result["portfolio_summary_frame"].iloc[0]
+    portfolio_constituents = result["portfolio_constituent_frame"]
+    assert portfolio_summary["strategy_id"] == "rsi"
+    assert portfolio_summary["included_symbol_count"] == 2
+    assert set(portfolio_constituents["symbol"]) == {"005930", "000660"}
+    assert portfolio_constituents["weight_pct"].sum() == pytest.approx(100.0)
+    assert not result["portfolio_equity_frame"].empty
+    assert result["portfolio_notices"] == ()
+
+
+def test_portfolio_panel_renders_assumptions_curve_and_constituent_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    daily_equity_frame = pd.DataFrame(
+        [
+            {"date": "2026-04-01", "equity": 1_000_000, "symbol": "A", "symbol_name": "종목 A", "strategy_id": "rsi", "strategy_name": "RSI"},
+            {"date": "2026-04-02", "equity": 1_100_000, "symbol": "A", "symbol_name": "종목 A", "strategy_id": "rsi", "strategy_name": "RSI"},
+            {"date": "2026-04-01", "equity": 1_000_000, "symbol": "B", "symbol_name": "종목 B", "strategy_id": "rsi", "strategy_name": "RSI"},
+            {"date": "2026-04-02", "equity": 900_000, "symbol": "B", "symbol_name": "종목 B", "strategy_id": "rsi", "strategy_name": "RSI"},
+        ]
+    )
+    portfolio = streamlit_backtest_module.build_equal_weight_portfolios(
+        daily_equity_frame,
+        selected_symbols=["A", "B"],
+    )
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_backtest_module, "st", fake_st)
+
+    streamlit_backtest_module._render_portfolio_aggregation_panel(
+        DashboardDataService(),
+        {
+            "portfolio_equity_frame": portfolio.equity_frame,
+            "portfolio_summary_frame": portfolio.summary_frame,
+            "portfolio_constituent_frame": portfolio.constituent_frame,
+            "portfolio_notices": portfolio.notices,
+        },
+    )
+
+    assert "포트폴리오 집계 대상 전략" in fake_st.selectbox_labels
+    assert any("동일 비중 · 리밸런싱 없음 · 공통 거래일" in caption for caption in fake_st.caption_calls)
+    assert any(label == "포트폴리오 수익률" for label, _ in fake_st.metric_calls)
+    assert len(fake_st.altair_chart_calls) == 1
+    assert fake_st.dataframe_calls == 1
+
+
+def test_portfolio_panel_shows_exclusion_reasons_when_common_period_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    daily_equity_frame = pd.DataFrame(
+        [
+            {"date": "2026-04-01", "equity": 1_000_000, "symbol": "A", "symbol_name": "종목 A", "strategy_id": "rsi", "strategy_name": "RSI"},
+            {"date": "2026-04-02", "equity": 1_100_000, "symbol": "A", "symbol_name": "종목 A", "strategy_id": "rsi", "strategy_name": "RSI"},
+            {"date": "2026-04-03", "equity": 1_000_000, "symbol": "B", "symbol_name": "종목 B", "strategy_id": "rsi", "strategy_name": "RSI"},
+            {"date": "2026-04-04", "equity": 1_100_000, "symbol": "B", "symbol_name": "종목 B", "strategy_id": "rsi", "strategy_name": "RSI"},
+        ]
+    )
+    portfolio = streamlit_backtest_module.build_equal_weight_portfolios(
+        daily_equity_frame,
+        selected_symbols=["A", "B"],
+    )
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_backtest_module, "st", fake_st)
+
+    streamlit_backtest_module._render_portfolio_aggregation_panel(
+        DashboardDataService(),
+        {
+            "portfolio_equity_frame": portfolio.equity_frame,
+            "portfolio_summary_frame": portfolio.summary_frame,
+            "portfolio_constituent_frame": portfolio.constituent_frame,
+            "portfolio_notices": portfolio.notices,
+        },
+    )
+
+    assert any("공통 거래일이 2일 미만" in message for message in fake_st.info_messages)
+    assert any("제외 또는 미계산 사유" in body for body in fake_st.markdown_calls)
+    assert fake_st.dataframe_calls == 1
+
+
 def test_parameter_panel_explains_defaults_and_rejects_reversed_golden_cross(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_st = _FakeStreamlit(
         number_input_values={

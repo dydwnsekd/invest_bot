@@ -32,6 +32,13 @@ from .parameters import (
     list_backtest_parameter_definitions,
     resolve_backtest_parameters,
 )
+from .portfolio import (
+    PORTFOLIO_DATE_POLICY,
+    PORTFOLIO_REBALANCING_METHOD,
+    PORTFOLIO_WEIGHTING_METHOD,
+    PortfolioAggregationResult,
+    build_equal_weight_portfolios,
+)
 from .runner import (
     DEFAULT_BACKTEST_RUNNER,
     DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
@@ -69,10 +76,15 @@ __all__ = [
     "DatasetRequirement",
     "GOLDEN_CROSS_SIGNALS",
     "NormalizedSignalBacktestRunner",
+    "PORTFOLIO_DATE_POLICY",
+    "PORTFOLIO_REBALANCING_METHOD",
+    "PORTFOLIO_WEIGHTING_METHOD",
+    "PortfolioAggregationResult",
     "RunReadinessGate",
     "StrategyReadiness",
     "build_run_readiness_gate",
     "build_daily_mark_to_market_equity_curve",
+    "build_equal_weight_portfolios",
     "build_strategy_signal_rows",
     "check_backtest_readiness",
     "default_backtest_parameters",
