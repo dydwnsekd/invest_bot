@@ -44,9 +44,13 @@ def render_actions_tab(
     symbol_entries = symbol_lookup.list_entries()
     selection_map = {entry.symbol: entry for entry in symbol_entries}
     available_symbols = list(selection_map.keys())
+    _sanitize_action_symbol_selection_state(available_symbols)
+    persisted_symbols = st.session_state.get("streamlit_selected_symbols", ["005930"])
+    if not isinstance(persisted_symbols, (list, tuple)):
+        persisted_symbols = []
     default_multi_symbols = default_selected_symbols(
         available_symbols,
-        st.session_state.get("streamlit_selected_symbols", ["005930"]),
+        [symbol for symbol in persisted_symbols if isinstance(symbol, str)],
     )
 
     with st.container(border=True):
@@ -130,6 +134,40 @@ def render_action_progress(action_name: str, selected_items: list[ResolvedSymbol
         if callable(write):
             write("완료될 때까지 화면을 닫지 말고 기다려 주세요. 작업이 끝나면 결과 메시지가 표시됩니다.")
         yield
+
+
+def _sanitize_action_symbol_selection_state(available_symbols: list[str]) -> None:
+    """Drop symbols that disappeared since a session preference was saved."""
+
+    session_state = st.session_state
+    persisted = session_state.get("streamlit_selected_symbols", ["005930"])
+    persisted_symbols = _available_symbol_selection(persisted, available_symbols)
+    fallback = persisted_symbols or default_selected_symbols(available_symbols, ["005930"])
+
+    if "multi_symbol_picker" in session_state:
+        current = session_state.get("multi_symbol_picker")
+        normalized = _available_symbol_selection(current, available_symbols)
+        current_values = list(current) if isinstance(current, (list, tuple)) else []
+        if normalized != current_values:
+            resolved = normalized or fallback
+            session_state["multi_symbol_picker"] = resolved
+            session_state["streamlit_selected_symbols"] = resolved
+        return
+
+    if "streamlit_selected_symbols" in session_state:
+        current_values = list(persisted) if isinstance(persisted, (list, tuple)) else []
+        if persisted_symbols != current_values:
+            session_state["streamlit_selected_symbols"] = fallback
+
+
+def _available_symbol_selection(value: object, available_symbols: list[str]) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    selected: list[str] = []
+    for symbol in value:
+        if isinstance(symbol, str) and symbol in available_symbols and symbol not in selected:
+            selected.append(symbol)
+    return selected
 
 
 def run_collect_action(selected_items: list[ResolvedSymbol], days: int) -> None:

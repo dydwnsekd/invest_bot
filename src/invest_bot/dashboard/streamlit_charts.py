@@ -523,12 +523,15 @@ def render_chart_selector(
 
     preset_by_key = {preset.key: preset for preset in presets}
     default_key = default_chart_preset(dataset_name, presets)
+    chart_type_key = f"{key_prefix}_chart_type"
+    if st.session_state.get(chart_type_key) not in preset_by_key:
+        st.session_state.pop(chart_type_key, None)
     selected_key = st.selectbox(
         "차트 유형",
         options=[preset.key for preset in presets],
         index=[preset.key for preset in presets].index(default_key),
         format_func=lambda key: preset_by_key[key].label,
-        key=f"{key_prefix}_chart_type",
+        key=chart_type_key,
     )
     st.caption(preset_by_key[selected_key].description)
     selected_preset, selected_dates = render_range_controls(frame, key_prefix=key_prefix)
@@ -557,13 +560,16 @@ def _render_professional_chart_selector(
 ) -> None:
     selected_preset, selected_dates = render_range_controls(frame, key_prefix=key_prefix)
     timeframe_keys = [key for key, _label in TIMEFRAME_OPTIONS]
+    timeframe_state_key = f"{key_prefix}_timeframe"
+    if st.session_state.get(timeframe_state_key) not in timeframe_keys:
+        st.session_state.pop(timeframe_state_key, None)
     timeframe_key = st.radio(
         "봉 기준",
         options=timeframe_keys,
         index=0,
         format_func=lambda key: TIMEFRAME_LABELS[key],
         horizontal=True,
-        key=f"{key_prefix}_timeframe",
+        key=timeframe_state_key,
     )
     range_state = resolve_range_state(
         frame,

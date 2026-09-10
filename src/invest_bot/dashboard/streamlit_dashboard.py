@@ -20,6 +20,7 @@ from invest_bot.dashboard.streamlit_layout import (
     resolve_tab_name as _resolve_tab_name,
     sync_tab_to_query_params as _sync_tab_to_query_params,
 )
+from invest_bot.dashboard.streamlit_preferences import restore_dashboard_preference_draft as _restore_dashboard_preference_draft
 from invest_bot.dashboard.streamlit_overview import (
     render_overview_tab as _render_overview_tab,
     render_schedule_status_panel as _render_schedule_status_panel,
@@ -69,6 +70,7 @@ def main() -> None:
 
     _render_sidebar(service, schedule_status)
     st.session_state.selected_tab = _resolve_tab_name(st.session_state.get("selected_tab"))
+    _restore_dashboard_preference_draft(st.session_state, tab_name=st.session_state.selected_tab)
     _sync_tab_to_query_params(st.session_state.selected_tab)
     _render_header(st.session_state.selected_tab)
     _render_action_feedback()

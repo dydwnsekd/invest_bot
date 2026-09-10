@@ -3119,6 +3119,68 @@ def test_streamlit_dashboard_main_builds_settings_once_and_injects_them(monkeypa
     assert captured["actions_settings"] is settings
 
 
+def test_streamlit_dashboard_main_restores_active_tab_draft_before_rendering_widgets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_st = _FakeStreamlit()
+    fake_st.session_state["selected_tab"] = "데이터 갱신"
+    fake_st.session_state["dashboard_preference_draft"] = {
+        "version": 1,
+        "settings": {
+            "actions": {
+                "symbols": ["005930", "000660"],
+                "collection_period": ["2026-01-01", "2026-03-31"],
+            }
+        },
+    }
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(streamlit_dashboard_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_dashboard_module, "_apply_custom_style", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_sidebar", lambda *args, **kwargs: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_header", lambda *args, **kwargs: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_action_feedback", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_load_optional_schedule_status", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_read_preview_frame", lambda service, preview: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_load_indicator_frame_for_symbol", lambda service, symbol: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_schedule_status_panel", lambda *args, **kwargs: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "SymbolLookup", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        streamlit_dashboard_module.AppSettings,
+        "from_file",
+        classmethod(lambda cls: AppSettings()),
+    )
+
+    class _FakeService:
+        def __init__(self, *, settings):
+            return None
+
+        def build_snapshot(self):
+            return SimpleNamespace()
+
+        def load_test_report(self):
+            return None
+
+    monkeypatch.setattr(streamlit_dashboard_module, "DashboardDataService", _FakeService)
+    monkeypatch.setattr(
+        streamlit_dashboard_module,
+        "_render_actions_tab",
+        lambda *args, **kwargs: captured.update(
+            {
+                "symbols": list(fake_st.session_state["multi_symbol_picker"]),
+                "period": fake_st.session_state["action_collection_period"],
+            }
+        ),
+    )
+
+    streamlit_dashboard_module.main()
+
+    assert captured == {
+        "symbols": ["005930", "000660"],
+        "period": (date(2026, 1, 1), date(2026, 3, 31)),
+    }
+
+
 def test_home_refreshes_favorites_and_rebuilds_snapshot_after_update(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_st = _FakeStreamlit()
     monkeypatch.setattr(streamlit_dashboard_module, "st", fake_st)

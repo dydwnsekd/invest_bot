@@ -5,6 +5,7 @@ from html import escape
 import streamlit as st
 
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.dashboard.streamlit_preferences import render_dashboard_preferences_panel, sync_dashboard_preference_draft
 
 
 TAB_META = {
@@ -93,6 +94,8 @@ def sync_tab_to_query_params(tab_name: str | None) -> None:
 
 def render_sidebar(service: DashboardDataService, schedule_status) -> None:
     st.session_state.selected_tab = resolve_tab_name(st.session_state.get("selected_tab"))
+    # This runs before a navigation button can call st.rerun(), preserving the active tab's widgets.
+    sync_dashboard_preference_draft(st.session_state)
     with st.sidebar:
         st.markdown("## invest_bot")
         st.caption("데이터 갱신부터 투자 리포트, 백테스트까지 한 흐름으로 확인합니다.")
@@ -130,6 +133,9 @@ def render_sidebar(service: DashboardDataService, schedule_status) -> None:
                 """,
                 unsafe_allow_html=True,
             )
+
+        st.divider()
+        render_dashboard_preferences_panel()
 
 
 def render_header(selected_tab: str | None = None) -> None:

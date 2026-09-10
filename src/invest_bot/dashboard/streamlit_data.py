@@ -49,6 +49,8 @@ def render_data_tab(snapshot, service: DashboardDataService, *, read_preview_fra
         return
 
     symbol_options = build_symbol_options(previews)
+    if st.session_state.get("data_symbol_filter") not in symbol_options:
+        st.session_state.pop("data_symbol_filter", None)
     selected_symbol = st.selectbox(
         "조회할 종목",
         options=symbol_options,
@@ -143,10 +145,12 @@ def render_stock_comparison_section(previews: Iterable[DatasetPreview], *, read_
         st.markdown("#### 종목 비교")
         st.caption("같은 거래일의 종가를 기준으로 최대 3개 종목의 흐름을 비교합니다. 이 화면은 저장된 데이터만 조회합니다.")
         selected_symbol = st.session_state.get("data_symbol_filter", symbol_options[0])
+        default_symbols = comparison_default_symbols(symbol_options, selected_symbol)
+        _sanitize_comparison_symbol_selection(symbol_options, default_symbols)
         selected_symbols = st.multiselect(
             "비교할 종목 (2~3개)",
             options=symbol_options,
-            default=comparison_default_symbols(symbol_options, selected_symbol),
+            default=default_symbols,
             format_func=lambda symbol: format_symbol_option(symbol, daily_previews.values()),
             max_selections=3,
             key="data_comparison_symbols",
@@ -180,6 +184,8 @@ def render_stock_comparison_section(previews: Iterable[DatasetPreview], *, read_
             selected_dates=selected_dates,
         )
         filtered_frame = apply_time_window(comparison.frame, range_state.dates)
+        if st.session_state.get("data_comparison_basis") not in {"indexed", "price"}:
+            st.session_state.pop("data_comparison_basis", None)
         basis = st.radio(
             "비교 기준",
             options=["indexed", "price"],
@@ -204,6 +210,23 @@ def render_stock_comparison_section(previews: Iterable[DatasetPreview], *, read_
         chart = build_stock_comparison_chart(chart_frame, basis=basis, height=360)
         if chart is not None:
             render_chart(chart, key_prefix="data_comparison")
+
+
+def _sanitize_comparison_symbol_selection(symbol_options: list[str], default_symbols: list[str]) -> None:
+    if "data_comparison_symbols" not in st.session_state:
+        return
+    current = st.session_state.get("data_comparison_symbols")
+    if not isinstance(current, (list, tuple)):
+        st.session_state["data_comparison_symbols"] = default_symbols
+        return
+    normalized: list[str] = []
+    for symbol in current:
+        if isinstance(symbol, str) and symbol in symbol_options and symbol not in normalized:
+            normalized.append(symbol)
+        if len(normalized) == 3:
+            break
+    if normalized != list(current):
+        st.session_state["data_comparison_symbols"] = normalized or default_symbols
 
 
 def render_dataset_summary_card(preview: DatasetPreview, service: DashboardDataService, *, read_preview_frame) -> None:

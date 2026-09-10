@@ -131,9 +131,17 @@ def render_backtest_tab(
     _render_backtest_flow_cards()
 
     persisted_symbols = st.session_state.get(BACKTEST_SELECTED_SYMBOLS_KEY, ["005930"])
+    if not isinstance(persisted_symbols, (list, tuple)):
+        persisted_symbols = []
     default_symbols = [symbol for symbol in persisted_symbols if symbol in available_symbols] or available_symbols[:1]
     persisted_strategies = st.session_state.get(BACKTEST_SELECTED_STRATEGIES_KEY, ["golden-cross"])
-    default_strategies = [strategy for strategy in persisted_strategies if strategy in strategy_options] or ["golden-cross"]
+    if not isinstance(persisted_strategies, (list, tuple)):
+        persisted_strategies = []
+    default_strategies = [strategy for strategy in persisted_strategies if strategy in strategy_options]
+    if not default_strategies:
+        default_strategies = ["golden-cross"] if "golden-cross" in strategy_options else strategy_options[:1]
+    _sanitize_multiselect_state(BACKTEST_SELECTED_SYMBOLS_KEY, available_symbols, default_symbols)
+    _sanitize_multiselect_state(BACKTEST_SELECTED_STRATEGIES_KEY, strategy_options, default_strategies)
 
     with st.container(border=True):
         st.markdown("#### 백테스트 실행 조건")
@@ -359,14 +367,18 @@ def _render_backtest_history_panel(service: DashboardDataService) -> dict[str, o
             return None
 
         filter_columns = st.columns(2, gap="small")
+        symbol_options = sorted({str(entry["symbol"]) for entry in entries if entry.get("symbol")})
+        strategy_options = sorted({str(entry["strategy_id"]) for entry in entries if entry.get("strategy_id")})
+        _sanitize_multiselect_state(BACKTEST_HISTORY_SYMBOL_FILTER_KEY, symbol_options, [])
+        _sanitize_multiselect_state(BACKTEST_HISTORY_STRATEGY_FILTER_KEY, strategy_options, [])
         selected_symbols = filter_columns[0].multiselect(
             "이력 종목 필터",
-            options=sorted({str(entry["symbol"]) for entry in entries if entry.get("symbol")}),
+            options=symbol_options,
             key=BACKTEST_HISTORY_SYMBOL_FILTER_KEY,
         )
         selected_strategies = filter_columns[1].multiselect(
             "이력 전략 필터",
-            options=sorted({str(entry["strategy_id"]) for entry in entries if entry.get("strategy_id")}),
+            options=strategy_options,
             format_func=lambda strategy_id: next(
                 (
                     str(entry["strategy_name"])
@@ -415,6 +427,21 @@ def _render_backtest_history_panel(service: DashboardDataService) -> dict[str, o
             f"데이터 원본: {selected_entry.get('source_label') or '기록 없음'}"
         )
         return result_bundle
+
+
+def _sanitize_multiselect_state(key: str, options: list[str], fallback: list[str]) -> None:
+    if key not in st.session_state:
+        return
+    current = st.session_state.get(key)
+    if not isinstance(current, (list, tuple)):
+        st.session_state[key] = list(fallback)
+        return
+    normalized: list[str] = []
+    for value in current:
+        if isinstance(value, str) and value in options and value not in normalized:
+            normalized.append(value)
+    if normalized != list(current):
+        st.session_state[key] = normalized or list(fallback)
 
 
 def _load_backtest_history_entries(service: DashboardDataService) -> tuple[list[dict[str, object]], tuple[str, ...]]:
