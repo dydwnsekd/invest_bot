@@ -37,7 +37,9 @@
   - 전략 요약 카드
   - 전략 비교표
   - 거래 순서 누적 수익률 차트
+  - 일별 평가금액 곡선
   - 거래 로그
+  - 저장 이력 재불러오기
 
 ## 현재 포함 전략
 
@@ -69,13 +71,17 @@
   - `input_sources_json`
 - [x] generic Data tab은 종목별 최신 artifact 1건만 보일 수 있으므로, in-session 비교 기준은 `백테스트` 탭 결과를 우선 사용
 
+## 확장 완료 항목
+
+- [x] 전략 조합 구조(AND / OR / 가중치)와 개별·조합 결과 비교
+- [x] 일별 mark-to-market equity curve
+- [x] 백테스트 artifact history / reload
+- [x] 전략별 제한된 실험 설정 UX와 기본값 복원
+- [x] 포트폴리오 / multi-symbol aggregation
+
 ## 남은 항목
 
-- [ ] 전략 조합 구조 설계
-- [ ] 일별 mark-to-market equity curve
-- [ ] 백테스트 artifact history / reload
-- [ ] 전략 파라미터 튜닝
-- [ ] 포트폴리오 / multi-symbol aggregation
+- [ ] 고급 전략 파라미터 튜닝(자동 탐색·최적값 추천 등)은 별도 검증 기준을 정한 뒤 진행
 
 ## 이번 범위의 비목표
 

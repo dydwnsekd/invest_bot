@@ -14,6 +14,16 @@
 
 ## 현재 구현 범위
 
+### 이번 세션 업데이트 (2026-09-13)
+
+- 대시보드 실행 계획의 0~7단계 완료
+  - 종목 비교 차트, 일별 평가금액 곡선, 저장된 백테스트 이력 재불러오기
+  - 제한된 전략 실험 설정, 복수 전략 조합(AND / OR / 가중치), 다종목 포트폴리오 집계
+  - 현재 브라우저 세션 한정 화면 설정 저장·적용·초기화
+- 탭 왕복 중 Streamlit 위젯 상태가 정리돼도, 현재 탭의 누락된 설정만 안전하게 복원
+- 관련 검증 완료
+  - `PYTHONPATH=. .venv/bin/pytest -q` (`342 passed`)
+
 ### 이번 세션 업데이트 (2026-08-20)
 
 - 투자 리포트의 의견 해석을 단일 매수/매도 결론에서 판단 상태 중심으로 보강
@@ -516,7 +526,10 @@ python scripts/run_backtest.py 005930
   - 전략 요약 카드
   - 전략 비교표
   - 거래 순서 누적 수익률 차트
+  - 일별 평가금액 곡선
   - 거래 로그
+  - 저장된 실행 이력 재불러오기
+  - 복수 전략 조합 결과와 다종목 포트폴리오 집계
 
 포함 전략 adapter/registry 7종:
 
@@ -557,10 +570,8 @@ python scripts/run_backtest.py 005930
 
 후속 후보:
 
-- 일별 mark-to-market equity curve
-- 백테스트 artifact history / reload
-- 전략 파라미터 튜닝
-- 포트폴리오 / multi-symbol aggregation
+- 고급 전략 파라미터 튜닝(자동 탐색·최적값 추천 등)
+- 브라우저 세션을 넘어서는 사용자별 화면 설정 저장 정책
 
 ### 9. 대시보드 실행
 
@@ -674,10 +685,12 @@ data/processed/test_reports/
 - [x] 리포트 관심종목(즐겨찾기) 저장 및 관심종목 탭
 - [x] 다중 종목 배치 수집
 - [x] 정기 수집 스케줄링 초안
-- [ ] 일별 mark-to-market equity curve
-- [ ] 백테스트 artifact history / reload정
-- [ ] 전략 파라미터 튜닝
-- [ ] 포트폴리오 / multi-symbol aggregation
+- [x] 일별 mark-to-market equity curve
+- [x] 백테스트 artifact history / reload
+- [x] 복수 전략 조합(AND / OR / 가중치)
+- [ ] 고급 전략 파라미터 튜닝
+- [x] 포트폴리오 / multi-symbol aggregation
+- [x] 현재 브라우저 세션 한정 화면 설정 저장
 - [ ] 모의투자 주문 실행
 - [ ] 실거래 주문 실행
 - [ ] 리스크 관리 정책 자동화
