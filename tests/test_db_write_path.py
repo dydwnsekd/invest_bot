@@ -172,6 +172,47 @@ def test_db_writer_preserves_all_valid_investor_summary_dates():
     assert [row.foreign_net_qty for row in rows] == [300.0, 200.0]
 
 
+def test_db_writer_keeps_valid_investor_rows_when_other_rows_or_values_are_malformed():
+    test_dir = make_test_dir("db_write_malformed_investor_rows")
+    database_url = make_db_url(test_dir)
+    init_test_db(database_url)
+    writer = SqlAlchemyMarketDataWriter(database_url)
+
+    writer.save_investor_daily(
+        "005930",
+        date(2026, 4, 10),
+        pd.DataFrame([{"investor": "foreign", "net_volume": "100"}]),
+        pd.DataFrame(
+            [
+                {
+                    "stck_bsop_date": "20260410",
+                    "frgn_ntby_qty": "100",
+                    "orgn_ntby_qty": "bad-number",
+                    "prsn_ntby_qty": "Infinity",
+                },
+                {"stck_bsop_date": "bad-date", "frgn_ntby_qty": "200"},
+                {"stck_bsop_date": "20260230", "frgn_ntby_qty": "300"},
+                {
+                    "stck_bsop_date": "20260409",
+                    "frgn_ntby_qty": "NaN",
+                    "orgn_ntby_qty": "-Infinity",
+                    "prsn_ntby_qty": "not-a-number",
+                },
+            ]
+        ),
+    )
+
+    rows = SqlAlchemyInvestorDailyRepository(
+        build_session_factory(build_engine(database_url))
+    ).list_for_symbol("005930")
+
+    assert len(rows) == 1
+    assert rows[0].trade_date == date(2026, 4, 10)
+    assert rows[0].foreign_net_qty == 100.0
+    assert rows[0].institutional_net_qty is None
+    assert rows[0].personal_net_qty is None
+
+
 def test_db_writer_does_not_create_investor_fact_for_empty_response():
     test_dir = make_test_dir("db_write_empty_investor")
     database_url = make_db_url(test_dir)

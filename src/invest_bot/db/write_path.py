@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime
+from math import isfinite
 from typing import Any
 
 import pandas as pd
@@ -92,14 +93,17 @@ def frame_payload(frame: pd.DataFrame) -> str:
 
 
 def parse_trade_date(value: Any) -> date | None:
-    if value in (None, ""):
+    if value is None or pd.isna(value):
         return None
     text = str(value).strip()
     if not text:
         return None
-    if len(text) == 8 and text.isdigit():
-        return datetime.strptime(text, "%Y%m%d").date()
-    return datetime.fromisoformat(text).date()
+    try:
+        if len(text) == 8 and text.isdigit():
+            return datetime.strptime(text, "%Y%m%d").date()
+        return datetime.fromisoformat(text).date()
+    except (TypeError, ValueError):
+        return None
 
 
 def parse_number(value: Any) -> float | None:
@@ -108,7 +112,11 @@ def parse_number(value: Any) -> float | None:
     text = str(value).replace(",", "").strip()
     if text in {"", "-"}:
         return None
-    return float(text)
+    try:
+        parsed = float(text)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return parsed if isfinite(parsed) else None
 
 
 def first_value(row: dict[str, Any], *keys: str) -> Any:

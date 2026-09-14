@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
@@ -77,7 +78,14 @@ class MarketDataCollector:
         )
 
     def save_daily_prices(
-        self, symbol: str, start_date: date, end_date: date, summary: pd.DataFrame, prices: pd.DataFrame
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        summary: pd.DataFrame,
+        prices: pd.DataFrame,
+        *,
+        _on_saved: Callable[[SavedDataset], None] | None = None,
     ) -> tuple[SavedDataset, SavedDataset]:
         date_range = f"{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
         summary_result = self.storage.save(
@@ -85,16 +93,26 @@ class MarketDataCollector:
             filename=f"{symbol}_{date_range}.csv",
             frame=summary,
         )
+        if _on_saved is not None:
+            _on_saved(summary_result)
         prices_result = self.storage.save(
             dataset="daily_prices",
             filename=f"{symbol}_{date_range}.csv",
             frame=prices,
         )
+        if _on_saved is not None:
+            _on_saved(prices_result)
         if self.db_writer is not None:
             self.db_writer.save_daily_prices(symbol, start_date, end_date, summary, prices)
         return summary_result, prices_result
 
-    def save_stock_info(self, symbol: str, stock_info: pd.DataFrame) -> SavedDataset:
+    def save_stock_info(
+        self,
+        symbol: str,
+        stock_info: pd.DataFrame,
+        *,
+        _on_saved: Callable[[SavedDataset], None] | None = None,
+    ) -> SavedDataset:
         if not self._should_persist_stock_info(symbol, stock_info):
             return SavedDataset(
                 dataset="stock_info",
@@ -106,12 +124,20 @@ class MarketDataCollector:
             filename=f"{symbol}.csv",
             frame=stock_info,
         )
+        if _on_saved is not None:
+            _on_saved(result)
         if self.db_writer is not None:
             self.db_writer.save_stock_info(symbol, stock_info)
         return result
 
     def save_investor_daily(
-        self, symbol: str, target_date: date, investor_daily: pd.DataFrame, investor_summary: pd.DataFrame
+        self,
+        symbol: str,
+        target_date: date,
+        investor_daily: pd.DataFrame,
+        investor_summary: pd.DataFrame,
+        *,
+        _on_saved: Callable[[SavedDataset], None] | None = None,
     ) -> tuple[SavedDataset, SavedDataset]:
         file_suffix = target_date.strftime("%Y%m%d")
         detail_result = self.storage.save(
@@ -119,11 +145,15 @@ class MarketDataCollector:
             filename=f"{symbol}_{file_suffix}.csv",
             frame=investor_daily,
         )
+        if _on_saved is not None:
+            _on_saved(detail_result)
         summary_result = self.storage.save(
             dataset="investor_daily_summary",
             filename=f"{symbol}_{file_suffix}.csv",
             frame=investor_summary,
         )
+        if _on_saved is not None:
+            _on_saved(summary_result)
         if self.db_writer is not None:
             self.db_writer.save_investor_daily(symbol, target_date, investor_daily, investor_summary)
         return detail_result, summary_result
@@ -135,6 +165,10 @@ class MarketDataCollector:
         investor_daily_rows = 0
         investor_summary_rows = 0
         saved_files: list[str] = []
+
+        def record_saved(result: SavedDataset) -> None:
+            saved_files.append(str(result.path))
+
         try:
             daily_summary, daily_prices = self.collect_daily_prices(symbol, start_date, end_date)
             daily_summary_rows = len(daily_summary)
@@ -166,17 +200,14 @@ class MarketDataCollector:
             investor_summary_rows = len(investor_summary)
             persist_stock_info = self._should_persist_stock_info(symbol, stock_info)
 
-            saved_daily_summary, saved_daily_prices = self.save_daily_prices(
-                symbol, start_date, end_date, daily_summary, daily_prices
+            self.save_daily_prices(
+                symbol, start_date, end_date, daily_summary, daily_prices, _on_saved=record_saved
             )
-            saved_files.extend([str(saved_daily_summary.path), str(saved_daily_prices.path)])
-            saved_stock_info = self.save_stock_info(symbol, stock_info) if persist_stock_info else None
-            if saved_stock_info is not None:
-                saved_files.append(str(saved_stock_info.path))
-            saved_investor_detail, saved_investor_summary = self.save_investor_daily(
-                symbol, end_date, investor_daily, investor_summary
+            if persist_stock_info:
+                self.save_stock_info(symbol, stock_info, _on_saved=record_saved)
+            self.save_investor_daily(
+                symbol, end_date, investor_daily, investor_summary, _on_saved=record_saved
             )
-            saved_files.extend([str(saved_investor_detail.path), str(saved_investor_summary.path)])
 
             return BatchCollectionResult(
                 symbol=symbol,

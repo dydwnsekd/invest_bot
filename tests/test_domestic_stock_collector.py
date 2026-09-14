@@ -276,15 +276,7 @@ def test_market_data_collector_does_not_build_db_writer_when_db_write_is_disable
     assert collector.db_writer is None
 
 
-def test_collect_symbol_bundle_reports_files_saved_before_later_failure_and_retries_cleanly(monkeypatch):
-    test_dir = make_test_dir("market_data_partial_save")
-    database_url = f"sqlite+pysqlite:///{(test_dir / 'partial-save.db').as_posix()}"
-    init_test_db(database_url)
-    collector = MarketDataCollector(
-        settings=AppSettings(),
-        storage=CsvStorage(test_dir),
-        db_writer=SqlAlchemyMarketDataWriter(database_url),
-    )
+def _stub_successful_bundle_collection(monkeypatch, collector: MarketDataCollector) -> None:
     sufficient_prices = pd.DataFrame(
         [{"stck_bsop_date": value} for value in pd.date_range("2026-01-01", periods=60).strftime("%Y%m%d")]
     )
@@ -306,6 +298,18 @@ def test_collect_symbol_bundle_reports_files_saved_before_later_failure_and_retr
             pd.DataFrame([{"stck_bsop_date": "20260329", "frgn_ntby_qty": "100"}]),
         ),
     )
+
+
+def test_collect_symbol_bundle_reports_files_saved_before_later_failure_and_retries_cleanly(monkeypatch):
+    test_dir = make_test_dir("market_data_partial_save")
+    database_url = f"sqlite+pysqlite:///{(test_dir / 'partial-save.db').as_posix()}"
+    init_test_db(database_url)
+    collector = MarketDataCollector(
+        settings=AppSettings(),
+        storage=CsvStorage(test_dir),
+        db_writer=SqlAlchemyMarketDataWriter(database_url),
+    )
+    _stub_successful_bundle_collection(monkeypatch, collector)
     original_save_investor_daily = collector.save_investor_daily
     attempts = 0
 
@@ -335,6 +339,69 @@ def test_collect_symbol_bundle_reports_files_saved_before_later_failure_and_retr
     assert len(second.saved_files) == 5
     assert len(set(second.saved_files)) == 5
     assert all(pd.read_csv(path).shape[0] > 0 for path in second.saved_files)
+    session_factory = build_session_factory(build_engine(database_url))
+    assert len(SqlAlchemyDailyPriceRepository(session_factory).list_for_symbol("005930")) == 60
+    assert len(SqlAlchemyInvestorDailyRepository(session_factory).list_for_symbol("005930")) == 1
+
+
+def test_collect_symbol_bundle_reports_first_snapshot_when_second_snapshot_fails(monkeypatch):
+    test_dir = make_test_dir("market_data_second_snapshot_failure")
+    collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(test_dir))
+    _stub_successful_bundle_collection(monkeypatch, collector)
+    original_save = collector.storage.save
+    failed_once = False
+
+    def fail_second_snapshot(dataset, filename, frame):
+        nonlocal failed_once
+        if dataset == "daily_prices" and not failed_once:
+            failed_once = True
+            raise RuntimeError("second snapshot failed")
+        return original_save(dataset, filename, frame)
+
+    monkeypatch.setattr(collector.storage, "save", fail_second_snapshot)
+
+    first = collector.collect_symbol_bundle("005930", date(2026, 3, 1), date(2026, 3, 29))
+    second = collector.collect_symbol_bundle("005930", date(2026, 3, 1), date(2026, 3, 29))
+
+    assert first.status == "failed"
+    assert len(first.saved_files) == 1
+    assert "/daily_prices_summary/" in first.saved_files[0]
+    assert pd.read_csv(first.saved_files[0]).shape[0] == 1
+    assert "second snapshot failed" in first.error
+    assert second.status == "success"
+    assert len(second.saved_files) == 5
+    assert len(set(second.saved_files)) == 5
+
+
+def test_collect_symbol_bundle_reports_snapshots_when_db_dual_write_fails(monkeypatch):
+    test_dir = make_test_dir("market_data_db_dual_write_failure")
+    database_url = f"sqlite+pysqlite:///{(test_dir / 'dual-write.db').as_posix()}"
+    init_test_db(database_url)
+    writer = SqlAlchemyMarketDataWriter(database_url)
+    collector = MarketDataCollector(settings=AppSettings(), storage=CsvStorage(test_dir), db_writer=writer)
+    _stub_successful_bundle_collection(monkeypatch, collector)
+    original_db_save = writer.save_daily_prices
+    attempts = 0
+
+    def fail_db_once(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("db dual-write failed")
+        return original_db_save(*args, **kwargs)
+
+    monkeypatch.setattr(writer, "save_daily_prices", fail_db_once)
+
+    first = collector.collect_symbol_bundle("005930", date(2026, 3, 1), date(2026, 3, 29))
+    second = collector.collect_symbol_bundle("005930", date(2026, 3, 1), date(2026, 3, 29))
+
+    assert first.status == "failed"
+    assert len(first.saved_files) == 2
+    assert all(pd.read_csv(path).shape[0] > 0 for path in first.saved_files)
+    assert "db dual-write failed" in first.error
+    assert second.status == "success"
+    assert len(second.saved_files) == 5
+    assert len(set(second.saved_files)) == 5
     session_factory = build_session_factory(build_engine(database_url))
     assert len(SqlAlchemyDailyPriceRepository(session_factory).list_for_symbol("005930")) == 60
     assert len(SqlAlchemyInvestorDailyRepository(session_factory).list_for_symbol("005930")) == 1
