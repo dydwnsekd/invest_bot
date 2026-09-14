@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -18,3 +19,13 @@ def init_test_db(database_url: str) -> None:
         ensure_schema(engine)
     finally:
         engine.dispose()
+
+
+def sanitized_subprocess_environment() -> dict[str, str]:
+    """Copy the process environment without invest_bot runtime credentials or DB targets."""
+    blocked_names = {"DATABASE_URL", "DISCORD_WEBHOOK_URL"}
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key not in blocked_names and not key.startswith("INVEST_BOT_")
+    }
