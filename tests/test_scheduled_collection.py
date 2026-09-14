@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
+import pytest
+
 from invest_bot.jobs.collect_market_data import DEFAULT_COLLECTION_LOOKBACK_DAYS
 from invest_bot.jobs.scheduled_collection import CollectionScheduleConfig, ScheduledCollectionRunner, load_schedule_status
 from tests.helpers import make_test_dir
@@ -48,6 +50,8 @@ def test_collection_schedule_config_defaults_to_365_days_when_omitted():
 
     assert DEFAULT_COLLECTION_LOOKBACK_DAYS == 365
     assert config.days == 365
+    expected_log_path = config_file.parent.parent / ".runtime" / "logs" / "collection_scheduler.log"
+    assert config.log_path.resolve() == expected_log_path.resolve()
 
 def test_scheduled_collection_runner_runs_once_and_writes_logs():
     test_dir = make_test_dir("scheduled_collection_once")
@@ -104,6 +108,53 @@ def test_scheduled_collection_runner_calls_before_run_hook():
     runner.run_once()
 
     assert before_run_calls == ["sync"]
+
+
+def test_scheduled_collection_runner_logs_failure_and_preserves_it_for_status():
+    test_dir = make_test_dir("scheduled_collection_failure")
+    config_file = test_dir / "collection_schedule.yaml"
+    config_file.write_text(
+        "symbols:\n  - '005930'\nlog_path: runtime/collection.log\n",
+        encoding="utf-8",
+    )
+    config = CollectionScheduleConfig.from_file(config_file)
+
+    def failing_collector(symbols: list[str], days: int) -> dict[str, object]:
+        raise RuntimeError("collector unavailable")
+
+    runner = ScheduledCollectionRunner(
+        schedule=config,
+        collector_fn=failing_collector,
+        now_fn=lambda: datetime(2026, 5, 31, 15, 30, 0),
+    )
+
+    with pytest.raises(RuntimeError, match="collector unavailable"):
+        runner.run_once()
+
+    status = load_schedule_status(config_file)
+    assert status.last_event == "collection_failed"
+    assert status.last_failed_at == "2026-05-31T15:30:00"
+    assert status.last_error == "collector unavailable"
+    assert [entry["event"] for entry in status.recent_entries or []] == [
+        "collection_started",
+        "collection_failed",
+    ]
+
+
+def test_scheduled_collection_runner_appends_across_runner_restarts():
+    test_dir = make_test_dir("scheduled_collection_restart")
+    config_file = test_dir / "collection_schedule.yaml"
+    config_file.write_text("symbols:\n  - '005930'\nlog_path: runtime/collection.log\n", encoding="utf-8")
+    schedule = CollectionScheduleConfig.from_file(config_file)
+    collector = lambda symbols, days: {"symbols": symbols, "success_count": 1, "failed_count": 0}
+
+    ScheduledCollectionRunner(schedule=schedule, collector_fn=collector).run_once()
+    ScheduledCollectionRunner(schedule=schedule, collector_fn=collector).run_once()
+
+    status = load_schedule_status(config_file)
+    assert schedule.log_path.parent.resolve() == (test_dir / "runtime").resolve()
+    assert status.total_logged_runs == 2
+    assert len(status.recent_entries or []) == 4
 
 
 def test_scheduled_collection_runner_repeats_with_interval_and_max_runs():

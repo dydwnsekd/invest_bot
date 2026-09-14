@@ -47,6 +47,7 @@ def test_docker_compose_defines_db_migration_startup_flow():
     assert services["migrate"]["command"] == ["python", "scripts/init_db.py"]
     assert services["migrate"]["depends_on"]["db"]["condition"] == "service_healthy"
     assert services["migrate"]["environment"]["INVEST_BOT_APP_ROLE"] == "migrate"
+    assert services["migrate"]["environment"]["INVEST_BOT_INIT_MODE"] == "migrate-only"
     assert services["migrate"]["volumes"] == ["./config:/app/config:ro"]
 
     for service_name in ["scheduler", "web", "collector"]:
@@ -54,7 +55,16 @@ def test_docker_compose_defines_db_migration_startup_flow():
         assert depends_on["db"]["condition"] == "service_healthy"
         assert depends_on["migrate"]["condition"] == "service_completed_successfully"
         assert services[service_name]["env_file"] == [".env"]
-        assert services[service_name]["volumes"] == ["./config:/app/config:ro"]
+    runtime_mount = "${INVEST_BOT_RUNTIME_DIR:-./.docker/runtime}:/app/.runtime"
+    assert services["scheduler"]["volumes"] == ["./config:/app/config:ro", runtime_mount]
+    assert services["web"]["volumes"] == ["./config:/app/config:ro", f"{runtime_mount}:ro"]
+    assert services["collector"]["volumes"] == ["./config:/app/config:ro"]
+
+
+def test_collection_schedule_example_uses_shared_writable_runtime_path():
+    schedule = yaml.safe_load((ROOT / "config" / "collection_schedule.yaml.example").read_text(encoding="utf-8"))
+
+    assert schedule["log_path"] == "../.runtime/logs/collection_scheduler.log"
 
 
 def test_db_migration_docs_exist_with_required_sections():
@@ -98,5 +108,5 @@ def test_db_migration_docs_exist_with_required_sections():
 def test_dockerignore_excludes_runtime_secret_files():
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
 
-    for path in [".env", "config/app.yaml"]:
+    for path in [".env", "config/app.yaml", ".docker", ".runtime", "data", "logs"]:
         assert path in dockerignore

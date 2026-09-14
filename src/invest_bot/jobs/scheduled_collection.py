@@ -15,13 +15,16 @@ from invest_bot.market.master_sync import sync_stock_master
 from invest_bot.jobs.collect_market_data import DEFAULT_COLLECTION_LOOKBACK_DAYS, collect_market_data_for_symbols
 
 
+DEFAULT_SCHEDULE_LOG_PATH = "../.runtime/logs/collection_scheduler.log"
+
+
 @dataclass(slots=True)
 class CollectionScheduleConfig:
     symbols: list[str]
     days: int = DEFAULT_COLLECTION_LOOKBACK_DAYS
     interval_minutes: int = 1440
     run_on_startup: bool = True
-    log_path: Path = Path("logs/collection_scheduler.log")
+    log_path: Path = Path(".runtime/logs/collection_scheduler.log")
 
     @classmethod
     def from_file(cls, path: str | Path | None = None) -> "CollectionScheduleConfig":
@@ -44,7 +47,7 @@ class CollectionScheduleConfig:
         if not symbols:
             raise ValueError("Collection schedule must define at least one symbol.")
 
-        log_path = Path(str(payload.get("log_path", "logs/collection_scheduler.log")))
+        log_path = Path(str(payload.get("log_path", DEFAULT_SCHEDULE_LOG_PATH)))
         if not log_path.is_absolute():
             log_path = config_path.parent / log_path
 
@@ -64,6 +67,8 @@ class CollectionScheduleStatus:
     last_event: str = ""
     last_started_at: str = ""
     last_finished_at: str = ""
+    last_failed_at: str = ""
+    last_error: str = ""
     next_run_at: str = ""
     last_success_count: int = 0
     last_failed_count: int = 0
@@ -80,8 +85,6 @@ class ScheduledCollectionRunner:
     now_fn: Callable[[], datetime] = datetime.now
 
     def run_once(self) -> dict[str, object]:
-        if self.before_run_fn is not None:
-            self.before_run_fn()
         started_at = self.now_fn()
         self._append_log(
             {
@@ -91,7 +94,21 @@ class ScheduledCollectionRunner:
                 "days": self.schedule.days,
             }
         )
-        result = self.collector_fn(symbols=self.schedule.symbols, days=self.schedule.days)
+        try:
+            if self.before_run_fn is not None:
+                self.before_run_fn()
+            result = self.collector_fn(symbols=self.schedule.symbols, days=self.schedule.days)
+        except Exception as exc:
+            failed_at = self.now_fn()
+            self._append_log(
+                {
+                    "event": "collection_failed",
+                    "failed_at": failed_at.isoformat(timespec="seconds"),
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                }
+            )
+            raise
         finished_at = self.now_fn()
         self._append_log(
             {
@@ -189,6 +206,9 @@ def load_schedule_status(path: str | Path | None = None, tail: int = 20) -> Coll
             status.last_success_count = int(entry.get("success_count", 0))
             status.last_failed_count = int(entry.get("failed_count", 0))
             status.total_logged_runs += 1
+        elif event == "collection_failed":
+            status.last_failed_at = str(entry.get("failed_at", ""))
+            status.last_error = str(entry.get("error", ""))
         elif event == "collection_waiting":
             status.next_run_at = str(entry.get("next_run_at", ""))
 
