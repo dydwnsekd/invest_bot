@@ -5,11 +5,14 @@ from datetime import date
 import pandas as pd
 
 from invest_bot.config.settings import AppSettings
+from invest_bot.db.engine import build_engine, build_session_factory
+from invest_bot.db.repositories import SqlAlchemyDailyPriceRepository, SqlAlchemyInvestorDailyRepository
+from invest_bot.db.write_path import SqlAlchemyMarketDataWriter
 from invest_bot.jobs.collect_market_data import DEFAULT_COLLECTION_LOOKBACK_DAYS, collect_market_data_for_symbols
 from invest_bot.market.collector import BatchCollectionResult, MarketDataCollector, MIN_REQUIRED_DAILY_PRICE_ROWS
 from invest_bot.market.domestic_stock import DailyPriceRequest, DomesticStockDataCollector, InvestorDailyRequest, StockInfoRequest
 from invest_bot.market.storage import CsvStorage
-from tests.helpers import make_test_dir
+from tests.helpers import init_test_db, make_test_dir
 
 
 class StubClient:
@@ -271,3 +274,67 @@ def test_market_data_collector_does_not_build_db_writer_when_db_write_is_disable
     collector = MarketDataCollector(settings=AppSettings())
 
     assert collector.db_writer is None
+
+
+def test_collect_symbol_bundle_reports_files_saved_before_later_failure_and_retries_cleanly(monkeypatch):
+    test_dir = make_test_dir("market_data_partial_save")
+    database_url = f"sqlite+pysqlite:///{(test_dir / 'partial-save.db').as_posix()}"
+    init_test_db(database_url)
+    collector = MarketDataCollector(
+        settings=AppSettings(),
+        storage=CsvStorage(test_dir),
+        db_writer=SqlAlchemyMarketDataWriter(database_url),
+    )
+    sufficient_prices = pd.DataFrame(
+        [{"stck_bsop_date": value} for value in pd.date_range("2026-01-01", periods=60).strftime("%Y%m%d")]
+    )
+    monkeypatch.setattr(
+        collector,
+        "collect_daily_prices",
+        lambda symbol, start_date, end_date: (pd.DataFrame([{"symbol": symbol}]), sufficient_prices),
+    )
+    monkeypatch.setattr(
+        collector,
+        "collect_stock_info",
+        lambda symbol: pd.DataFrame([{"pdno": symbol, "prdt_abrv_name": "삼성전자"}]),
+    )
+    monkeypatch.setattr(
+        collector,
+        "collect_investor_daily",
+        lambda symbol, target_date: (
+            pd.DataFrame([{"frgn_ntby_qty": "100"}]),
+            pd.DataFrame([{"stck_bsop_date": "20260329", "frgn_ntby_qty": "100"}]),
+        ),
+    )
+    original_save_investor_daily = collector.save_investor_daily
+    attempts = 0
+
+    def fail_once(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("investor persistence failed")
+        return original_save_investor_daily(*args, **kwargs)
+
+    monkeypatch.setattr(collector, "save_investor_daily", fail_once)
+
+    first = collector.collect_symbol_bundle("005930", date(2026, 3, 1), date(2026, 3, 29))
+    second = collector.collect_symbol_bundle("005930", date(2026, 3, 1), date(2026, 3, 29))
+
+    assert first.status == "failed"
+    assert first.daily_summary_rows == 1
+    assert first.daily_price_rows == MIN_REQUIRED_DAILY_PRICE_ROWS
+    assert first.stock_info_rows == 1
+    assert first.investor_daily_rows == 1
+    assert first.investor_summary_rows == 1
+    assert len(first.saved_files) == 3
+    assert all(pd.read_csv(path).shape[0] > 0 for path in first.saved_files)
+    assert "investor persistence failed" in first.error
+
+    assert second.status == "success"
+    assert len(second.saved_files) == 5
+    assert len(set(second.saved_files)) == 5
+    assert all(pd.read_csv(path).shape[0] > 0 for path in second.saved_files)
+    session_factory = build_session_factory(build_engine(database_url))
+    assert len(SqlAlchemyDailyPriceRepository(session_factory).list_for_symbol("005930")) == 60
+    assert len(SqlAlchemyInvestorDailyRepository(session_factory).list_for_symbol("005930")) == 1

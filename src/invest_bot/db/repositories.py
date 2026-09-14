@@ -59,7 +59,9 @@ class SqlAlchemyStockRepository:
 
         if record.symbol_name and (existing.symbol_name in {existing.symbol, "", "unknown"} or record.symbol_name != normalized):
             existing.symbol_name = record.symbol_name
-        if record.market and (existing.market in {"", "unknown"} or record.market != "unknown"):
+        placeholder_markets = {"", "unknown", "domestic_stock"}
+        should_upgrade_placeholder = existing.market in {"", "unknown"} and record.market not in {"", "unknown"}
+        if record.market and (should_upgrade_placeholder or record.market not in placeholder_markets):
             existing.market = record.market
         session.flush()
         return existing

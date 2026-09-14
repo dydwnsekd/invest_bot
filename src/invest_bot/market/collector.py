@@ -129,14 +129,22 @@ class MarketDataCollector:
         return detail_result, summary_result
 
     def collect_symbol_bundle(self, symbol: str, start_date: date, end_date: date) -> BatchCollectionResult:
+        daily_summary_rows = 0
+        daily_price_rows = 0
+        stock_info_rows = 0
+        investor_daily_rows = 0
+        investor_summary_rows = 0
+        saved_files: list[str] = []
         try:
             daily_summary, daily_prices = self.collect_daily_prices(symbol, start_date, end_date)
+            daily_summary_rows = len(daily_summary)
+            daily_price_rows = len(daily_prices)
             if len(daily_prices.index) < MIN_REQUIRED_DAILY_PRICE_ROWS:
                 return BatchCollectionResult(
                     symbol=symbol,
                     status="failed",
-                    daily_summary_rows=len(daily_summary),
-                    daily_price_rows=len(daily_prices),
+                    daily_summary_rows=daily_summary_rows,
+                    daily_price_rows=daily_price_rows,
                     stock_info_rows=0,
                     investor_daily_rows=0,
                     investor_summary_rows=0,
@@ -152,34 +160,32 @@ class MarketDataCollector:
             except Exception as error:  # noqa: BLE001
                 stock_info = self._fallback_stock_info(symbol, error)
                 stock_info_error = str(error)
+            stock_info_rows = len(stock_info)
             investor_daily, investor_summary = self.collect_investor_daily(symbol, end_date)
+            investor_daily_rows = len(investor_daily)
+            investor_summary_rows = len(investor_summary)
             persist_stock_info = self._should_persist_stock_info(symbol, stock_info)
 
             saved_daily_summary, saved_daily_prices = self.save_daily_prices(
                 symbol, start_date, end_date, daily_summary, daily_prices
             )
+            saved_files.extend([str(saved_daily_summary.path), str(saved_daily_prices.path)])
             saved_stock_info = self.save_stock_info(symbol, stock_info) if persist_stock_info else None
+            if saved_stock_info is not None:
+                saved_files.append(str(saved_stock_info.path))
             saved_investor_detail, saved_investor_summary = self.save_investor_daily(
                 symbol, end_date, investor_daily, investor_summary
             )
-
-            saved_files = [
-                str(saved_daily_summary.path),
-                str(saved_daily_prices.path),
-                str(saved_investor_detail.path),
-                str(saved_investor_summary.path),
-            ]
-            if saved_stock_info is not None:
-                saved_files.insert(2, str(saved_stock_info.path))
+            saved_files.extend([str(saved_investor_detail.path), str(saved_investor_summary.path)])
 
             return BatchCollectionResult(
                 symbol=symbol,
                 status="success",
-                daily_summary_rows=len(daily_summary),
-                daily_price_rows=len(daily_prices),
-                stock_info_rows=len(stock_info),
-                investor_daily_rows=len(investor_daily),
-                investor_summary_rows=len(investor_summary),
+                daily_summary_rows=daily_summary_rows,
+                daily_price_rows=daily_price_rows,
+                stock_info_rows=stock_info_rows,
+                investor_daily_rows=investor_daily_rows,
+                investor_summary_rows=investor_summary_rows,
                 saved_files=saved_files,
                 error=stock_info_error,
             )
@@ -187,12 +193,12 @@ class MarketDataCollector:
             return BatchCollectionResult(
                 symbol=symbol,
                 status="failed",
-                daily_summary_rows=0,
-                daily_price_rows=0,
-                stock_info_rows=0,
-                investor_daily_rows=0,
-                investor_summary_rows=0,
-                saved_files=[],
+                daily_summary_rows=daily_summary_rows,
+                daily_price_rows=daily_price_rows,
+                stock_info_rows=stock_info_rows,
+                investor_daily_rows=investor_daily_rows,
+                investor_summary_rows=investor_summary_rows,
+                saved_files=saved_files,
                 error=str(error),
             )
 

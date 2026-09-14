@@ -58,29 +58,33 @@ class SqlAlchemyMarketDataWriter:
         self, symbol: str, target_date: date, investor_daily: pd.DataFrame, investor_summary: pd.DataFrame
     ) -> None:
         normalized = normalize_symbol(symbol)
-        summary_row: dict[str, Any]
-        if investor_summary.empty:
-            summary_row = {"trade_date": target_date.isoformat()}
-        else:
-            summary_row = investor_summary.iloc[0].to_dict()
-        trade_date = parse_trade_date(summary_row.get("trade_date") or summary_row.get("stck_bsop_date")) or target_date
-        self.stock_repository.upsert(StockRecord(symbol=normalized, symbol_name=normalized, market=self.default_market))
-        self.investor_daily_repository.replace_for_symbol(
-            normalized,
-            [
+        records: list[InvestorDailyRecord] = []
+        collected_at = datetime.now(UTC)
+        raw_payload = frame_payload(investor_daily)
+        for summary_row in investor_summary.to_dict(orient="records"):
+            trade_date = parse_trade_date(first_value(summary_row, "trade_date", "stck_bsop_date"))
+            if trade_date is None:
+                continue
+            foreign_net_qty = parse_number(first_value(summary_row, "foreign_net_qty", "frgn_ntby_qty"))
+            institutional_net_qty = parse_number(first_value(summary_row, "institutional_net_qty", "orgn_ntby_qty"))
+            personal_net_qty = parse_number(first_value(summary_row, "personal_net_qty", "prsn_ntby_qty"))
+            if foreign_net_qty is None and institutional_net_qty is None and personal_net_qty is None:
+                continue
+            records.append(
                 InvestorDailyRecord(
                     symbol=normalized,
                     trade_date=trade_date,
-                    foreign_net_qty=parse_number(summary_row.get("foreign_net_qty") or summary_row.get("frgn_ntby_qty")),
-                    institutional_net_qty=parse_number(
-                        summary_row.get("institutional_net_qty") or summary_row.get("orgn_ntby_qty")
-                    ),
-                    personal_net_qty=parse_number(summary_row.get("personal_net_qty") or summary_row.get("prsn_ntby_qty")),
-                    raw_payload=frame_payload(investor_daily),
-                    collected_at=datetime.now(UTC),
+                    foreign_net_qty=foreign_net_qty,
+                    institutional_net_qty=institutional_net_qty,
+                    personal_net_qty=personal_net_qty,
+                    raw_payload=raw_payload,
+                    collected_at=collected_at,
                 )
-            ],
-        )
+            )
+        if not records:
+            return
+        self.stock_repository.upsert(StockRecord(symbol=normalized, symbol_name=normalized, market=self.default_market))
+        self.investor_daily_repository.replace_for_symbol(normalized, records)
 
 
 def frame_payload(frame: pd.DataFrame) -> str:
@@ -99,9 +103,20 @@ def parse_trade_date(value: Any) -> date | None:
 
 
 def parse_number(value: Any) -> float | None:
-    if value in (None, "", "-"):
+    if value is None or pd.isna(value):
         return None
     text = str(value).replace(",", "").strip()
-    if not text:
+    if text in {"", "-"}:
         return None
     return float(text)
+
+
+def first_value(row: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = row.get(key)
+        if value is None or pd.isna(value):
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        return value
+    return None
