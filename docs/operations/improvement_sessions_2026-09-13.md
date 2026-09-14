@@ -7,6 +7,7 @@
 - 통합 작업 ID: `01a09a75-fc7c-7ec0-8296-aed358d3152c`
 - 분석 기준 커밋: `9e54fe6f8a009cdb6adeb3b002d85422e33c1779` (`main`)
 - 실행 방식: 전문 작업 5개를 별도 Codex worktree에서 시작한다. 각 작업은 시작 시 실제 HEAD를 기록한다.
+- 실행 모델: 5개 작업 모두 `gpt-5.6-sol`, reasoning effort `medium`. 리셋 크레딧은 사용하지 않는다.
 - 이 문서와 공통 README/task 문서의 최종 통합은 통합 작업이 맡는다.
 - 각 작업은 자신의 worktree에서만 수정한다. 원본 프로젝트의 설정, 데이터, 미등록 파일을 수정하거나 다른 작업의 변경을 되돌리지 않는다.
 - 새 라이브러리 도입, 실제 주문, 운영 DB 마이그레이션, 원격 push/배포는 이번 1차 작업에 포함하지 않는다.
@@ -53,4 +54,16 @@
 
 ## 생성된 작업
 
-생성 결과 확인 후 작업 ID와 시작 상태를 기록한다.
+2026-09-14 재개 시 다섯 작업 모두 `active`, 첫 turn `inProgress`와 실제 진행 메시지를 `wait_threads`/`read_thread`로 확인했다. 생성 직후 반환된 임시 client ID 대신 아래 실제 작업 ID를 사용한다. 구현·통합 완료를 뜻하는 상태는 아니다.
+
+공통 시작 커밋은 `c96894e6929d303d90f3b06543db66913e37084a`이며 분석 기준점 이후 이 계획 문서만 추가된 상태다. 각 작업의 실행 기록에서 `gpt-5.6-sol` / `medium`도 확인했다.
+
+| 작업 | 실제 작업 ID | 별도 worktree | 확인 상태 |
+| --- | --- | --- | --- |
+| 데이터 수집·저장 개선 | `01a09f69-26a0-73a1-a41c-abb29ecb3bb2` | `/Users/yongjun/.codex/worktrees/2ea9/invest_bot` | 실행 중: 데이터 저장 결함 수정·회귀 검증 |
+| 퀀트·백테스트·리포트 개선 | `01a09f6c-35f9-7173-a826-9dd3d935e48e` | `/Users/yongjun/.codex/worktrees/e3ce/invest_bot` | 실행 중: MDD·리포트 기준일 계약 확인 |
+| 대시보드 구조·조회 개선 | `01a09f6c-6be5-7202-b419-e3868064b276` | `/Users/yongjun/.codex/worktrees/201c/invest_bot` | 실행 중: 설계·기존 UX·조회 경로 확인 |
+| 운영·배포 안정화 | `01a09f6c-7e19-7590-97db-9a4d00780afc` | `/Users/yongjun/.codex/worktrees/fdb1/invest_bot` | 실행 중: 로그 경로·초기화 CLI 계약 확인 |
+| QA·독립 검증 체계 개선 | `01a09f6c-9079-7c52-985b-3ed039b3340b` | `/Users/yongjun/.codex/worktrees/cdc4/invest_bot` | 실행 중: 설정·네트워크 격리·CI 준비 |
+
+2026-09-13의 이전 생성 요청은 실행 확인이 되지 않았으므로 활성 작업 목록에 포함하지 않는다. 기존 worktree와 원본 미등록 파일은 보존한다. 이후 결과 수집에는 위 실제 작업 ID를 사용한다.
