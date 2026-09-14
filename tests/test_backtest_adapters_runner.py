@@ -255,3 +255,57 @@ def test_daily_mark_to_market_curve_stays_flat_without_completed_trades() -> Non
         DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY,
     ]
     assert equity_curve["position_state"].tolist() == ["현금", "현금", "현금"]
+
+
+def test_runner_summary_includes_intratrade_drawdown_and_initial_equity_peak() -> None:
+    rows = pd.DataFrame(
+        [
+            {"date": "2026-04-01", "close": 95, "signal": "buy"},
+            {"date": "2026-04-02", "close": 100, "signal": "hold"},
+            {"date": "2026-04-03", "close": 50, "signal": "hold"},
+            {"date": "2026-04-04", "close": 100, "signal": "hold"},
+        ]
+    )
+
+    result = DEFAULT_BACKTEST_RUNNER.run("005930", rows)
+    curve = build_daily_mark_to_market_equity_curve(rows, result.trades, initial_equity=1.0)
+    summary = result.summary.iloc[0]
+
+    assert summary["max_drawdown_pct"] == pytest.approx(50.0)
+    assert summary["final_equity"] == pytest.approx(curve.iloc[-1]["equity"])
+    assert summary["total_return_pct"] == pytest.approx(curve.iloc[-1]["equity_return_pct"])
+    assert result.trades.iloc[0]["exit_reason"] == "final_close"
+
+
+def test_runner_summary_counts_first_trade_loss_from_initial_equity() -> None:
+    rows = pd.DataFrame(
+        [
+            {"date": "2026-04-01", "close": 95, "signal": "buy"},
+            {"date": "2026-04-02", "close": 100, "signal": "hold"},
+            {"date": "2026-04-03", "close": 80, "signal": "hold"},
+        ]
+    )
+
+    summary = DEFAULT_BACKTEST_RUNNER.run("005930", rows).summary.iloc[0]
+
+    assert summary["total_return_pct"] == pytest.approx(-20.0)
+    assert summary["max_drawdown_pct"] == pytest.approx(20.0)
+    assert summary["final_equity"] == pytest.approx(0.8)
+
+
+def test_runner_summary_without_trades_matches_flat_daily_curve() -> None:
+    rows = pd.DataFrame(
+        [
+            {"date": "2026-04-01", "close": 100, "signal": "hold"},
+            {"date": "2026-04-02", "close": 50, "signal": "hold"},
+        ]
+    )
+
+    result = DEFAULT_BACKTEST_RUNNER.run("005930", rows)
+    curve = build_daily_mark_to_market_equity_curve(rows, result.trades, initial_equity=1.0)
+    summary = result.summary.iloc[0]
+
+    assert summary["trade_count"] == 0
+    assert summary["max_drawdown_pct"] == 0.0
+    assert summary["final_equity"] == pytest.approx(curve.iloc[-1]["equity"])
+    assert summary["total_return_pct"] == pytest.approx(curve.iloc[-1]["equity_return_pct"])

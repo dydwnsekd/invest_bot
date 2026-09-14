@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from invest_bot.db.contracts import StockRecord
 from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.frame_storage import DbFrameStorage
 from invest_bot.db.repositories import SqlAlchemyStockRepository
-from invest_bot.jobs.generate_market_report import MarketReportGenerator, MarketReportRequest
+from invest_bot.jobs.generate_market_report import MarketReportDataError, MarketReportGenerator, MarketReportRequest
 from invest_bot.market.storage import CsvStorage
 from tests.helpers import init_test_db, make_test_dir
 
@@ -91,6 +92,12 @@ def test_market_report_generator_builds_and_saves_summary_report():
     assert report.iloc[0]["volume_state"] == "active"
     assert report.iloc[0]["investor_flow"] == "supportive"
     assert report.iloc[0]["final_opinion"] == "buy"
+    assert report.iloc[0]["date"] == "2026-04-10"
+    assert report.iloc[0]["reference_date"] == "2026-04-10"
+    assert report.iloc[0]["indicator_data_status"] == "aligned"
+    assert report.iloc[0]["signal_data_status"] == "aligned"
+    assert report.iloc[0]["investor_data_status"] == "aligned"
+    assert report.iloc[0]["investor_date_source"] == "filename"
 
 
 def test_market_report_generator_prefers_canonical_symbol_name_over_stock_info_fallback():
@@ -183,7 +190,7 @@ def test_market_report_generator_uses_hold_fallback_for_missing_strategy_inputs(
             symbol="005930",
             indicator_filename="unused.csv",
             signal_filename="unused.csv",
-            investor_filename="unused.csv",
+            investor_filename="005930_20260410.csv",
         ),
         indicator_frame=indicator_frame,
         signal_frame=signal_frame,
@@ -198,3 +205,106 @@ def test_market_report_generator_uses_hold_fallback_for_missing_strategy_inputs(
     assert row["trend_filter_reason"].startswith("Missing indicators: prev_close")
     assert row["mean_reversion_signal"] == "hold"
     assert row["mean_reversion_reason"].startswith("Missing indicators:")
+
+
+def test_market_report_uses_latest_rows_not_after_common_reference_date() -> None:
+    generator = MarketReportGenerator(
+        raw_storage=CsvStorage(make_test_dir("market_report_reference") / "raw"),
+        processed_storage=CsvStorage(make_test_dir("market_report_reference_processed") / "processed"),
+    )
+    indicator_frame = pd.DataFrame(
+        [
+            {"date": "2026-04-12", "close": 999, "ma_5": 999, "ma_20": 999, "ma_60": 999},
+            {"date": "2026-04-10", "close": 100, "ma_5": 101, "ma_20": 99, "ma_60": 98},
+            {"date": "2026-04-09", "close": 90, "ma_5": 90, "ma_20": 90, "ma_60": 90},
+        ]
+    )
+    signal_frame = pd.DataFrame(
+        [
+            {"date": "2026-04-11", "signal": "sell", "signal_reason": "future"},
+            {"date": "2026-04-10", "signal": "buy", "signal_reason": "reference"},
+        ]
+    )
+    investor_frame = pd.DataFrame(
+        [
+            {"stck_bsop_date": "20260410", "frgn_ntby_qty": 10, "orgn_ntby_qty": 5, "prsn_ntby_qty": -15},
+            {"stck_bsop_date": "20260408", "frgn_ntby_qty": -10, "orgn_ntby_qty": -5, "prsn_ntby_qty": 15},
+        ]
+    )
+
+    report = generator.generate_report(
+        request=MarketReportRequest("005930", "indicator.csv", "signal.csv", "investor.csv"),
+        indicator_frame=indicator_frame,
+        signal_frame=signal_frame,
+        investor_frame=investor_frame,
+        stock_info_frame=pd.DataFrame(),
+    )
+    row = report.iloc[0]
+
+    assert row["reference_date"] == "2026-04-10"
+    assert row["close"] == 100.0
+    assert row["golden_cross_signal"] == "buy"
+    assert row["foreign_net"] == 10.0
+    assert row["indicator_date"] == row["signal_date"] == row["investor_date"] == "2026-04-10"
+
+
+def test_market_report_marks_a_source_that_lags_the_reference_date() -> None:
+    generator = MarketReportGenerator(
+        raw_storage=CsvStorage(make_test_dir("market_report_lagging") / "raw"),
+        processed_storage=CsvStorage(make_test_dir("market_report_lagging_processed") / "processed"),
+    )
+    report = generator.generate_report(
+        request=MarketReportRequest("005930", "indicator.csv", "signal.csv", "investor.csv"),
+        indicator_frame=pd.DataFrame(
+            [
+                {"date": "2026-04-09", "close": 90},
+                {"date": "2026-04-11", "close": 110},
+            ]
+        ),
+        signal_frame=pd.DataFrame(
+            [
+                {"date": "2026-04-09", "signal": "hold"},
+                {"date": "2026-04-10", "signal": "buy"},
+            ]
+        ),
+        investor_frame=pd.DataFrame(
+            [{"trade_date": "2026-04-10", "frgn_ntby_qty": 1, "orgn_ntby_qty": 1, "prsn_ntby_qty": -2}]
+        ),
+        stock_info_frame=pd.DataFrame(),
+    )
+    row = report.iloc[0]
+
+    assert row["reference_date"] == "2026-04-10"
+    assert row["indicator_date"] == "2026-04-09"
+    assert row["indicator_data_status"] == "lagging"
+    assert row["signal_data_status"] == "aligned"
+    assert row["investor_data_status"] == "aligned"
+
+
+@pytest.mark.parametrize(
+    ("source_name", "indicator_frame", "signal_frame", "investor_frame"),
+    [
+        ("indicator", pd.DataFrame(), pd.DataFrame([{"date": "2026-04-10", "signal": "hold"}]), pd.DataFrame([{"date": "2026-04-10"}])),
+        ("signal", pd.DataFrame([{"date": "2026-04-10", "close": 100}]), pd.DataFrame(), pd.DataFrame([{"date": "2026-04-10"}])),
+        ("investor", pd.DataFrame([{"date": "2026-04-10", "close": 100}]), pd.DataFrame([{"date": "2026-04-10", "signal": "hold"}]), pd.DataFrame()),
+    ],
+)
+def test_market_report_rejects_empty_required_sources(
+    source_name: str,
+    indicator_frame: pd.DataFrame,
+    signal_frame: pd.DataFrame,
+    investor_frame: pd.DataFrame,
+) -> None:
+    generator = MarketReportGenerator(
+        raw_storage=CsvStorage(make_test_dir(f"market_report_empty_{source_name}") / "raw"),
+        processed_storage=CsvStorage(make_test_dir(f"market_report_empty_{source_name}_processed") / "processed"),
+    )
+
+    with pytest.raises(MarketReportDataError, match=source_name):
+        generator.generate_report(
+            request=MarketReportRequest("005930", "indicator.csv", "signal.csv", "investor.csv"),
+            indicator_frame=indicator_frame,
+            signal_frame=signal_frame,
+            investor_frame=investor_frame,
+            stock_info_frame=pd.DataFrame(),
+        )

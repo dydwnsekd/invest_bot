@@ -100,32 +100,24 @@ class NormalizedSignalBacktestRunner:
         strategy_id = _first_present(signal_frame.get("strategy_id"))
         strategy_name = _first_present(signal_frame.get("strategy_name"))
 
-        if trades_frame.empty:
-            return pd.DataFrame(
-                [
-                    {
-                        "symbol": symbol,
-                        "strategy_id": strategy_id,
-                        "strategy_name": strategy_name,
-                        "source_rows": len(signal_frame),
-                        "buy_signal_count": buy_signal_count,
-                        "sell_signal_count": sell_signal_count,
-                        "trade_count": 0,
-                        "win_rate_pct": 0.0,
-                        "average_return_pct": 0.0,
-                        "total_return_pct": 0.0,
-                        "max_drawdown_pct": 0.0,
-                        "final_equity": 1.0,
-                    }
-                ]
-            )
+        daily_equity_curve = build_daily_mark_to_market_equity_curve(
+            signal_frame,
+            trades_frame,
+            initial_equity=1.0,
+        )
+        equity = daily_equity_curve["equity"] if not daily_equity_curve.empty else pd.Series([1.0])
+        rolling_peak = pd.concat([pd.Series([1.0]), equity], ignore_index=True).cummax().iloc[1:]
+        drawdowns = ((equity.reset_index(drop=True) / rolling_peak.reset_index(drop=True)) - 1.0) * 100.0
+        final_equity = float(equity.iloc[-1])
 
-        trade_returns = trades_frame["return_pct"].astype(float) / 100.0
-        equity_curve = (1.0 + trade_returns).cumprod()
-        rolling_peak = equity_curve.cummax()
-        drawdowns = ((equity_curve / rolling_peak) - 1.0) * 100.0
-        winning_trades = int((trades_frame["return_pct"].astype(float) > 0).sum())
-        trade_count = len(trades_frame)
+        if trades_frame.empty:
+            winning_trades = 0
+            trade_count = 0
+            average_return_pct = 0.0
+        else:
+            winning_trades = int((trades_frame["return_pct"].astype(float) > 0).sum())
+            trade_count = len(trades_frame)
+            average_return_pct = float(trades_frame["return_pct"].mean())
 
         return pd.DataFrame(
             [
@@ -137,11 +129,11 @@ class NormalizedSignalBacktestRunner:
                     "buy_signal_count": buy_signal_count,
                     "sell_signal_count": sell_signal_count,
                     "trade_count": trade_count,
-                    "win_rate_pct": (winning_trades / trade_count) * 100.0,
-                    "average_return_pct": float(trades_frame["return_pct"].mean()),
-                    "total_return_pct": (float(equity_curve.iloc[-1]) - 1.0) * 100.0,
+                    "win_rate_pct": (winning_trades / trade_count) * 100.0 if trade_count else 0.0,
+                    "average_return_pct": average_return_pct,
+                    "total_return_pct": (final_equity - 1.0) * 100.0,
                     "max_drawdown_pct": abs(float(drawdowns.min())) if not drawdowns.empty else 0.0,
-                    "final_equity": float(equity_curve.iloc[-1]),
+                    "final_equity": final_equity,
                 }
             ]
         )

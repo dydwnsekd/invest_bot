@@ -15,6 +15,14 @@ from invest_bot.market.storage import SavedDataset
 from invest_bot.strategy import MeanReversionStrategy, RSIStrategy, TrendFilterStrategy
 
 
+SOURCE_DATE_COLUMN_ALIASES = ("date", "trade_date", "stck_bsop_date")
+SOURCE_DATE_COLUMN = "__source_date"
+
+
+class MarketReportDataError(ValueError):
+    """Raised when a required report input cannot establish a usable as-of date."""
+
+
 @dataclass(slots=True)
 class MarketReportRequest:
     symbol: str
@@ -57,11 +65,33 @@ class MarketReportGenerator:
         investor_frame: pd.DataFrame,
         stock_info_frame: pd.DataFrame,
     ) -> pd.DataFrame:
-        latest_indicator = self._latest_row(indicator_frame)
-        latest_signal = self._latest_row(signal_frame)
-        latest_investor = self._latest_row(investor_frame)
+        dated_sources = {
+            "indicator": self._normalize_dated_source(indicator_frame, "indicator"),
+            "signal": self._normalize_dated_source(signal_frame, "signal"),
+            "investor": self._normalize_dated_source(
+                investor_frame,
+                "investor",
+                filename=request.investor_filename,
+                allow_filename_date=True,
+            ),
+        }
+        reference_date = min(frame[SOURCE_DATE_COLUMN].max() for frame, _ in dated_sources.values())
+        selected_sources: dict[str, tuple[pd.Series, str]] = {}
+        for name, (frame, date_source) in dated_sources.items():
+            eligible = frame.loc[frame[SOURCE_DATE_COLUMN] <= reference_date]
+            if eligible.empty:
+                raise MarketReportDataError(
+                    f"Required market report source '{name}' has no row on or before reference date "
+                    f"{reference_date:%Y-%m-%d}."
+                )
+            selected_sources[name] = (eligible.iloc[-1], date_source)
+        normalized_indicator = dated_sources["indicator"][0]
+        indicator_history = normalized_indicator.loc[normalized_indicator[SOURCE_DATE_COLUMN] <= reference_date]
+        latest_indicator, indicator_date_source = selected_sources["indicator"]
+        latest_signal, signal_date_source = selected_sources["signal"]
+        latest_investor, investor_date_source = selected_sources["investor"]
         latest_stock_info = self._latest_row(stock_info_frame)
-        market_snapshot = self._build_market_snapshot(indicator_frame, latest_indicator)
+        market_snapshot = self._build_market_snapshot(indicator_history, latest_indicator)
         strategy_outcomes = self._evaluate_strategy_outcomes(market_snapshot)
 
         symbol_name = self._resolve_symbol_name(
@@ -102,13 +132,26 @@ class MarketReportGenerator:
             volume_state=volume_state,
             investor_flow=investor_flow,
         )
+        indicator_date = pd.Timestamp(latest_indicator[SOURCE_DATE_COLUMN])
+        signal_date = pd.Timestamp(latest_signal[SOURCE_DATE_COLUMN])
+        investor_date = pd.Timestamp(latest_investor[SOURCE_DATE_COLUMN])
 
         report = pd.DataFrame(
             [
                 {
                     "symbol": request.symbol,
                     "symbol_name": symbol_name,
-                    "date": self._text_value(latest_signal.get("date")) or self._text_value(latest_indicator.get("date")),
+                    "date": self._text_value(reference_date),
+                    "reference_date": self._text_value(reference_date),
+                    "indicator_date": self._text_value(indicator_date),
+                    "indicator_data_status": self._source_status(indicator_date, reference_date),
+                    "indicator_date_source": indicator_date_source,
+                    "signal_date": self._text_value(signal_date),
+                    "signal_data_status": self._source_status(signal_date, reference_date),
+                    "signal_date_source": signal_date_source,
+                    "investor_date": self._text_value(investor_date),
+                    "investor_data_status": self._source_status(investor_date, reference_date),
+                    "investor_date_source": investor_date_source,
                     "close": close,
                     "ma_5": ma_5,
                     "ma_20": ma_20,
@@ -192,6 +235,53 @@ class MarketReportGenerator:
             return self.raw_storage.load(dataset, filename)
         except (EmptyDataError, FileNotFoundError):
             return pd.DataFrame()
+
+    @classmethod
+    def _normalize_dated_source(
+        cls,
+        frame: pd.DataFrame,
+        source_name: str,
+        *,
+        filename: str | None = None,
+        allow_filename_date: bool = False,
+    ) -> tuple[pd.DataFrame, str]:
+        if frame.empty:
+            raise MarketReportDataError(f"Required market report source '{source_name}' is empty.")
+
+        normalized = frame.copy()
+        for column in SOURCE_DATE_COLUMN_ALIASES:
+            if column not in normalized.columns:
+                continue
+            parsed = pd.to_datetime(normalized[column], errors="coerce")
+            normalized[SOURCE_DATE_COLUMN] = parsed
+            normalized = normalized.dropna(subset=[SOURCE_DATE_COLUMN])
+            if normalized.empty:
+                raise MarketReportDataError(
+                    f"Required market report source '{source_name}' has no valid values in date column '{column}'."
+                )
+            return normalized.sort_values(SOURCE_DATE_COLUMN, kind="stable").reset_index(drop=True), f"column:{column}"
+
+        if allow_filename_date and filename:
+            filename_date = cls._date_from_filename(filename)
+            if filename_date is not None:
+                normalized[SOURCE_DATE_COLUMN] = filename_date
+                return normalized.reset_index(drop=True), "filename"
+
+        raise MarketReportDataError(f"Required market report source '{source_name}' has no usable date.")
+
+    @staticmethod
+    def _date_from_filename(filename: str) -> pd.Timestamp | None:
+        for part in reversed(str(filename).rsplit("/", 1)[-1].split("_")):
+            token = part.split(".", 1)[0]
+            if len(token) == 8 and token.isdigit():
+                parsed = pd.to_datetime(token, format="%Y%m%d", errors="coerce")
+                if not pd.isna(parsed):
+                    return pd.Timestamp(parsed)
+        return None
+
+    @staticmethod
+    def _source_status(source_date: pd.Timestamp, reference_date: pd.Timestamp) -> str:
+        return "aligned" if source_date == reference_date else "lagging"
 
     @staticmethod
     def _build_market_snapshot(indicator_frame: pd.DataFrame, latest_indicator: pd.Series) -> dict[str, object]:
