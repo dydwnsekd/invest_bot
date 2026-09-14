@@ -15,7 +15,13 @@ from tests.helpers import sanitized_subprocess_environment
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _run_init_db(database_url: str, tmp_path: Path, synthetic_stock_master: Path) -> subprocess.CompletedProcess[str]:
+def _run_init_db(
+    database_url: str,
+    tmp_path: Path,
+    synthetic_stock_master: Path,
+    *,
+    mode: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     config_path = tmp_path / "app.yaml"
     config_path.write_text(
         f"database_url: {database_url}\nenable_db_write: false\n",
@@ -51,6 +57,10 @@ def _run_init_db(database_url: str, tmp_path: Path, synthetic_stock_master: Path
                 "def _blocked_urlopen(*args, **kwargs):",
                 "    raise RuntimeError('network disabled by isolated init-db test')",
                 "urllib.request.urlopen = _blocked_urlopen",
+                "if os.environ.get('INVEST_BOT_TEST_INIT_MODE') == 'migrate-only':",
+                "    def _unexpected_master_sync(*args, **kwargs):",
+                "        raise AssertionError('migration-only must not call stock master sync')",
+                "    master_sync.sync_stock_master = _unexpected_master_sync",
             ]
         ),
         encoding="utf-8",
@@ -62,11 +72,12 @@ def _run_init_db(database_url: str, tmp_path: Path, synthetic_stock_master: Path
             "INVEST_BOT_TEST_CONFIG": str(config_path),
             "INVEST_BOT_TEST_STOCK_MASTER": str(synthetic_stock_master),
             "INVEST_BOT_TEST_SYNC_STATE": str(state_path),
+            "INVEST_BOT_TEST_INIT_MODE": mode or "",
             "PYTHONPATH": os.pathsep.join([str(bootstrap_dir), str(ROOT / "src")]),
         }
     )
     return subprocess.run(
-        [sys.executable, "scripts/init_db.py"],
+        [sys.executable, "scripts/init_db.py", *(["--mode", mode] if mode else [])],
         cwd=ROOT,
         env=env,
         check=True,
@@ -92,6 +103,22 @@ def test_init_db_script_runs_migrations_for_sqlite(tmp_path, synthetic_stock_mas
     assert db_path.exists()
     config_after = project_config.read_bytes() if project_config.exists() else None
     assert config_after == config_before
+
+
+def test_migrate_only_subprocess_reaches_head_without_master_sync(tmp_path, synthetic_stock_master) -> None:
+    db_path = tmp_path / "migration-only.db"
+
+    result = _run_init_db(
+        f"sqlite+pysqlite:///{db_path.as_posix()}",
+        tmp_path,
+        synthetic_stock_master,
+        mode="migrate-only",
+    )
+
+    assert "stock master sync skipped (migration-only mode)" in result.stdout
+    assert not (tmp_path / "stock_master_sync_state.json").exists()
+    with sqlite3.connect(db_path) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == _migration_head()
 
 
 def test_init_db_script_upgrades_legacy_bootstrap_sqlite_db(tmp_path, synthetic_stock_master) -> None:
