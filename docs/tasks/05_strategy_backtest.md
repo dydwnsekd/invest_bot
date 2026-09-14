@@ -57,6 +57,13 @@
 - [x] `sell` 신호 발생 시 다음 거래일 종가 청산
 - [x] 종료 신호 없이 포지션이 남으면 마지막 거래일 종가로 강제 종료
 
+## 결과 정확성 개선 (2026-09-15)
+
+- 요약의 `max_drawdown_pct`, `final_equity`, `total_return_pct`를 일별 mark-to-market 곡선에서 계산합니다.
+- 초기자산을 최초 peak로 포함하며 보유 중 `100 → 50 → 100` 사례도 최대 낙폭 50%로 보고합니다.
+- 체결·강제 청산 규칙과 거래비용 미반영 가정은 유지합니다.
+- 시장 리포트는 지표·신호·수급의 공통 기준일 이하 입력만 사용합니다. 상세 날짜·누락 처리 계약은 [리포트 가이드](../analysis/market_report_guide.md)를 따릅니다.
+
 ## 현재 persistence 규칙
 
 - [x] 거래 로그와 요약 결과에 `run_group_id`, `run_id`, `symbol`, `strategy_id`, `strategy_name`, `output_type` 부여

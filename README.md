@@ -14,6 +14,15 @@
 
 ## 현재 구현 범위
 
+### 개선 작업 통합 진행 중 (2026-09-15)
+
+- 수급의 유효한 여러 거래일과 기존 종목 메타데이터를 보존하고, 실패 시 이미 저장한 결과를 보고
+- 백테스트 요약의 최대 낙폭·최종자산·총수익률을 일별 평가금액 곡선 기준으로 통일
+- 시장 리포트 공통 기준일 도입; CSV 숫자형 날짜와 주말 수급 관측일 연동 보완은 다음 순차 작업으로 대기
+- DB migration과 외부 종목 마스터 초기화를 분리하고 scheduler/web 로그 경로를 공유
+- 기본 테스트를 임시 설정·DB로 격리하고 Python 3.13 CI 및 별도 PostgreSQL 검증 추가
+- 역할별 범위와 통합 검증 기록: [개선 작업 계획](docs/operations/improvement_sessions_2026-09-13.md)
+
 ### 이번 세션 업데이트 (2026-09-13)
 
 - 대시보드 실행 계획의 0~7단계 완료
@@ -361,6 +370,9 @@ docker compose build
 
 기본 실행 경로에는 `db`, `migrate`, `web`, `scheduler`가 포함됩니다.
 `migrate`는 별도 프로필 없이 함께 평가되며, `web`과 `scheduler`는 마이그레이션 성공 후 시작됩니다.
+Compose의 `migrate`는 `migrate-only` 모드이므로 외부 종목 마스터 다운로드 없이 스키마를 적용합니다. 전체 초기화가 필요하면 `python scripts/init_db.py --mode full`을 명시적으로 실행합니다. 로컬 기본 모드는 기존과 같은 `full`이며, 선택 우선순위는 `--mode` 인자 → `INVEST_BOT_INIT_MODE` 환경변수 → `full`입니다.
+
+스케줄 예시의 `log_path: ../.runtime/logs/collection_scheduler.log`는 config 파일 기준 상대경로입니다. Compose에서는 호스트 `${INVEST_BOT_RUNTIME_DIR:-./.docker/runtime}`를 scheduler에 쓰기 가능, web에 읽기 전용으로 마운트합니다. 기존 스케줄 설정에 `logs/collection_scheduler.log`가 남아 있다면 예시의 경로로 갱신해야 읽기 전용 config 밖에 로그가 기록됩니다. 상세 확인 방법은 [운영 가이드](docs/tasks/07_operations_docs.md)를 참고하세요.
 
 백그라운드 실행:
 
@@ -430,6 +442,10 @@ python -m pytest
 python scripts/run_tests.py
 ```
 
+기본 suite는 실제 네트워크와 PostgreSQL 검증을 제외하며, 기존 설정 파일을 덮어쓰지 않습니다. `python scripts/run_tests.py --suite default -q`로 같은 범위를 실행할 수 있습니다. 초기화 테스트는 현재 Python과 임시 SQLite·종목 마스터 fixture를 사용합니다.
+
+PostgreSQL 검증은 운영 DB와 분리된 로컬 테스트 DB에 `QA_POSTGRESQL_URL`을 지정한 뒤 `python scripts/run_tests.py --suite postgresql tests/integration/test_postgresql_migrations.py -q`로 실행합니다. DB 이름은 `_test`로 끝나야 합니다. CI는 별도 `postgres:17` 서비스를 사용합니다.
+
 ### 2. 단일 종목 수집
 
 ```powershell
@@ -493,7 +509,7 @@ python scripts/run_market_report.py 005930
 
 생성된 리포트에는 종합 의견(`final_opinion`)과 별도로 아래 전략별 판단 필드가 함께 포함됩니다.
 
-리포트의 `date`는 실행한 오늘 날짜가 아니라 최신 골든크로스 신호의 기준 거래일입니다. 신호가 없으면 최신 지표 기준 거래일을 사용합니다. 수집 데이터가 최신이어도 지표 계산과 신호 생성을 다시 실행하지 않으면 리포트 날짜는 이전 신호 기준일로 남을 수 있습니다.
+리포트의 `date`와 `reference_date`는 지표·신호·수급의 최신 유효일 중 가장 이른 날짜입니다. 각 입력에서는 이 공통 기준일 이하의 최신 행만 사용합니다. `indicator_date`, `signal_date`, `investor_date`와 각 `*_data_status`로 실제 사용한 날짜와 지연 여부를 확인할 수 있습니다. 필수 입력이 없거나 기준일 이전 행을 선택할 수 없으면 리포트 생성을 실패로 처리합니다. 현재 통합 브랜치에는 CSV 숫자형 날짜 파싱과 날짜 없는 상세 수급의 파일명 날짜 사용 문제가 남아 있으며, 실제 거래일이 있는 수급 summary 연결을 다음 순차 작업에서 마무리합니다.
 
 대시보드에서 최신 수집분까지 반영하려면 `전체 파이프라인`을 실행하거나 `데이터 수집 -> 지표 계산 -> 신호 생성 -> 리포트 생성` 순서로 실행합니다. 데이터 수집이 모두 실패하면 전체 파이프라인은 리포트를 갱신하지 않고 실패 메시지를 표시합니다.
 

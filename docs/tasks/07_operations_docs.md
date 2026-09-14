@@ -20,8 +20,28 @@
 
 - [ ] task 문서 갱신 규칙 정리
 - [ ] 수집/분석/대시보드 운영 가이드
-- [ ] 로그 확인 가이드
+- [x] 공유 runtime 로그 확인 가이드
 - [ ] 릴리즈/배포 방식 정리
+
+## 실행 경계와 로그 확인 (2026-09-15)
+
+- 스키마만 적용: `python scripts/init_db.py --mode migrate-only`
+- 마스터 동기화까지 실행: `python scripts/init_db.py --mode full`
+- 모드 우선순위: CLI → `INVEST_BOT_INIT_MODE` → 기본 `full`
+- Compose의 `migrate`는 `migrate-only`로 실행합니다. scheduler는 수집 전에 기존 마스터 동기화를 계속 수행합니다.
+- full 모드에서 마스터 다운로드가 실패하더라도 `database migration complete`가 출력됐다면 스키마 적용은 완료된 상태입니다.
+
+스케줄 설정의 `log_path`는 설정 파일의 디렉터리를 기준으로 해석합니다. 예시값 `../.runtime/logs/collection_scheduler.log`를 사용하면 config 밖의 runtime 경로에 기록합니다. 기존 사용자 설정은 자동 변경하지 않으므로 예전 `logs/...` 값이 있으면 새 경로로 갱신해야 합니다.
+
+Compose의 호스트 경로는 `INVEST_BOT_RUNTIME_DIR` 또는 기본 `.docker/runtime`입니다. scheduler는 이 경로에 쓰고 web은 같은 경로를 읽습니다. 다음 명령은 기본 호스트 경로의 최근 이벤트를 확인합니다.
+
+```bash
+tail -n 20 .docker/runtime/logs/collection_scheduler.log
+```
+
+로컬 Python 실행의 기본 경로는 `.runtime/logs/collection_scheduler.log`입니다. 로그에는 `collection_started`, `collection_finished`, `collection_failed`, `collection_waiting` 이벤트가 기록됩니다. 수집 전처리나 수집기 예외는 `collection_failed`의 `failed_at`, `error_type`, `error`로 확인합니다. 재시작해도 기존 파일에 이어 기록하며 자동 로그 순환은 아직 제공하지 않습니다.
+
+기본 테스트와 별도 PostgreSQL 검증은 `scripts/run_tests.py --suite default|postgresql`로 구분합니다. 컨테이너 이미지 빌드·서비스 기동 검증과 단위 테스트 통과 여부는 별도로 기록합니다.
 
 ## 이번 세션 문서 갱신 요약 (2026-07-06)
 
