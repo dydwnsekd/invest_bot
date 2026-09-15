@@ -38,6 +38,7 @@ def generate_market_report_for_symbol(
         indicator_filename=indicator_filename,
         signal_filename=signal_filename,
         investor_filename=investor_filename,
+        investor_summary_filename=investor_filename,
     )
     indicator_frame = report_generator.load_indicator_frame(request)
     signal_frame = report_generator.load_signal_frame(request)
@@ -60,6 +61,7 @@ def generate_market_report_for_symbol(
         "indicator_file": indicator_filename,
         "signal_file": signal_filename,
         "investor_file": investor_filename,
+        "investor_summary_file": request.investor_summary_filename,
         "saved_path": str(saved.path),
         "delivery": None,
     }

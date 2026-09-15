@@ -17,6 +17,8 @@ from invest_bot.strategy import MeanReversionStrategy, RSIStrategy, TrendFilterS
 
 SOURCE_DATE_COLUMN_ALIASES = ("date", "trade_date", "stck_bsop_date")
 SOURCE_DATE_COLUMN = "__source_date"
+SOURCE_DATE_HINT_COLUMN = "__source_date_hint"
+INVESTOR_VALUE_COLUMNS = {"frgn_ntby_qty", "orgn_ntby_qty", "prsn_ntby_qty"}
 
 
 class MarketReportDataError(ValueError):
@@ -30,6 +32,7 @@ class MarketReportRequest:
     signal_filename: str
     investor_filename: str
     stock_info_filename: str | None = None
+    investor_summary_filename: str | None = None
 
 
 class MarketReportGenerator:
@@ -51,7 +54,41 @@ class MarketReportGenerator:
         return self._load_processed_csv("golden_cross_signals", request.signal_filename, parse_date=True)
 
     def load_investor_frame(self, request: MarketReportRequest) -> pd.DataFrame:
-        return self._load_raw_csv("investor_daily", request.investor_filename)
+        frame = self._load_raw_csv("investor_daily", request.investor_filename)
+        if not frame.empty and any(column in frame.columns for column in SOURCE_DATE_COLUMN_ALIASES):
+            return frame
+        if not request.investor_summary_filename:
+            raise MarketReportDataError(
+                "Investor detail has no observation date. A matching investor_daily_summary snapshot is required; "
+                "refresh investor data before generating the report."
+            )
+
+        summary = self._load_raw_csv("investor_daily_summary", request.investor_summary_filename)
+        if summary.empty:
+            raise MarketReportDataError(
+                "Investor detail has no observation date and its matching investor_daily_summary snapshot is missing; "
+                "refresh investor data before generating the report."
+            )
+        try:
+            normalized_summary, date_source = self._normalize_dated_source(summary, "investor_daily_summary")
+        except MarketReportDataError as error:
+            raise MarketReportDataError(
+                "Investor detail has no observation date and its matching investor_daily_summary has no valid "
+                "observation date; refresh investor data before generating the report."
+            ) from error
+        summary_date_source = f"summary:{date_source}"
+        if INVESTOR_VALUE_COLUMNS.intersection(normalized_summary.columns):
+            normalized_summary[SOURCE_DATE_HINT_COLUMN] = summary_date_source
+            return normalized_summary
+        if len(frame.index) != 1:
+            raise MarketReportDataError(
+                "Investor detail has no observation date and contains multiple rows, while its matching "
+                "investor_daily_summary has dates only. The observations cannot be aligned safely; refresh investor "
+                "data with dated values before generating the report."
+            )
+        frame["stck_bsop_date"] = normalized_summary[SOURCE_DATE_COLUMN].max()
+        frame[SOURCE_DATE_HINT_COLUMN] = summary_date_source
+        return frame
 
     def load_stock_info_frame(self, request: MarketReportRequest) -> pd.DataFrame:
         filename = request.stock_info_filename or f"{request.symbol}.csv"
@@ -68,12 +105,7 @@ class MarketReportGenerator:
         dated_sources = {
             "indicator": self._normalize_dated_source(indicator_frame, "indicator"),
             "signal": self._normalize_dated_source(signal_frame, "signal"),
-            "investor": self._normalize_dated_source(
-                investor_frame,
-                "investor",
-                filename=request.investor_filename,
-                allow_filename_date=True,
-            ),
+            "investor": self._normalize_dated_source(investor_frame, "investor"),
         }
         reference_date = min(frame[SOURCE_DATE_COLUMN].max() for frame, _ in dated_sources.values())
         selected_sources: dict[str, tuple[pd.Series, str]] = {}
@@ -226,7 +258,7 @@ class MarketReportGenerator:
         except (EmptyDataError, FileNotFoundError):
             return pd.DataFrame()
         if parse_date and "date" in frame.columns:
-            frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+            frame["date"] = self._parse_date_series(frame["date"])
             frame = frame.sort_values("date").reset_index(drop=True)
         return frame
 
@@ -241,9 +273,6 @@ class MarketReportGenerator:
         cls,
         frame: pd.DataFrame,
         source_name: str,
-        *,
-        filename: str | None = None,
-        allow_filename_date: bool = False,
     ) -> tuple[pd.DataFrame, str]:
         if frame.empty:
             raise MarketReportDataError(f"Required market report source '{source_name}' is empty.")
@@ -252,32 +281,39 @@ class MarketReportGenerator:
         for column in SOURCE_DATE_COLUMN_ALIASES:
             if column not in normalized.columns:
                 continue
-            parsed = pd.to_datetime(normalized[column], errors="coerce")
+            parsed = cls._parse_date_series(normalized[column])
             normalized[SOURCE_DATE_COLUMN] = parsed
             normalized = normalized.dropna(subset=[SOURCE_DATE_COLUMN])
             if normalized.empty:
                 raise MarketReportDataError(
                     f"Required market report source '{source_name}' has no valid values in date column '{column}'."
                 )
-            return normalized.sort_values(SOURCE_DATE_COLUMN, kind="stable").reset_index(drop=True), f"column:{column}"
+            date_source = f"column:{column}"
+            if SOURCE_DATE_HINT_COLUMN in normalized.columns:
+                hints = normalized[SOURCE_DATE_HINT_COLUMN].dropna()
+                if not hints.empty:
+                    date_source = str(hints.iloc[-1])
+            return normalized.sort_values(SOURCE_DATE_COLUMN, kind="stable").reset_index(drop=True), date_source
 
-        if allow_filename_date and filename:
-            filename_date = cls._date_from_filename(filename)
-            if filename_date is not None:
-                normalized[SOURCE_DATE_COLUMN] = filename_date
-                return normalized.reset_index(drop=True), "filename"
-
-        raise MarketReportDataError(f"Required market report source '{source_name}' has no usable date.")
+        suffix = (
+            " A matching investor_daily_summary snapshot is required; refresh investor data."
+            if source_name == "investor"
+            else ""
+        )
+        raise MarketReportDataError(f"Required market report source '{source_name}' has no usable date.{suffix}")
 
     @staticmethod
-    def _date_from_filename(filename: str) -> pd.Timestamp | None:
-        for part in reversed(str(filename).rsplit("/", 1)[-1].split("_")):
-            token = part.split(".", 1)[0]
-            if len(token) == 8 and token.isdigit():
-                parsed = pd.to_datetime(token, format="%Y%m%d", errors="coerce")
-                if not pd.isna(parsed):
-                    return pd.Timestamp(parsed)
-        return None
+    def _parse_date_series(series: pd.Series) -> pd.Series:
+        text = series.astype("string").str.strip()
+        compact_date = text.str.fullmatch(r"\d{8}(?:\.0+)?", na=False)
+        parsed = pd.Series(pd.NaT, index=series.index, dtype="datetime64[ns]")
+        parsed.loc[compact_date] = pd.to_datetime(
+            text.loc[compact_date].str.split(".").str[0],
+            format="%Y%m%d",
+            errors="coerce",
+        )
+        parsed.loc[~compact_date] = pd.to_datetime(series.loc[~compact_date], errors="coerce")
+        return parsed
 
     @staticmethod
     def _source_status(source_date: pd.Timestamp, reference_date: pd.Timestamp) -> str:

@@ -90,7 +90,20 @@ def test_generate_market_report_for_symbol_preserves_saved_report_when_delivery_
     }
 
 
-def _make_generator(name: str) -> MarketReportGenerator:
+def test_generate_market_report_uses_summary_trade_date_for_weekend_request_snapshot() -> None:
+    generator = _make_generator("market_report_weekend_request", request_date="20260412")
+
+    result = generate_market_report_for_symbol("005930", generator=generator)
+    saved_report = generator.processed_storage.load("market_reports", Path(str(result["saved_path"])).name)
+
+    assert result["investor_file"] == "005930_20260412.csv"
+    assert result["investor_summary_file"] == "005930_20260412.csv"
+    assert saved_report.iloc[0]["reference_date"] == "2026-04-10"
+    assert saved_report.iloc[0]["investor_date"] == "2026-04-10"
+    assert saved_report.iloc[0]["investor_date_source"] == "summary:column:stck_bsop_date"
+
+
+def _make_generator(name: str, *, request_date: str = "20260410") -> MarketReportGenerator:
     test_dir = make_test_dir(name)
     raw_storage = CsvStorage(test_dir / "raw")
     processed_storage = CsvStorage(test_dir / "processed")
@@ -129,8 +142,13 @@ def _make_generator(name: str) -> MarketReportGenerator:
     )
     raw_storage.save(
         "investor_daily",
-        "005930_20260410.csv",
+        f"005930_{request_date}.csv",
         pd.DataFrame([{"frgn_ntby_qty": "120", "orgn_ntby_qty": "80", "prsn_ntby_qty": "-200"}]),
+    )
+    raw_storage.save(
+        "investor_daily_summary",
+        f"005930_{request_date}.csv",
+        pd.DataFrame([{"stck_bsop_date": "20260410"}]),
     )
     raw_storage.save(
         "stock_info",
