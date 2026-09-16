@@ -1,5 +1,7 @@
 # invest_bot DB migration ERD
 
+> OKF 상태: `review-required`. 최신 테이블·쓰기 정책 전체를 반영한 ERD는 아니다. [알려진 차이와 구현 근거](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)를 함께 확인한다.
+
 ## Purpose
 
 이 문서는 **현재 코드 기준 실제 테이블 관계를 간략히 보여주는 보조 문서**다. 세부 책임과 사용자 변경 경계는 [`db_schema.md`](./db_schema.md)를 canonical source로 본다.

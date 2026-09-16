@@ -1,5 +1,7 @@
 # Next Steps And OMX Handoff - 2026-06-07
 
+> OKF 상태: `historical`. 당시의 인계와 실행 예시를 보존한다. 현재 작업 순서는 [개선 작업 추적](improvement_sessions_2026-09-13.md)의 단일 작업·순차 진행 원칙을 따른다.
+
 이 문서는 현재 `invest_bot` 상태를 기준으로 다음 구현 우선순위와 OMX 실행 프롬프트를 정리한 handoff 문서다.
 
 ## Current baseline

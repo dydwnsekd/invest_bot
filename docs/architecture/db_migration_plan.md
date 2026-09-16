@@ -1,5 +1,7 @@
 # invest_bot DB migration implementation-ready plan
 
+> OKF 상태: `proposed`. 아래 내용은 목표와 후속 설계안이며 완료된 구현 명세가 아니다. [현재 구현 근거](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)와 [작업 상태](../tasks/00_summary.md)를 구분해 읽는다.
+
 ## Objective
 
 Align the DB/runtime implementation with the ownership rules below:

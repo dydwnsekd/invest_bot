@@ -43,12 +43,16 @@ python -m pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/python scripts/run_tests.py
 ```
 
+기본 suite는 네트워크와 PostgreSQL 검증을 제외한다. `--suite default`로 명시할 수 있으며, 별도의 테스트 DB를 준비한 PostgreSQL 검증은 `--suite postgresql`로 선택한다. 초기화 테스트는 임시 설정과 DB를 사용한다. 구체적인 범위와 실행 설정은 [테스트 실행기](../../scripts/run_tests.py), [pytest 설정](../../pytest.ini), [CI](../../.github/workflows/tests.yml)를 확인한다.
+
 ## Delivery rule
 
 - commit 전에 변경 결과를 markdown으로 정리한다.
 - 보고서에는 기능별 목적, 변경 파일, 핵심 변경 내용, 검증 결과, 남은 리스크를 포함한다.
 
-## Current verification baseline
+## Historical verification baseline
 
 - 2026-06-07 기준 `.venv`는 Python 3.13으로 맞춰져 있다.
 - 같은 날짜 기준 전체 테스트 스위트 `44 passed`를 확인했다.
+
+이는 당시 결과다. 이후 통합 검증은 [task 요약](../tasks/00_summary.md)과 해당 작업 보고서를 확인하고, 현재 수정의 완료 판단에는 새 검증 증거를 사용한다.

@@ -1,5 +1,7 @@
 # invest_bot DB-first schema
 
+> OKF 상태: `review-required`. 아래 문서에는 목표 정책과 현재 구현의 차이가 남아 있다. 특히 수집 시 종목 placeholder 생성과 관심종목 테이블은 [현재 저장 경계](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)를 먼저 확인한다. 이 문서만으로 현행 구현을 단정하지 않는다.
+
 ## Purpose
 
 이 문서는 현재 `invest_bot`의 DB 스키마와 **테이블 책임**, **사용자 액션에 의한 변경 허용 여부**, **컬럼 의미**, **기능별 source of truth**를 정리하는 canonical 문서다. 구현/리팩터링/마이그레이션 판단은 이 문서를 우선 기준으로 삼는다.

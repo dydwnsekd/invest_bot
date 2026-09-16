@@ -1,5 +1,7 @@
 # invest_bot DB ERD operational summary
 
+> OKF 상태: `review-required`. 테이블 목록과 쓰기 경계에 누락·차이가 있다. [현재 구현 근거](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)를 우선 확인한다.
+
 이 문서는 운영 관점에서 보는 간단한 ERD 요약이다. 세부 컬럼 정의와 write boundary는 [`../architecture/db_schema.md`](../architecture/db_schema.md)를 기준으로 본다.
 
 ```mermaid

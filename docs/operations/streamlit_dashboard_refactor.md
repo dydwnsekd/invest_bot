@@ -1,5 +1,7 @@
 # Streamlit Dashboard Refactor Tracker
 
+> OKF 상태: `historical`. 날짜별 리팩터링 기록이다. 현재 UX 기준은 [DESIGN](../../DESIGN.md), 기능·후속 상태는 [대시보드 task](../tasks/04_dashboard.md)와 [개선 작업 추적](improvement_sessions_2026-09-13.md)에서 확인한다.
+
 ## 목표
 
 `streamlit_dashboard.py`의 책임을 단계적으로 분리해 파일 크기와 변경 충돌을 줄이고, 중간에 작업이 멈춰도 이 문서를 보고 다음 단계부터 바로 이어서 진행할 수 있게 한다.

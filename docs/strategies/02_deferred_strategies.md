@@ -1,5 +1,7 @@
 # Deferred And Follow-up Strategy Notes
 
+> OKF 상태: `historical`. 2026-06-18 당시의 후속 검토 기록이다. 현재 구현·연동 상태는 [전략·백테스트 현황](../tasks/05_strategy_backtest.md)에서 확인한다.
+
 ## 목적
 
 이 문서는 phase 1 이후 후속 전략 작업의 상태를 기록한다.

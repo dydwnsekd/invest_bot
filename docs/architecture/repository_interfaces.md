@@ -1,5 +1,7 @@
 # invest_bot repository interfaces for DB migration
 
+> OKF 상태: `review-required`. 특히 종목 reference의 쓰기 정책은 현재 수집 경로와 차이가 있다. [현재 저장 경계](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)와 실제 계약·구현을 함께 확인한다.
+
 ## Purpose
 
 이 문서는 현재 코드 기준 repository contract를 **reference / facts / artifacts** 책임 관점에서 정리한다. 구체적인 메서드 시그니처는 `src/invest_bot/db/contracts.py`를 canonical source로 본다.

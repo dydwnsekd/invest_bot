@@ -1,5 +1,7 @@
 # invest_bot agent guide
 
+프로젝트 지식의 분류와 갱신은 [OKF](OKF.md)를 따른다. [지식 홈](docs/README.md)과 [문서 등록부](docs/knowledge/catalog.md)에서 문서 상태를 확인하며, 과거 보고서의 미완료 목록을 현재 작업으로 재실행하지 않는다. 사용자 지시와 상위 작업 지침이 우선한다.
+
 ## 1. 프로젝트 목적
 
 이 프로젝트의 목표는 국내주식 시장을 대상으로, 데이터를 수집하고 전략을 검증한 뒤 모의투자와 실거래로 확장 가능한 자동매매 연구/운영 도구를 만드는 것입니다.
@@ -195,8 +197,8 @@ invest_bot/
 
 1. `README.md`
 2. `agent.md`
-3. `docs/tasks/00_summary.md`
-4. 자신의 세션 범위와 직접 관련된 task 문서
+3. `docs/README.md`와 `docs/knowledge/catalog.md`에서 담당 주제의 현재 문서 확인
+4. `docs/tasks/00_summary.md`와 자신의 범위에 해당하는 task 문서
 5. 관련 실행 스크립트와 최근 테스트 파일
 
 세션 시작 시 반드시 확인할 것:

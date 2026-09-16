@@ -8,8 +8,10 @@
 
 1. [`README.md`](../../README.md)
 2. [`agent.md`](../../agent.md)
-3. [`docs/tasks/00_summary.md`](../tasks/00_summary.md)
-4. 자신의 작업 범위와 관련된 task 문서
+3. [지식 홈](../README.md)과 [문서 등록부](../knowledge/catalog.md)에서 문서 상태 확인
+4. [`docs/tasks/00_summary.md`](../tasks/00_summary.md)와 자신의 작업 범위에 해당하는 task 문서
+
+역할별 기존 작업 하나를 유지하고 한 번에 하나씩 진행한다. 과거 계획의 병렬 실행 예시는 현재 사용자 요청을 덮어쓰지 않는다. 새로운 문서나 갱신은 [OKF 규약](../../OKF.md)에 따른다.
 
 공통적으로 요청하면 좋은 항목:
 

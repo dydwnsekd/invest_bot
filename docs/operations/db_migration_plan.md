@@ -1,5 +1,7 @@
 # invest_bot DB ownership and migration plan
 
+> OKF 상태: `proposed`. 운영 관점의 목표 정책과 이행 계획이다. [현재 저장 경계](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)가 설명하는 구현 상태를 이 계획으로 대체하지 않는다.
+
 이 문서는 현재 DB 구조를 **reference / facts / artifacts**로 다시 구분하고, 사용자 조회와 실행 액션의 write boundary를 고정하기 위한 운영 계획이다.
 
 ## Current ownership policy
