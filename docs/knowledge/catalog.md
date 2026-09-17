@@ -8,6 +8,7 @@
 | --- | --- | --- | --- | --- |
 | D-OKF | [OKF](../../OKF.md) | policy | active | 통합 · 지식 관리 규약 |
 | D-HOME | [지식 홈](../README.md) | index | active | 통합 · 질문별 탐색 |
+| D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·OKF 이해; 작성 시점의 설명용 요약 |
 | D-CATALOG | [문서 등록부](catalog.md) | index | active | 통합 · 문서 역할과 상태 |
 | D-CONCEPTS | [개념 지도](concepts.md) | concept | active | 통합 · 핵심 개념과 구현 근거 |
 | D-TEMPLATE | [작성 양식](template.md) | policy | active | 통합 · 새 문서 작성 |
@@ -73,4 +74,4 @@ DB 문서의 구체적인 차이와 현재 확인 경로는 [개념 지도](conc
 - H-STRATEGY-CANDIDATES와 H-STRATEGY-FOLLOWUP의 현재 구현 상태는 D-BACKTEST가 대체한다(`superseded-by`). 후보 아이디어 자체를 삭제한 것은 아니다.
 - H-HANDOFF-0607의 다음 작업 순서는 D-SESSIONS가 대체한다.
 - H-DASHBOARD-PLAN의 완료 이력과 현재 대시보드 후속 작업은 서로 다른 작업이다. 현재 상태는 D-DASHBOARD와 D-SESSIONS에서 확인한다.
-- 새 관리 문서는 이 목록에 한 번만 등록한다. 현재 관리 대상은 루트의 README·agent·DESIGN·OKF, `docs/**/*.md`, 프로젝트 참조 skill의 Markdown이다. 외부 의존성 문서와 임시 산출물은 포함하지 않는다.
+- 새 관리 문서는 이 목록에 한 번만 등록한다. 현재 관리 대상은 루트의 README·agent·DESIGN·OKF, `docs/**/*.md`, `docs/project-guide.html`, 프로젝트 참조 skill의 Markdown이다. 외부 의존성 문서와 임시 산출물은 포함하지 않는다.
