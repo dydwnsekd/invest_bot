@@ -2,8 +2,9 @@
 
 ## 개요
 
-`reference/open-trading-api/strategy_builder`에는 기본 전략 10개가 포함되어 있다.
-현재 `invest_bot`에서는 이 전략들을 그대로 복사하기보다, 각 전략의 아이디어를 현재 수집/분석 구조에 맞게 다시 구현하는 방식이 적합하다.
+이 문서는 과거 `reference/open-trading-api/strategy_builder` 참고 자료를 바탕으로 정리한 전략 아이디어다. 2026-09-19 확인 기준으로 해당 참고 디렉터리는 현재 저장소에 없으므로, 원본 예제와 설명의 일치 여부는 재검토가 필요하다.
+
+등록부 상태는 `review-required`다. 아래 후보 설명을 현재 구현 명세로 사용하지 않는다. 구현된 7개 전략과 검증 규칙은 [전략·백테스트 현황](../tasks/05_strategy_backtest.md), 실제 입력 조건은 [전략 레지스트리](../../src/invest_bot/backtest/strategy_registry.py)에서 확인한다.
 
 ## 전략 목록
 
@@ -131,15 +132,17 @@ reference 기본 전략 10개와 별개로, 현재 프로젝트는 투자자 수
 - 사용한 지표 값도 같이 저장해 대시보드와 백테스트에서 재사용한다.
 - 초반에는 복합 전략보다 단일 전략을 먼저 검증한다.
 
-## 참고 파일
+## 과거 참고 파일 목록
 
-- [strategy_01_golden_cross.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_01_golden_cross.py)
-- [strategy_02_momentum.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_02_momentum.py)
-- [strategy_03_week52_high.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_03_week52_high.py)
-- [strategy_04_consecutive.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_04_consecutive.py)
-- [strategy_05_disparity.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_05_disparity.py)
-- [strategy_06_breakout_fail.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_06_breakout_fail.py)
-- [strategy_07_strong_close.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_07_strong_close.py)
-- [strategy_08_volatility.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_08_volatility.py)
-- [strategy_09_mean_reversion.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_09_mean_reversion.py)
-- [strategy_10_trend_filter.py](../../reference/open-trading-api/strategy_builder/strategy/strategy_10_trend_filter.py)
+아래는 현재 열 수 있는 링크가 아니라, 과거 참조했던 파일명 기록이다. 경로 기준은 `reference/open-trading-api/strategy_builder/strategy/`이며 현재 checkout에는 없다. 참고 자료가 다시 제공되면 실제 파일과 설명을 대조한 뒤 상태를 갱신한다.
+
+- `strategy_01_golden_cross.py`
+- `strategy_02_momentum.py`
+- `strategy_03_week52_high.py`
+- `strategy_04_consecutive.py`
+- `strategy_05_disparity.py`
+- `strategy_06_breakout_fail.py`
+- `strategy_07_strong_close.py`
+- `strategy_08_volatility.py`
+- `strategy_09_mean_reversion.py`
+- `strategy_10_trend_filter.py`

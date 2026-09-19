@@ -12,7 +12,7 @@
 
 - 1차 범위는 **배치 실행 / 전체 파이프라인** 경로만 포함합니다.
 - 수동 단건 CLI 기본 경로는 Discord를 보내지 않습니다.
-- Discord payload는 리포트 CSV row를 그대로 source of truth로 사용합니다.
+- Discord payload는 생성한 리포트 행을 source of truth로 사용합니다. 기본 저장 방식은 DB snapshot입니다.
 - 전송 형식은 rich embed가 아니라 plain-text `content` 1건입니다.
 - 전송 결과는 아래 3가지 상태를 사용합니다.
   - `sent`: 전송 성공
@@ -22,9 +22,11 @@
 
 ## 리포트 위치
 
-기본 저장 경로:
+기본 저장소는 DB의 `dataset_frames` 테이블이며, dataset 이름은 `market_reports`입니다. [리포트 생성기](../../src/invest_bot/jobs/generate_market_report.py)는 저장소를 별도로 주입하지 않으면 [DbFrameStorage](../../src/invest_bot/db/frame_storage.py)를 사용합니다.
 
-- [market_reports](../../data/processed/domestic_stock/market_reports)
+저장 결과에 표시되는 `/virtual/db/dataset_frames/market_reports/<filename>`는 DB snapshot을 식별하기 위한 가상 경로입니다. 실제 로컬 CSV 파일 경로가 아닙니다. 대시보드의 투자 리포트 화면이나 저장소의 `load("market_reports", filename)`으로 조회합니다.
+
+CSV 기반 저장소를 명시적으로 주입한 경우에만 해당 저장소의 파일 경로를 사용합니다. 예전 `data/processed/domestic_stock/market_reports` 디렉터리를 기본 저장 위치로 가정하지 않습니다.
 
 ## 기준일 산정 규칙
 

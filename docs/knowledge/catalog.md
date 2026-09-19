@@ -46,7 +46,7 @@
 | D-DB-PLAN | [DB 구현 계획](../architecture/db_migration_plan.md) | plan | proposed | 데이터 · 미완료 구조 개편 제안 |
 | D-DB-OPS-PLAN | [DB 운영 계획](../operations/db_migration_plan.md) | plan | proposed | 운영 · 구조 개편의 운영 관점, 현재 구현 명세 아님 |
 | D-DB-OPS-ERD | [운영 ERD](../operations/db_erd.md) | reference | review-required | 운영 · 최신 테이블·쓰기 경계 재검토 필요 |
-| D-STRATEGY-REFERENCE | [전략 후보 설명](../strategies/01_reference_strategies.md) | reference | active | 퀀트 · 아이디어 설명; 구현 여부는 D-BACKTEST |
+| D-STRATEGY-REFERENCE | [전략 후보 설명](../strategies/01_reference_strategies.md) | reference | review-required | 퀀트 · 원본 reference 미포함; 아이디어 설명 재검토, 구현 여부는 D-BACKTEST |
 | D-PROJECT-SKILL | [프로젝트 참조 skill](../../skills/invest-bot-reference-reader/SKILL.md) | policy | review-required | 통합 · 옛 절대 경로·외부 reference 디렉터리 가정 재검토 |
 | D-PROJECT-RULES | [프로젝트 참조 규칙](../../skills/invest-bot-reference-reader/references/project-rules.md) | policy | review-required | 통합 · 참조 skill의 기존 보조 지침 |
 

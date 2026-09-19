@@ -175,8 +175,8 @@
 - [x] 수집 조회기간 캘린더 선택 문서화
 - [x] 좌측 메뉴 텍스트형 내비게이션 변경 문서화
 - [x] DB 마이그레이션 준비 문서 작성 (`ERD`, `docker-compose`, repository interfaces`)
-- [ ] 작업 문서 갱신 규칙 정리
-- [ ] 운영 로그 확인 가이드
+- [x] 작업 문서 갱신 규칙 정리 ([OKF 규약](../../OKF.md))
+- [x] 공유 runtime 운영 로그 확인 가이드 ([실행 경계와 로그 확인](07_operations_docs.md#실행-경계와-로그-확인-2026-09-15))
 
 관련 문서:
 - [`07_operations_docs.md`](07_operations_docs.md)

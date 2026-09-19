@@ -222,7 +222,7 @@
 ## Runtime rules
 
 - `DbFrameStorage`와 `SqlAlchemyMarketDataWriter`는 런타임에 스키마를 생성하지 않는다.
-- 스키마 생성과 업그레이드는 [scripts/init_db.py](/Users/yongjun/PycharmProjects/invest_bot/scripts/init_db.py) 및 Alembic migration이 전담한다.
+- 스키마 생성과 업그레이드는 [scripts/init_db.py](../../scripts/init_db.py) 및 Alembic migration이 전담한다.
 - 대시보드 helper는 새 `DashboardDataService()`를 내부에서 만들지 않고, 호출자가 넘긴 서비스/스토리지를 그대로 사용해야 한다.
 
 ## Endpoint configuration
@@ -236,7 +236,7 @@ DB endpoint는 `config/app.yaml`에서 관리한다.
 
 ## Initialization
 
-- DB 초기화 스크립트: [scripts/init_db.py](/Users/yongjun/PycharmProjects/invest_bot/scripts/init_db.py)
+- DB 초기화 스크립트: [scripts/init_db.py](../../scripts/init_db.py)
 - 내부 동작:
   - Alembic migration 실행
   - 기존 bootstrap schema가 있으면 stamp 후 head까지 upgrade
@@ -253,4 +253,4 @@ DB endpoint는 `config/app.yaml`에서 관리한다.
 
 ## Relationship image
 
-- SVG: [db_schema.svg](/Users/yongjun/PycharmProjects/invest_bot/docs/architecture/db_schema.svg)
+- SVG: [db_schema.svg](db_schema.svg)

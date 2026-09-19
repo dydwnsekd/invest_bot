@@ -98,13 +98,13 @@
 
 ## 관련 파일
 
-- [`base.py`](src/invest_bot/strategy/base.py)
-- [`golden_cross.py`](src/invest_bot/strategy/golden_cross.py)
-- [`strategy_registry.py`](src/invest_bot/backtest/strategy_registry.py)
-- [`adapters.py`](src/invest_bot/backtest/adapters.py)
-- [`persistence.py`](src/invest_bot/backtest/persistence.py)
-- [`generate_golden_cross_signals.py`](src/invest_bot/jobs/generate_golden_cross_signals.py)
-- [`generate_backtest.py`](src/invest_bot/jobs/generate_backtest.py)
-- [`run_backtest.py`](src/invest_bot/jobs/run_backtest.py)
-- [`run_backtest.py`](scripts/run_backtest.py)
-- [`streamlit_backtest.py`](src/invest_bot/dashboard/streamlit_backtest.py)
+- [`base.py`](../../src/invest_bot/strategy/base.py)
+- [`golden_cross.py`](../../src/invest_bot/strategy/golden_cross.py)
+- [`strategy_registry.py`](../../src/invest_bot/backtest/strategy_registry.py)
+- [`adapters.py`](../../src/invest_bot/backtest/adapters.py)
+- [`persistence.py`](../../src/invest_bot/backtest/persistence.py)
+- [`generate_golden_cross_signals.py`](../../src/invest_bot/jobs/generate_golden_cross_signals.py)
+- [`generate_backtest.py`](../../src/invest_bot/jobs/generate_backtest.py)
+- [`run_backtest.py`](../../src/invest_bot/jobs/run_backtest.py)
+- [`run_backtest.py`](../../scripts/run_backtest.py)
+- [`streamlit_backtest.py`](../../src/invest_bot/dashboard/streamlit_backtest.py)

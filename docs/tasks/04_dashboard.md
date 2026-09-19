@@ -330,10 +330,10 @@ http://127.0.0.1:8000
 
 ## 관련 파일
 
-- [`service.py`](src/invest_bot/dashboard/service.py)
-- [`streamlit_dashboard.py`](src/invest_bot/dashboard/streamlit_dashboard.py)
-- [`streamlit_reports.py`](src/invest_bot/dashboard/streamlit_reports.py)
-- [`streamlit_watchlist.py`](src/invest_bot/dashboard/streamlit_watchlist.py)
-- [`report_favorites.py`](src/invest_bot/dashboard/report_favorites.py)
-- [`run_dashboard.py`](scripts/run_dashboard.py)
-- [`run_streamlit_dashboard.py`](scripts/run_streamlit_dashboard.py)
+- [`service.py`](../../src/invest_bot/dashboard/service.py)
+- [`streamlit_dashboard.py`](../../src/invest_bot/dashboard/streamlit_dashboard.py)
+- [`streamlit_reports.py`](../../src/invest_bot/dashboard/streamlit_reports.py)
+- [`streamlit_watchlist.py`](../../src/invest_bot/dashboard/streamlit_watchlist.py)
+- [`report_favorites.py`](../../src/invest_bot/dashboard/report_favorites.py)
+- [`run_dashboard.py`](../../scripts/run_dashboard.py)
+- [`run_streamlit_dashboard.py`](../../scripts/run_streamlit_dashboard.py)
