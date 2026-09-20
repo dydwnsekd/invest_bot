@@ -11,7 +11,7 @@ from invest_bot.config.settings import AppSettings
 from invest_bot.db.contracts import DatasetFrameRecord
 from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.frame_storage import DbFrameStorage
-from invest_bot.db.repositories import SqlAlchemyStockRepository
+from invest_bot.db.repositories import SqlAlchemyStockRepository, frame_from_json
 from invest_bot.market.stock_master import StockMasterRepository
 
 
@@ -255,14 +255,31 @@ class DashboardDataService:
         self.test_report_path = Path(test_report_path)
 
     def build_snapshot(self) -> DashboardSnapshot:
-        if self.get_dataset_storage() is not None:
+        storage = self.get_dataset_storage()
+        if storage is not None:
+            symbol_name_map = self._load_symbol_name_map()
+            datasets = (*self.RAW_DATASETS, *self.PROCESSED_DATASETS)
+            latest_records = list(storage.repository.list_latest(datasets))
             return DashboardSnapshot(
-                raw_previews=self._collect_db_previews(self.RAW_DATASETS),
-                processed_previews=self._collect_db_previews(self.PROCESSED_DATASETS),
+                raw_previews=self._collect_db_previews(
+                    self.RAW_DATASETS,
+                    records=latest_records,
+                    symbol_name_map=symbol_name_map,
+                ),
+                processed_previews=self._collect_db_previews(
+                    self.PROCESSED_DATASETS,
+                    records=latest_records,
+                    symbol_name_map=symbol_name_map,
+                ),
             )
+        symbol_name_map = (
+            self._load_symbol_name_map()
+            if self.raw_root.exists() or self.processed_root.exists()
+            else {}
+        )
         return DashboardSnapshot(
-            raw_previews=self._collect_previews(self.raw_root),
-            processed_previews=self._collect_previews(self.processed_root),
+            raw_previews=self._collect_previews(self.raw_root, symbol_name_map=symbol_name_map),
+            processed_previews=self._collect_previews(self.processed_root, symbol_name_map=symbol_name_map),
         )
 
     def load_preview_frame(self, preview: DatasetPreview) -> pd.DataFrame:
@@ -367,12 +384,17 @@ class DashboardDataService:
             test_cases=test_cases,
         )
 
-    def _collect_previews(self, root: Path) -> list[DatasetPreview]:
+    def _collect_previews(
+        self,
+        root: Path,
+        *,
+        symbol_name_map: dict[str, str] | None = None,
+    ) -> list[DatasetPreview]:
         previews: list[DatasetPreview] = []
         if not root.exists():
             return previews
 
-        symbol_name_map = self._load_symbol_name_map()
+        symbol_name_map = symbol_name_map if symbol_name_map is not None else self._load_symbol_name_map()
         for dataset_dir in sorted(path for path in root.iterdir() if path.is_dir()):
             csv_files = sorted(dataset_dir.glob("*.csv"), key=lambda path: path.stat().st_mtime, reverse=True)
             if not csv_files:
@@ -424,17 +446,25 @@ class DashboardDataService:
 
         return previews
 
-    def _collect_db_previews(self, datasets: tuple[str, ...]) -> list[DatasetPreview]:
+    def _collect_db_previews(
+        self,
+        datasets: tuple[str, ...],
+        *,
+        records: list[DatasetFrameRecord] | None = None,
+        symbol_name_map: dict[str, str] | None = None,
+    ) -> list[DatasetPreview]:
         previews: list[DatasetPreview] = []
         storage = self.get_dataset_storage()
         if storage is None:
             return previews
 
-        symbol_name_map = self._load_symbol_name_map()
+        symbol_name_map = symbol_name_map if symbol_name_map is not None else self._load_symbol_name_map()
+        latest_records = records if records is not None else list(storage.repository.list_latest(datasets))
         for dataset in datasets:
-            latest_records = self._list_latest_records(dataset)
             for record in latest_records:
-                frame = storage.load(dataset, record.filename)
+                if record.dataset != dataset:
+                    continue
+                frame = frame_from_json(record.frame_json) if record.frame_json else storage.load(dataset, record.filename)
                 symbol = self._extract_symbol(Path(record.filename))
                 symbol_name = symbol_name_map.get(symbol, "")
                 enriched = self._enrich_frame(frame, symbol=symbol, symbol_name=symbol_name)

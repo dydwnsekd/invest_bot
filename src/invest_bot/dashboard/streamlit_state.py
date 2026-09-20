@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +20,45 @@ DAILY_PRICE_COLUMN_MAP = {
 }
 
 
+class DashboardFrameLoader:
+    """Reuse immutable frame reads during one Streamlit render request."""
+
+    def __init__(self, service: DashboardDataService) -> None:
+        self._service = service
+        self._frames: dict[tuple[str, str], pd.DataFrame | None] = {}
+
+    def load_indicator(self, symbol: str) -> pd.DataFrame | None:
+        return self._load_latest(
+            "daily_prices_indicators",
+            symbol,
+            root=self._service.processed_root,
+        )
+
+    def load_professional(self, symbol: str) -> pd.DataFrame | None:
+        base_frame = _load_professional_chart_base_frame(
+            self._service,
+            symbol,
+            load_indicator_frame=self.load_indicator,
+            load_daily_prices_frame=lambda: self._load_latest(
+                "daily_prices",
+                symbol,
+                root=self._service.raw_root,
+            ),
+        )
+        if base_frame is None:
+            return None
+
+        investor_frame = self._load_latest("investor_daily", symbol, root=self._service.raw_root)
+        return _merge_investor_flow(base_frame, investor_frame)
+
+    def _load_latest(self, dataset: str, symbol: str, *, root: Path) -> pd.DataFrame | None:
+        key = (dataset, symbol)
+        if key not in self._frames:
+            self._frames[key] = _load_latest_dataset_frame(self._service, dataset, symbol, root=root)
+        frame = self._frames[key]
+        return None if frame is None else frame.copy()
+
+
 def load_optional_schedule_status():
     try:
         return load_schedule_status()
@@ -36,20 +76,17 @@ def read_preview_frame(service: DashboardDataService, source: DatasetPreview | P
 
 
 def load_indicator_frame_for_symbol(service: DashboardDataService, symbol: str) -> pd.DataFrame | None:
-    return _load_latest_dataset_frame(
-        service,
-        "daily_prices_indicators",
-        symbol,
-        root=service.processed_root,
-    )
+    return DashboardFrameLoader(service).load_indicator(symbol)
 
 
 def load_professional_chart_frame_for_symbol(service: DashboardDataService, symbol: str) -> pd.DataFrame | None:
-    base_frame = _load_professional_chart_base_frame(service, symbol)
-    if base_frame is None:
-        return None
+    return DashboardFrameLoader(service).load_professional(symbol)
 
-    investor_frame = _load_latest_dataset_frame(service, "investor_daily", symbol, root=service.raw_root)
+
+def _merge_investor_flow(
+    base_frame: pd.DataFrame,
+    investor_frame: pd.DataFrame | None,
+) -> pd.DataFrame:
     if investor_frame is None:
         return base_frame
 
@@ -84,15 +121,33 @@ def _has_usable_flow_values(series: pd.Series) -> bool:
     return normalized.notna().any()
 
 
-def _load_professional_chart_base_frame(service: DashboardDataService, symbol: str) -> pd.DataFrame | None:
-    indicator_frame = load_indicator_frame_for_symbol(service, symbol)
+def _load_professional_chart_base_frame(
+    service: DashboardDataService,
+    symbol: str,
+    *,
+    load_indicator_frame: Callable[[str], pd.DataFrame | None] | None = None,
+    load_daily_prices_frame: Callable[[], pd.DataFrame | None] | None = None,
+) -> pd.DataFrame | None:
+    indicator_frame = (
+        load_indicator_frame(symbol)
+        if load_indicator_frame is not None
+        else _load_latest_dataset_frame(
+            service,
+            "daily_prices_indicators",
+            symbol,
+            root=service.processed_root,
+        )
+    )
+    load_daily_prices = load_daily_prices_frame or (
+        lambda: _load_latest_dataset_frame(service, "daily_prices", symbol, root=service.raw_root)
+    )
     if _has_ohlc_columns(indicator_frame):
         normalized_indicator = _normalize_date_column(indicator_frame)
         if normalized_indicator is not None:
             if _has_non_null_volume(normalized_indicator):
                 return normalized_indicator
 
-            normalized_daily_prices = _load_normalized_daily_prices_frame(service, symbol)
+            normalized_daily_prices = _normalize_daily_prices_frame(load_daily_prices())
             if normalized_daily_prices is None or "volume" not in normalized_daily_prices.columns:
                 return normalized_indicator
 
@@ -111,7 +166,7 @@ def _load_professional_chart_base_frame(service: DashboardDataService, symbol: s
                 merged["volume"] = merged["volume"].where(merged["volume"].notna(), merged["volume_daily_prices"])
             return merged.drop(columns=["volume_daily_prices"], errors="ignore")
 
-    normalized_daily_prices = _load_normalized_daily_prices_frame(service, symbol)
+    normalized_daily_prices = _normalize_daily_prices_frame(load_daily_prices())
     if not _has_ohlc_columns(normalized_daily_prices):
         return None
 
@@ -152,8 +207,7 @@ def _load_latest_dataset_frame(
         return None
 
 
-def _load_normalized_daily_prices_frame(service: DashboardDataService, symbol: str) -> pd.DataFrame | None:
-    daily_prices_frame = _load_latest_dataset_frame(service, "daily_prices", symbol, root=service.raw_root)
+def _normalize_daily_prices_frame(daily_prices_frame: pd.DataFrame | None) -> pd.DataFrame | None:
     if daily_prices_frame is None:
         return None
 

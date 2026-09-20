@@ -97,7 +97,7 @@ from invest_bot.dashboard.streamlit_watchlist import (
     render_watchlist_tab,
 )
 from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolEntry
-from invest_bot.dashboard.streamlit_state import load_professional_chart_frame_for_symbol
+from invest_bot.dashboard.streamlit_state import DashboardFrameLoader, load_professional_chart_frame_for_symbol
 from tests.helpers import init_test_db, make_test_dir
 
 
@@ -406,6 +406,105 @@ def test_overview_next_actions_offer_report_then_backtest_only_when_trust_is_con
     )
 
     assert [title for title, _, _ in actions] == ["투자 리포트 확인", "백테스트"]
+
+
+def test_overview_surfaces_latest_collection_failure_even_when_failed_count_is_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_overview_module, "st", fake_st)
+    schedule_status = SimpleNamespace(
+        log_exists=True,
+        last_event="collection_failed",
+        last_failed_count=0,
+        last_success_count=0,
+        last_failed_at="2026-09-15T01:02:03+00:00",
+        last_error="collector unavailable",
+        last_finished_at="2026-09-15T01:02:03+00:00",
+        next_run_at=None,
+        last_started_at="2026-09-15T01:02:02+00:00",
+        total_logged_runs=1,
+        recent_entries=[],
+        schedule=SimpleNamespace(symbols=["005930"], interval_minutes=60, days=365, run_on_startup=False),
+    )
+    trust_status = streamlit_overview_module.OverviewTrustStatus(
+        label="기준일 확인됨",
+        detail="확인됨",
+        report_date=date(2026, 9, 15),
+        signal_date=date(2026, 9, 15),
+        data_status=streamlit_overview_module.OverviewDataStatus(
+            label="기준일 확인됨",
+            detail="확인됨",
+            report_date=date(2026, 9, 15),
+            signal_date=date(2026, 9, 15),
+        ),
+    )
+
+    actions = streamlit_overview_module.build_overview_next_actions(schedule_status, None, trust_status)
+    streamlit_overview_module.render_schedule_status_summary(schedule_status)
+    streamlit_overview_module.render_schedule_status_panel(schedule_status)
+
+    assert [action[0] for action in actions] == ["수집 실패 확인"]
+    assert any("최근 결과: 실패" in caption for caption in fake_st.caption_calls)
+    assert any("collector unavailable" in warning for warning in fake_st.warning_messages)
+
+
+@pytest.mark.parametrize("last_event", ["collection_waiting", "collection_started"])
+def test_overview_retains_failure_until_a_later_run_finishes(monkeypatch, last_event) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_overview_module, "st", fake_st)
+    status = SimpleNamespace(
+        log_exists=True,
+        last_event=last_event,
+        last_failed_at="2026-09-19T02:00:00+00:00",
+        last_finished_at="2026-09-19T01:00:00+00:00",
+        last_error="collector unavailable",
+        last_success_count=5,
+        last_failed_count=0,
+        next_run_at=None,
+        recent_entries=[],
+    )
+    streamlit_overview_module.render_schedule_status_summary(status)
+    assert streamlit_overview_module.schedule_collection_failed(status)
+    assert any("최근 결과: 실패" in text for text in fake_st.caption_calls)
+    assert not any("성공 5" in text for text in fake_st.caption_calls)
+    assert any("collector unavailable" in text for text in fake_st.warning_messages)
+
+
+@pytest.mark.parametrize("failed_count", [0, 1])
+def test_overview_does_not_reuse_old_exception_after_new_completion(monkeypatch, failed_count) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_overview_module, "st", fake_st)
+    status = SimpleNamespace(
+        log_exists=True,
+        last_event="collection_waiting",
+        last_failed_at="2026-09-19T01:00:00+00:00",
+        last_finished_at="2026-09-19T02:00:00+00:00",
+        last_error="stale exception",
+        last_success_count=5,
+        last_failed_count=failed_count,
+        next_run_at=None,
+        recent_entries=[],
+    )
+    streamlit_overview_module.render_schedule_status_summary(status)
+    assert streamlit_overview_module.schedule_collection_failed(status) == bool(failed_count)
+    assert not any("stale exception" in text for text in fake_st.warning_messages)
+    assert any(("일부 실패" if failed_count else "성공") in text for text in fake_st.caption_calls)
+
+
+@pytest.mark.parametrize("result_event, expected_failure", [
+    ("collection_finished", False),
+    ("collection_failed", True),
+])
+def test_overview_uses_log_order_when_run_timestamps_tie(result_event, expected_failure) -> None:
+    status = SimpleNamespace(
+        last_event="collection_waiting",
+        last_failed_at="2026-09-19T02:00:00+00:00",
+        last_finished_at="2026-09-19T02:00:00+00:00",
+        last_failed_count=0,
+        recent_entries=[{"event": result_event}, {"event": "collection_waiting"}],
+    )
+    assert streamlit_overview_module.schedule_collection_failed(status) is expected_failure
 
 
 def test_overview_navigation_sets_the_requested_tab(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1981,6 +2080,64 @@ def test_load_professional_chart_frame_for_symbol_prefers_indicators_and_merges_
     ]
 
 
+def test_dashboard_frame_loader_reuses_frames_only_within_one_render_request() -> None:
+    class _MutableStorage:
+        root_dir = Path("/virtual/dashboard")
+
+        def __init__(self) -> None:
+            self.frames = {
+                "daily_prices_indicators": pd.DataFrame(
+                    [
+                        {
+                            "date": "2026-09-13",
+                            "open": 99,
+                            "high": 101,
+                            "low": 98,
+                            "close": 100,
+                            "volume": 1_000,
+                        }
+                    ]
+                ),
+                "investor_daily": pd.DataFrame(
+                    [{"stck_bsop_date": "20260913", "frgn_ntby_qty": 10}]
+                ),
+            }
+            self.load_calls: list[tuple[str, str]] = []
+
+        def latest_filename(self, dataset: str, symbol: str) -> str | None:
+            return f"{symbol}_{dataset}.csv" if dataset in self.frames else None
+
+        def load(self, dataset: str, filename: str) -> pd.DataFrame:
+            self.load_calls.append((dataset, filename))
+            return self.frames[dataset].copy()
+
+    storage = _MutableStorage()
+    service = DashboardDataService(dataset_storage=storage)
+    first_request = DashboardFrameLoader(service)
+
+    first_frame = first_request.load_professional("005930")
+    repeated_indicator = first_request.load_indicator("005930")
+
+    assert first_frame is not None
+    assert repeated_indicator is not None
+    assert first_frame.iloc[-1]["close"] == 100
+    assert storage.load_calls.count(("daily_prices_indicators", "005930_daily_prices_indicators.csv")) == 1
+    assert storage.load_calls.count(("investor_daily", "005930_investor_daily.csv")) == 1
+
+    repeated_indicator.loc[0, "close"] = -1
+    assert first_request.load_indicator("005930").iloc[-1]["close"] == 100
+
+    storage.frames["daily_prices_indicators"].loc[0, "close"] = 200
+    assert first_request.load_indicator("005930").iloc[-1]["close"] == 100
+
+    next_request = DashboardFrameLoader(service)
+    refreshed_indicator = next_request.load_indicator("005930")
+
+    assert refreshed_indicator is not None
+    assert refreshed_indicator.iloc[-1]["close"] == 200
+    assert storage.load_calls.count(("daily_prices_indicators", "005930_daily_prices_indicators.csv")) == 2
+
+
 def test_load_professional_chart_frame_for_symbol_backfills_volume_from_daily_prices_when_indicator_base_lacks_it() -> None:
     service = DashboardDataService(
         dataset_storage=_FakeDatasetStorage(
@@ -3117,6 +3274,52 @@ def test_streamlit_dashboard_main_builds_settings_once_and_injects_them(monkeypa
 
     assert captured["service_settings"] is settings
     assert captured["actions_settings"] is settings
+
+
+def test_streamlit_dashboard_main_home_only_reads_the_current_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_st = _FakeStreamlit()
+    fake_st.session_state["selected_tab"] = "홈"
+    snapshot = SimpleNamespace(raw_previews=[], processed_previews=[])
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(streamlit_dashboard_module, "st", fake_st)
+    monkeypatch.setattr(streamlit_dashboard_module, "_apply_custom_style", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_sidebar", lambda *args, **kwargs: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_header", lambda *args, **kwargs: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_render_action_feedback", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "_load_optional_schedule_status", lambda: None)
+    monkeypatch.setattr(streamlit_dashboard_module, "SymbolLookup", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        streamlit_dashboard_module.AppSettings,
+        "from_file",
+        classmethod(lambda cls: AppSettings()),
+    )
+    monkeypatch.setattr(
+        streamlit_dashboard_module,
+        "_refresh_home_watchlist_snapshot",
+        lambda *args, **kwargs: pytest.fail("홈 진입은 수집·분석·알림 갱신을 실행하면 안 됩니다."),
+    )
+
+    class _FakeService:
+        def __init__(self, *, settings):
+            return None
+
+        def build_snapshot(self):
+            return snapshot
+
+        def load_test_report(self):
+            return None
+
+    monkeypatch.setattr(streamlit_dashboard_module, "DashboardDataService", _FakeService)
+    monkeypatch.setattr(
+        streamlit_dashboard_module,
+        "_render_overview_tab",
+        lambda passed_snapshot, *args, **kwargs: captured.update(snapshot=passed_snapshot),
+    )
+
+    streamlit_dashboard_module.main()
+
+    assert captured["snapshot"] is snapshot
 
 
 def test_streamlit_dashboard_main_restores_active_tab_draft_before_rendering_widgets(

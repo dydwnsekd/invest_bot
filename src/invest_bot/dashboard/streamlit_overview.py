@@ -403,7 +403,7 @@ def build_overview_next_actions(
     tests_failed = bool(test_report and test_report.failed)
     data_needs_attention = trust_status.data_status.label != "기준일 확인됨"
     schedule_needs_attention = schedule_status is None or not getattr(schedule_status, "log_exists", False)
-    schedule_failed = bool(schedule_status and getattr(schedule_status, "last_failed_count", 0))
+    schedule_failed = schedule_collection_failed(schedule_status)
 
     if tests_failed:
         actions.append(("시스템 검증", "테스트 실패가 있으니 시스템 검증에서 실패 항목을 먼저 확인하세요.", "시스템 검증"))
@@ -421,6 +421,36 @@ def build_overview_next_actions(
         actions.append(("백테스트", "관심 있는 전략은 백테스트에서 과거 성과를 확인하세요.", "백테스트"))
 
     return actions
+
+
+def schedule_run_failed(schedule_status) -> bool:
+    """Keep the latest run outcome across waiting/started log events."""
+    if schedule_status is None:
+        return False
+    for entry in reversed(getattr(schedule_status, "recent_entries", ())):
+        if entry.get("event") in {"collection_finished", "collection_failed"}:
+            return entry["event"] == "collection_failed"
+    if getattr(schedule_status, "last_event", "") == "collection_failed":
+        return True
+    failed_at = pd.to_datetime(getattr(schedule_status, "last_failed_at", ""), errors="coerce", utc=True)
+    finished_at = pd.to_datetime(getattr(schedule_status, "last_finished_at", ""), errors="coerce", utc=True)
+    return bool(pd.notna(failed_at) and (pd.isna(finished_at) or failed_at > finished_at))
+
+
+def schedule_collection_failed(schedule_status) -> bool:
+    return schedule_status is not None and (
+        schedule_run_failed(schedule_status) or bool(getattr(schedule_status, "last_failed_count", 0))
+    )
+
+
+def schedule_failure_detail(schedule_status) -> str:
+    if not schedule_run_failed(schedule_status):
+        finished_at = compact_datetime(str(getattr(schedule_status, "last_finished_at", "")))
+        return f"{finished_at} · 실패 종목 {schedule_status.last_failed_count}개 · 최근 수집 로그에서 상세를 확인하세요."
+    failed_at = compact_datetime(str(getattr(schedule_status, "last_failed_at", "")))
+    error = str(getattr(schedule_status, "last_error", "")).strip()
+    details = [detail for detail in (failed_at, error) if detail]
+    return " · ".join(details) or "최근 실패 상세가 기록되지 않았습니다."
 
 
 def navigate_to_tab(tab_name: str) -> None:
@@ -537,12 +567,21 @@ def render_schedule_status_summary(schedule_status) -> None:
             return
 
         cols = st.columns(2)
-        cols[0].metric("마지막 실행", compact_datetime(schedule_status.last_finished_at))
+        run_failed = schedule_run_failed(schedule_status)
+        last_run_at = getattr(schedule_status, "last_failed_at", "") if run_failed else schedule_status.last_finished_at
+        cols[0].metric("마지막 실행", compact_datetime(last_run_at))
         cols[1].metric("다음 예정 시각", compact_datetime(schedule_status.next_run_at))
-        status_text = "성공" if schedule_status.last_failed_count == 0 else "일부 실패"
-        st.caption(
-            f"최근 결과: {status_text} · 성공 {schedule_status.last_success_count} · 실패 {schedule_status.last_failed_count}"
-        )
+        failed = schedule_collection_failed(schedule_status)
+        if run_failed:
+            st.caption("최근 결과: 실패 · 실행 중단으로 완료 집계 없음")
+        elif failed:
+            st.caption(f"최근 결과: 일부 실패 · 성공 {schedule_status.last_success_count} · 실패 {schedule_status.last_failed_count}")
+        elif not schedule_status.last_finished_at:
+            st.caption("최근 결과: 완료 기록 없음")
+        else:
+            st.caption(f"최근 결과: 성공 · 성공 {schedule_status.last_success_count} · 실패 {schedule_status.last_failed_count}")
+        if failed:
+            st.warning(f"최근 정기 수집 실패 · {schedule_failure_detail(schedule_status)}")
 
 
 def render_schedule_status_panel(schedule_status) -> None:
@@ -560,6 +599,9 @@ def render_schedule_status_panel(schedule_status) -> None:
         latest_left, latest_right = st.columns(2)
         latest_left.markdown(f"**마지막 시작 시각**  \n{compact_datetime(schedule_status.last_started_at)}")
         latest_right.markdown(f"**마지막 종료 시각**  \n{compact_datetime(schedule_status.last_finished_at)}")
+
+        if schedule_collection_failed(schedule_status):
+            st.warning(f"최근 정기 수집 실패 · {schedule_failure_detail(schedule_status)}")
 
         next_run = compact_datetime(schedule_status.next_run_at)
         if schedule_status.next_run_at:

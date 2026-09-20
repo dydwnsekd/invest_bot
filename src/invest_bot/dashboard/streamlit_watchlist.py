@@ -68,6 +68,7 @@ def render_watchlist_tab(
     *,
     read_preview_frame: Callable[[object], pd.DataFrame],
     load_indicator_frame_for_symbol: Callable[[str], pd.DataFrame | None],
+    load_professional_frame_for_symbol: Callable[[str], pd.DataFrame | None] | None = None,
     favorites_store: ReportFavoritesStore | None = None,
 ) -> None:
     st.markdown('<h3 class="section-title">관심종목</h3>', unsafe_allow_html=True)
@@ -158,6 +159,7 @@ def render_watchlist_tab(
         frame=selected_entry["frame"],
         read_preview_frame=read_preview_frame,
         load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
+        load_professional_frame_for_symbol=load_professional_frame_for_symbol,
         favorites_store=favorites_store,
         is_favorite=bool(selected_entry["is_favorite"]),
     )

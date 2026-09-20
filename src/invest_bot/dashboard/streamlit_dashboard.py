@@ -27,6 +27,7 @@ from invest_bot.dashboard.streamlit_overview import (
 )
 from invest_bot.dashboard.streamlit_reports import render_reports_tab as _render_reports_tab
 from invest_bot.dashboard.streamlit_state import (
+    DashboardFrameLoader,
     load_indicator_frame_for_symbol as _load_indicator_frame_for_symbol,
     load_optional_schedule_status as _load_optional_schedule_status,
     read_preview_frame as _read_preview_frame,
@@ -56,7 +57,9 @@ def main() -> None:
     symbol_lookup = SymbolLookup()
     schedule_status = _load_optional_schedule_status()
     read_preview_frame = partial(_read_preview_frame, service)
-    load_indicator_frame_for_symbol = partial(_load_indicator_frame_for_symbol, service)
+    frame_loader = DashboardFrameLoader(service)
+    load_indicator_frame_for_symbol = frame_loader.load_indicator
+    load_professional_frame_for_symbol = frame_loader.load_professional
 
     snapshot = service.build_snapshot()
     test_report = service.load_test_report()
@@ -94,6 +97,7 @@ def main() -> None:
             service,
             read_preview_frame=read_preview_frame,
             load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
+            load_professional_frame_for_symbol=load_professional_frame_for_symbol,
         )
     elif tab == "관심종목":
         _render_watchlist_tab(
@@ -101,6 +105,7 @@ def main() -> None:
             service,
             read_preview_frame=read_preview_frame,
             load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
+            load_professional_frame_for_symbol=load_professional_frame_for_symbol,
         )
     elif tab == "백테스트":
         _render_backtest_tab(
@@ -109,7 +114,12 @@ def main() -> None:
             symbol_lookup=symbol_lookup,
         )
     elif tab == "데이터 보기":
-        _render_data_tab(snapshot, service, read_preview_frame=read_preview_frame)
+        _render_data_tab(
+            snapshot,
+            service,
+            read_preview_frame=read_preview_frame,
+            load_professional_frame_for_symbol=load_professional_frame_for_symbol,
+        )
     else:
         _render_test_tab(test_report)
 

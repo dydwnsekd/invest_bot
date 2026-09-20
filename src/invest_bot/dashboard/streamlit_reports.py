@@ -41,6 +41,7 @@ def render_reports_tab(
     *,
     read_preview_frame: Callable[[object], pd.DataFrame],
     load_indicator_frame_for_symbol: Callable[[str], pd.DataFrame | None],
+    load_professional_frame_for_symbol: Callable[[str], pd.DataFrame | None] | None = None,
     favorites_store: ReportFavoritesStore | None = None,
 ) -> None:
     st.markdown('<h3 class="section-title">투자 리포트</h3>', unsafe_allow_html=True)
@@ -137,6 +138,7 @@ def render_reports_tab(
         frame=selected_entry["frame"],
         read_preview_frame=read_preview_frame,
         load_indicator_frame_for_symbol=load_indicator_frame_for_symbol,
+        load_professional_frame_for_symbol=load_professional_frame_for_symbol,
         favorites_store=favorites_store,
         is_favorite=bool(selected_entry["is_favorite"]),
     )
@@ -514,6 +516,7 @@ def render_market_report_card(
     frame: pd.DataFrame | None = None,
     read_preview_frame: Callable[[object], pd.DataFrame],
     load_indicator_frame_for_symbol: Callable[[str], pd.DataFrame | None],
+    load_professional_frame_for_symbol: Callable[[str], pd.DataFrame | None] | None = None,
     favorites_store: ReportFavoritesStore | None = None,
     is_favorite: bool = False,
 ) -> None:
@@ -603,7 +606,11 @@ def render_market_report_card(
 
         # Shared report-card path is also used by Watchlist, so professional chart
         # assembly here intentionally lets Watchlist inherit the upgraded stock frame.
-        chart_frame = load_professional_chart_frame_for_symbol(service, preview.symbol)
+        chart_frame = (
+            load_professional_frame_for_symbol(preview.symbol)
+            if load_professional_frame_for_symbol is not None
+            else load_professional_chart_frame_for_symbol(service, preview.symbol)
+        )
         if chart_frame is None:
             chart_frame = load_indicator_frame_for_symbol(preview.symbol)
         if chart_frame is not None:

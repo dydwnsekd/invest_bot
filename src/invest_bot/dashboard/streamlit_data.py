@@ -33,7 +33,13 @@ DATASET_DISPLAY_ORDER = {
 }
 
 
-def render_data_tab(snapshot, service: DashboardDataService, *, read_preview_frame) -> None:
+def render_data_tab(
+    snapshot,
+    service: DashboardDataService,
+    *,
+    read_preview_frame,
+    load_professional_frame_for_symbol=None,
+) -> None:
     st.markdown('<h3 class="section-title">데이터 보기</h3>', unsafe_allow_html=True)
     st.markdown(
         '<div class="section-copy">종목을 먼저 고른 뒤, 지금 확인할 만한 핵심 데이터 요약부터 보고 필요할 때만 차트와 표를 펼쳐 보도록 흐름을 정리했습니다.</div>',
@@ -76,7 +82,12 @@ def render_data_tab(snapshot, service: DashboardDataService, *, read_preview_fra
     render_stock_comparison_section(previews, read_preview_frame=read_preview_frame)
 
     for preview in selected_previews:
-        render_dataset_summary_card(preview, service, read_preview_frame=read_preview_frame)
+        render_dataset_summary_card(
+            preview,
+            service,
+            read_preview_frame=read_preview_frame,
+            load_professional_frame_for_symbol=load_professional_frame_for_symbol,
+        )
 
 
 def build_symbol_options(previews: Iterable[DatasetPreview]) -> list[str]:
@@ -229,7 +240,13 @@ def _sanitize_comparison_symbol_selection(symbol_options: list[str], default_sym
         st.session_state["data_comparison_symbols"] = normalized or default_symbols
 
 
-def render_dataset_summary_card(preview: DatasetPreview, service: DashboardDataService, *, read_preview_frame) -> None:
+def render_dataset_summary_card(
+    preview: DatasetPreview,
+    service: DashboardDataService,
+    *,
+    read_preview_frame,
+    load_professional_frame_for_symbol=None,
+) -> None:
     frame = read_preview_frame(preview)
     quick_table = build_default_table(frame, preview)
     title = preview.display_name
@@ -258,17 +275,32 @@ def render_dataset_summary_card(preview: DatasetPreview, service: DashboardDataS
         st.dataframe(format_frame_for_display(quick_table, service), width="stretch", hide_index=True)
 
         with st.expander("차트 · 전체 표 · 컬럼 설명 자세히 보기"):
-            render_dataset_detail(preview, frame, service)
+            render_dataset_detail(
+                preview,
+                frame,
+                service,
+                load_professional_frame_for_symbol=load_professional_frame_for_symbol,
+            )
 
 
-def render_dataset_detail(preview: DatasetPreview, frame, service: DashboardDataService) -> None:
+def render_dataset_detail(
+    preview: DatasetPreview,
+    frame,
+    service: DashboardDataService,
+    *,
+    load_professional_frame_for_symbol=None,
+) -> None:
     if st.toggle("차트 보기", key=f"toggle_chart_{preview.name}_{preview.symbol}_{preview.path.name}"):
         chart_frame = frame
         if (
             preview.name in {"daily_prices", "daily_prices_indicators"}
             and str(preview.symbol).strip()
         ):
-            professional_frame = load_professional_chart_frame_for_symbol(service, preview.symbol)
+            professional_frame = (
+                load_professional_frame_for_symbol(preview.symbol)
+                if load_professional_frame_for_symbol is not None
+                else load_professional_chart_frame_for_symbol(service, preview.symbol)
+            )
             if professional_frame is not None:
                 chart_frame = professional_frame
         render_chart_selector(

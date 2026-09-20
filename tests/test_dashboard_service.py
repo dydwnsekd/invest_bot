@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pandas as pd
+from sqlalchemy import Engine, event
 
 from invest_bot.dashboard.service import DashboardDataService
-from invest_bot.db.contracts import StockRecord
+from invest_bot.db.contracts import DatasetFrameRecord, StockRecord
 from invest_bot.db.engine import build_engine, build_session_factory
 from invest_bot.db.frame_storage import DbFrameStorage
-from invest_bot.db.repositories import SqlAlchemyStockRepository
+from invest_bot.db.repositories import SqlAlchemyStockRepository, frame_to_json
 from invest_bot.market.storage import CsvStorage
 from tests.helpers import init_test_db, make_test_dir
 
@@ -151,6 +153,92 @@ def test_dashboard_service_describes_strategy_fields_in_market_report_metadata()
     assert service.COLUMN_META["rsi_strategy_signal"].label == "RSI 전략 판단"
     assert service.COLUMN_META["trend_filter_signal"].label == "추세 필터 전략 판단"
     assert service.COLUMN_META["mean_reversion_signal"].label == "평균회귀 전략 판단"
+
+
+def test_dashboard_service_build_snapshot_batches_latest_record_lookup_once() -> None:
+    created_at = datetime(2026, 9, 13, tzinfo=UTC)
+    stored_frame = pd.DataFrame([{"symbol": "005930", "date": "2026-09-13", "close": 100}])
+    records = [
+        DatasetFrameRecord(
+            dataset="daily_prices",
+            filename="005930_daily_prices.csv",
+            frame_json=frame_to_json(stored_frame),
+            row_count=1,
+            created_at=created_at,
+            symbol="005930",
+        ),
+        DatasetFrameRecord(
+            dataset="market_reports",
+            filename="005930_market_reports.csv",
+            frame_json=frame_to_json(stored_frame),
+            row_count=1,
+            created_at=created_at,
+            symbol="005930",
+        ),
+    ]
+
+    class _CountingRepository:
+        def __init__(self) -> None:
+            self.list_latest_calls: list[tuple[str, ...]] = []
+
+        def list_latest(self, datasets):
+            requested = tuple(datasets)
+            self.list_latest_calls.append(requested)
+            return [record for record in records if record.dataset in requested]
+
+    class _CountingStorage:
+        def __init__(self) -> None:
+            self.repository = _CountingRepository()
+            self.root_dir = Path("/virtual/dashboard")
+            self.database_url = ""
+            self.load_calls = 0
+
+        def load(self, dataset: str, filename: str) -> pd.DataFrame:
+            self.load_calls += 1
+            return stored_frame.copy()
+
+    storage = _CountingStorage()
+    service = DashboardDataService(dataset_storage=storage)
+    service._load_symbol_name_map = lambda: {"005930": "삼성전자"}  # type: ignore[method-assign]
+
+    snapshot = service.build_snapshot()
+
+    assert [preview.name for preview in snapshot.raw_previews] == ["daily_prices"]
+    assert [preview.name for preview in snapshot.processed_previews] == ["market_reports"]
+    assert storage.repository.list_latest_calls == [
+        (*service.RAW_DATASETS, *service.PROCESSED_DATASETS)
+    ]
+    assert storage.load_calls == 0
+
+
+def test_dashboard_snapshot_avoids_per_frame_sql_reads(tmp_path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'snapshot.db'}"
+    init_test_db(database_url)
+    storage = DbFrameStorage(database_url)
+    datasets = (*DashboardDataService.RAW_DATASETS, *DashboardDataService.PROCESSED_DATASETS)
+    for dataset in datasets:
+        for symbol in ("005930", "000660"):
+            storage.save(dataset, f"{symbol}_{dataset}.csv", pd.DataFrame([
+                {"symbol": symbol, "date": "2026-09-19", "close": 100},
+            ]))
+    selects = []
+
+    def count_selects(connection, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            selects.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", count_selects)
+    try:
+        snapshot = DashboardDataService(dataset_storage=storage).build_snapshot()
+    finally:
+        event.remove(Engine, "before_cursor_execute", count_selects)
+
+    previews = snapshot.raw_previews + snapshot.processed_previews
+    assert {(preview.name, preview.symbol) for preview in previews} == {
+        (dataset, symbol) for dataset in datasets for symbol in ("005930", "000660")
+    }
+    # One symbol map read plus the repository's per-dataset SELECTs; no frame reloads.
+    assert len(selects) <= len(datasets) + 1
 
 
 def test_dashboard_service_lists_all_backtest_history_artifacts_newest_first() -> None:
