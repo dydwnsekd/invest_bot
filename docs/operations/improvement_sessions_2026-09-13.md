@@ -2,6 +2,8 @@
 
 ## 공통 기준
 
+2026-09-19 현재: 대시보드 변경을 원본 작업 폴더로 반영하고 기본 suite `390 passed, 1 deselected`를 확인했다. 사용자 요청에 따라 **커밋 전 검토 상태**로 유지한다. 기존 worktree는 보존했으며 다른 역할 작업은 재개하지 않았다. [변경·검증 보고서](session_reports/2026-09-19_dashboard.md)
+
 - 작성일: 2026-09-13
 - 통합 작업: `Agent main`
 - 통합 작업 ID: `01a09a75-fc7c-7ec0-8296-aed358d3152c`
@@ -63,7 +65,7 @@
 | --- | --- | --- | --- |
 | 데이터 수집·저장 개선 | `01a09f69-26a0-73a1-a41c-abb29ecb3bb2` | `/Users/yongjun/.codex/worktrees/2ea9/invest_bot` | 완료: 추가 수정까지 통합, 표적 28 passed |
 | 퀀트·백테스트·리포트 개선 | `01a09f6c-35f9-7173-a826-9dd3d935e48e` | `/Users/yongjun/.codex/worktrees/e3ce/invest_bot` | 완료: 날짜 처리 후속 수정 통합, 기본 회귀 379 passed |
-| 대시보드 구조·조회 개선 | `01a09f6c-6be5-7202-b419-e3868064b276` | `/Users/yongjun/.codex/worktrees/201c/invest_bot` | 대기: 미커밋 변경 보존 |
+| 대시보드 구조·조회 개선 | `01a09f6c-6be5-7202-b419-e3868064b276` | `/Users/yongjun/.codex/worktrees/201c/invest_bot` | 9월 19일 원본 작업 폴더 반영·검증 완료, 사용자 검토 대기·미커밋; worktree 보존 |
 | 운영·배포 안정화 | `01a09f6c-7e19-7590-97db-9a4d00780afc` | `/Users/yongjun/.codex/worktrees/fdb1/invest_bot` | 1차 완료·통합, 최종 연결 검증 대기 |
 | QA·독립 검증 체계 개선 | `01a09f6c-9079-7c52-985b-3ed039b3340b` | `/Users/yongjun/.codex/worktrees/cdc4/invest_bot` | 1차 완료·통합, 전체 통합 회귀 대기 |
 
