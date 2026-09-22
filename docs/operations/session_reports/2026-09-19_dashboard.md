@@ -1,0 +1,100 @@
+# 2026-09-19 대시보드 개선 검토본
+
+## 실제 화면·성능 확인 추가 (2026-09-22)
+
+현재 HEAD는 `18887c1`이며 대시보드 변경은 `073f2a2`로 이미 커밋되어 있었다. 아래 9월 19일의 미커밋 상태는 당시 기록이다. 이번에는 제품 코드를 수정하거나 새 커밋을 만들지 않았다.
+
+### 확인 환경
+
+- 기존 Docker web(8000)은 9일째 실행 중이며 신규 `streamlit_backtest_history.py`가 없어 최신 변경이 배포되지 않은 상태였다. 기존 서비스는 중단·재시작하지 않았다.
+- 최신 로컬 코드로 127.0.0.1:8001에 임시 Streamlit 서버를 실행했다. 시작 시 마스터 동기화를 호출하는 wrapper를 사용하지 않고 Streamlit을 직접 실행했다.
+- 실제 로컬 PostgreSQL에 `PGOPTIONS='-c default_transaction_read_only=on'`을 적용했고 `SHOW transaction_read_only`의 `on`을 확인했다. 수집·분석·백테스트 실행·즐겨찾기 변경·알림 버튼은 실행하지 않았다.
+- DB에는 snapshot 319개가 있었으며 최신 preview는 30개였다. 브라우저 화면은 1280×720에서 확인했다.
+
+### 실제 화면 결과
+
+- 홈, 투자 리포트, 데이터 보기, 관심종목, 백테스트, 데이터 갱신, 시스템 검증 화면을 열었다. 리포트의 캔들·거래량·RSI 차트와 데이터 보기의 종목 비교가 표시됐다.
+- 리포트 검색 `삼성`, 빠른 조회 기간 `1개월`을 설정한 뒤 데이터 보기 및 다른 탭을 거쳐 돌아와 검색어와 선택 상태가 유지됨을 실제 DOM에서 확인했다.
+- **문제: 관심종목 갱신 상태의 두 번째 카드부터 HTML 소스가 화면에 노출된다.** `streamlit_watchlist.py`의 여러 줄 들여쓰기 HTML 조합과 Markdown 렌더 경계를 후속 수정할 필요가 있다. 새 이력 모듈 분리와 별개의 기존 카드 렌더 경로다.
+- **문제: 홈의 마지막 분석 생성 시각이 좁은 metric에서 말줄임 처리된다.** 1280px 화면에서 `2026-09-13 11:…`로 보여 전체 시각을 즉시 읽기 어렵다.
+- 사이드바는 DB 저장 방식에서도 `data/raw/domestic_stock`, `data/processed/domestic_stock`를 데이터 위치로 안내한다. 실제 DB snapshot과 혼동되지 않도록 표시 개선이 필요하다.
+- 최신 리포트 기준일은 2026-09-11이고 오래된 데이터 경고는 정상 표시됐다. 최신 데이터 수집은 이번에 실행하지 않았다.
+- 실제 DB에 `backtest_summaries`/`backtest_trades`가 없어 이력 화면의 빈 상태만 확인했다. 운영 데이터의 저장 이력 선택·복원은 확인하지 못했다.
+- 로컬 저장 pytest 결과가 없어 시스템 검증은 결과 부재 안내를 표시했다. 브라우저에서 확인한 error/warn 로그는 없었으나 Python 로그에는 기존 `use_container_width` 폐기 예정 경고가 있었다.
+
+### 실제 PostgreSQL 성능
+
+개선 전 `cbd7b57`의 service와 현재 service를 같은 로컬 Python·DB에 연결했다. 초기 연결 이후 각 12회를 번갈아 실행하고 전체 snapshot 반환값의 일치를 확인했다. SQLAlchemy Engine 이벤트로 SELECT만 집계했다.
+
+| snapshot 지표 | 개선 전 | 개선 후 |
+| --- | ---: | ---: |
+| SELECT 횟수 | 42 | 11 |
+| 중앙값 | 150.55 ms | 91.40 ms |
+| 최솟값 / 최댓값 | 146.56 / 181.03 ms | 89.76 / 109.08 ms |
+
+중앙값 약 39% 감소, SELECT 약 74% 감소다. 기존 컨테이너와 로컬 서버의 서로 다른 실행 환경을 직접 속도 비교한 결과는 아니다.
+
+실제 DB를 연결한 Streamlit AppTest에서 기본 선택 상태로 화면별 3회 rerun을 별도로 측정했다. 아래는 **서버 렌더 시간**으로, 브라우저의 화면 완성·차트 페인트·네트워크 전송 시간은 포함하지 않는다.
+
+| 화면 | 중앙값 | SELECT / rerun |
+| --- | ---: | ---: |
+| 홈 | 143.28 ms | 21 |
+| 투자 리포트 | 158.79 ms | 20 |
+| 데이터 보기 | 157.32 ms | 21 |
+| 관심종목 | 236.50 ms | 60 |
+| 백테스트 | 159.39 ms | 21 |
+
+측정한 모든 rerun에서 AppTest exception은 없었다. 관심종목은 나머지 화면보다 조회 수가 많아 다음 성능 개선 후보이며, 현재 데이터 규모의 단일 사용자 측정이라 동시 접속·대규모 데이터 성능을 보장하지 않는다. 다음 우선순위는 카드 HTML 노출 수정, 날짜 표시 가독성, 관심종목 반복 조회 분석, 최신 코드 배포 확인이다.
+
+## 상태와 범위
+
+- 기준 main: `cbd7b57`. 원래 `codex/dashboard-query-cleanup` worktree에 보존된 변경을 현재 작업 폴더로 반영했다. 원본 worktree는 수정하지 않았다.
+- 상태: 구현·자동 검증 완료, 사용자 검토 대기. 사용자 요청에 따라 커밋·스테이징·push는 수행하지 않았다.
+- 기존 계획: 조회 전용 화면·탭 복원·백테스트 이력 계약을 고정하고, 반복 조회 축소 → 화면 갱신 범위 데이터 재사용 → 이력 UI 책임 분리 순서로 진행했다.
+
+## 변경 내용과 검토 위치
+
+| 파일 | 변경과 이유 |
+| --- | --- |
+| [service.py](../../../src/invest_bot/dashboard/service.py) | snapshot 한 번에 최신 record 목록과 종목명 map을 공유하고, 이미 가져온 `frame_json`을 재사용하여 개별 frame 재조회를 없앰 |
+| [streamlit_state.py](../../../src/invest_bot/dashboard/streamlit_state.py) | `DashboardFrameLoader`가 동일 화면 갱신 안에서 dataset·종목별 frame을 재사용. 반환값은 복사하며 다음 rerun에는 새 loader로 저장 결과를 다시 읽음 |
+| [streamlit_dashboard.py](../../../src/invest_bot/dashboard/streamlit_dashboard.py) | loader를 main 호출마다 생성하여 리포트·관심종목·데이터 보기로 전달 |
+| [streamlit_backtest_history.py](../../../src/invest_bot/dashboard/streamlit_backtest_history.py) | 저장 이력 목록·필터·선택·표시를 분리. 결과 복원과 계산은 기존 backtest 모듈에 유지 |
+| [streamlit_overview.py](../../../src/invest_bot/dashboard/streamlit_overview.py) | 수집 예외를 종목별 실패 수와 별도로 표시. 대기·재시작 이후에도 최근 실패를 유지하고, 다음 완료 이후에는 과거 예외를 재사용하지 않음 |
+
+사용자 화면의 주된 변화는 홈/데이터 갱신의 정기 수집 실패 안내다. 실행 중단에는 과거 성공 건수를 붙이지 않고 완료 집계가 없음을 표시한다. 종목별 일부 실패에는 해당 완료 시각과 실패 건수를 표시한다. 메뉴·차트 배치와 백테스트 수식은 유지한다.
+
+## 검증 근거
+
+- 변경 전 대시보드 관련 4개 suite: `168 passed`.
+- snapshot 재조회 회귀 테스트를 먼저 적용하여 기존 구현에서 실패하는 것을 확인했다(최신 목록 호출 10회).
+- 운영 실패 표시 추가 회귀: 수정 전 `3 failed, 1 passed`로 대기/재시작 후 실패 유실과 과거 예외 재표시를 확인했다.
+- 최종 기본 suite: `.venv/bin/python -m pytest -q` → `390 passed, 1 deselected, 6 warnings`.
+- PostgreSQL 1건은 기본 suite 범위 밖이다. 6건은 기존 Alembic `path_separator` 경고다.
+- 실제 Streamlit AppTest의 탭 왕복·화면 smoke, 홈 조회 전용, 관심종목 선택, 저장 이력 선택 시 백테스트 비실행 검증이 포함된다.
+- 새 회귀는 실제 임시 SQLite의 SQL 조회 상한, 두 종목 preview 보존, loader 복사본 격리·다음 갱신의 최신값, 수집 로그의 실패→대기/재시작→성공·부분 실패, 같은 초의 로그 순서를 포함한다.
+
+## 동일 fixture 측정
+
+운영 DB 대신 임시 SQLite를 사용했다. 1종목·10 dataset에 동일한 1행 frame(`symbol=005930`, `date=2026-09-19`, `close=100`, `volume=1000`)을 저장했다. 현재 HEAD의 service 모듈과 변경된 모듈을 동일 DB에 연결하고, 두 `build_snapshot()` 결과의 dataclass 내용을 비교해 일치를 확인했다. 초기화·warm-up을 제외하고 각 15회 실행했으며 SQLAlchemy Engine 이벤트로 SELECT 수를 세었다.
+
+| 항목 | 기준 main | 변경 후 |
+| --- | ---: | ---: |
+| 실제 SELECT / snapshot | 22 | 11 |
+| 경과 시간 중앙값 (15회) | 10.529 ms | 8.569 ms |
+| 최신 목록 repository 호출 | 10 | 1 |
+| snapshot frame 재로드 | 10 | 0 |
+
+repository 호출 1회는 SQL 1회를 의미하지 않는다. repository 내부의 dataset별 조회 10회는 유지하며 종목명 조회 1회가 추가된다. 실제 DB·브라우저 지연에 대한 보장이나 운영 성능 수치가 아니다. 반복 조회 방지는 [SQL 회귀 테스트](../../../tests/test_dashboard_service.py)로 고정했다.
+
+## 사용자 확인 순서
+
+1. 홈에서 기존 종목 카드·데이터 기준일과 정기 수집 상태를 확인한다.
+2. 투자 리포트 → 데이터 보기 → 투자 리포트를 왕복해 검색·기간 설정과 차트를 확인한다.
+3. 관심종목을 선택해 리포트가 표시되고 자동 수집이 시작되지 않는지 확인한다.
+4. 백테스트의 저장 이력 필터·선택·결과 복원을 확인한다. 이력 선택 자체는 새 백테스트를 실행하지 않는다.
+5. 수집 실패 기록이 있는 환경에서는 실패 시각·오류가 표시되는지 확인한다. 검토를 위해 운영 실패를 일부러 발생시킬 필요는 없다.
+
+## 남은 범위
+
+실제 브라우저에서의 사용자 육안 확인, 운영 PostgreSQL 성능, 외부 API·알림·주문·컨테이너 실행은 이번에 검증하지 않았다. 전역/TTL 캐시는 추가하지 않았다. 저장 후에는 다음 Streamlit rerun에서 갱신되며 같은 rerun 내부는 읽은 값을 유지한다. 저장소에는 전용 lint/typecheck 설정이 없어 해당 도구 통과를 주장하지 않는다.
