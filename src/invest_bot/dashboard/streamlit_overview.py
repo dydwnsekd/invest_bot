@@ -215,8 +215,12 @@ def render_overview_trust_status(
 
         status_columns = st.columns(3)
         status_columns[0].metric("시장 기준일", format_market_reference_date(status.data_status))
-        status_columns[1].metric("마지막 수집 완료", format_collection_finished_at(schedule_status))
-        status_columns[2].metric("마지막 분석 생성", format_processing_created_at(analysis_created_at))
+        render_overview_timestamp_metric(
+            status_columns[1], "마지막 수집 완료", format_collection_finished_at(schedule_status)
+        )
+        render_overview_timestamp_metric(
+            status_columns[2], "마지막 분석 생성", format_processing_created_at(analysis_created_at)
+        )
 
         if status.report_date != status.signal_date:
             st.caption(
@@ -225,6 +229,15 @@ def render_overview_trust_status(
                 "전략 신호 기준일 "
                 f"{format_reference_date(status.signal_date) if status.signal_date else '없음'}"
             )
+
+
+def render_overview_timestamp_metric(column, label: str, timestamp: str) -> None:
+    display_date, separator, display_time = timestamp.partition(" ")
+    if separator and ":" in display_time:
+        column.metric(label, display_date)
+        column.caption(f"시각 {display_time}")
+    else:
+        column.metric(label, timestamp)
 
 
 def format_market_reference_date(status: OverviewDataStatus) -> str:

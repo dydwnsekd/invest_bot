@@ -212,17 +212,18 @@ def _render_watchlist_status_card(status: WatchlistDataStatus) -> str:
         f"<span>수집 저장 <strong>{escape(_format_status_timestamp(status.collection_created_at))}</strong></span>"
         f"<span>분석 생성 <strong>{escape(_format_status_timestamp(status.analysis_created_at))}</strong></span>"
     )
-    return f"""
-        <article class="watchlist-status-card{state_class}">
-          <div class="watchlist-status-card__heading">
-            <strong>{escape(status.symbol)}</strong>
-            <span>{escape(status.label)}</span>
-          </div>
-          <p>{escape(status.detail)}</p>
-          <div class="watchlist-status-card__dates">{date_items}</div>
-          <div class="watchlist-status-card__times">{time_items}</div>
-        </article>
-    """
+    # Keep adjacent cards in one HTML block; indentation can become Markdown code.
+    return (
+        f'<article class="watchlist-status-card{state_class}">'
+        '<div class="watchlist-status-card__heading">'
+        f'<strong>{escape(status.symbol)}</strong>'
+        f'<span>{escape(status.label)}</span>'
+        '</div>'
+        f'<p>{escape(status.detail)}</p>'
+        f'<div class="watchlist-status-card__dates">{date_items}</div>'
+        f'<div class="watchlist-status-card__times">{time_items}</div>'
+        '</article>'
+    )
 
 
 def _open_data_refresh_for_symbols(symbols: Sequence[str]) -> None:

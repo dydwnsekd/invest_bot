@@ -359,6 +359,38 @@ def test_overview_trust_time_helpers_separate_market_collection_and_analysis_tim
     assert streamlit_overview_module.format_processing_created_at(analysis_created_at) == "2026-08-14 04:15"
 
 
+def test_overview_trust_status_shows_full_dates_and_times_in_narrow_columns(monkeypatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_overview_module, "st", fake_st)
+    data_status = streamlit_overview_module.build_overview_data_status(
+        date(2026, 9, 11), date(2026, 9, 11), latest_expected_date=date(2026, 9, 11)
+    )
+    status = streamlit_overview_module.OverviewTrustStatus(
+        label="기준일 확인됨", detail="확인됨", report_date=date(2026, 9, 11),
+        signal_date=date(2026, 9, 11), data_status=data_status,
+    )
+
+    streamlit_overview_module.render_overview_trust_status(
+        status,
+        schedule_status=SimpleNamespace(last_finished_at="2026-09-13T11:00:00"),
+        analysis_created_at=datetime(2026, 9, 13, 11, 15, tzinfo=UTC),
+    )
+
+    assert ("마지막 수집 완료", "2026-09-13") in fake_st.metric_calls
+    assert ("마지막 분석 생성", "2026-09-13") in fake_st.metric_calls
+    assert "시각 11:00" in fake_st.caption_calls
+    assert "시각 11:15" in fake_st.caption_calls
+
+    fake_st.metric_calls.clear()
+    fake_st.caption_calls.clear()
+    streamlit_overview_module.render_overview_trust_status(
+        status, schedule_status=None, analysis_created_at=None,
+    )
+    assert ("마지막 수집 완료", "정보 없음") in fake_st.metric_calls
+    assert ("마지막 분석 생성", "-") in fake_st.metric_calls
+    assert fake_st.caption_calls == []
+
+
 def test_overview_market_reference_marks_mismatched_dates_explicitly() -> None:
     status = streamlit_overview_module.build_overview_data_status(
         date(2026, 8, 14),
@@ -2436,6 +2468,27 @@ def test_watchlist_processing_times_keep_collection_and_analysis_artifacts_separ
     assert times["005930"].analysis_created_at == datetime(2026, 8, 21, 2, 20, tzinfo=UTC)
     assert times["000660"].collection_created_at is None
     assert times["000660"].analysis_created_at == datetime(2026, 8, 21, 2, 40, tzinfo=UTC)
+
+
+def test_watchlist_status_cards_do_not_form_indented_markdown_code_blocks(monkeypatch) -> None:
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(streamlit_watchlist_module, "st", fake_st)
+    statuses = [
+        streamlit_watchlist_module.WatchlistDataStatus(
+            symbol=symbol, label="갱신 필요", detail='<script>alert("x")</script> & 확인',
+            daily_date=None, investor_date=None, indicator_date=None,
+            signal_date=None, report_date=None,
+        )
+        for symbol in ("005930", "000660", "005380", "005385")
+    ]
+    render_watchlist_data_status(statuses)
+    grid = next(body for body in fake_st.markdown_calls if 'class="watchlist-status-grid"' in body)
+    assert grid.count('<article class="watchlist-status-card') == 4
+    # A blank boundary followed by indented HTML becomes a Markdown code block.
+    assert not any(line.startswith("    <") for line in grid.splitlines())
+    assert "<script>" not in grid
+    assert "&lt;script&gt;" in grid and "&amp; 확인" in grid
+    assert all(symbol in grid for symbol in ("005930", "000660", "005380", "005385"))
 
 
 def test_watchlist_data_status_opens_refresh_with_only_outdated_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
