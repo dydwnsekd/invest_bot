@@ -5,6 +5,7 @@ from html import escape
 import streamlit as st
 
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.db.frame_storage import DbFrameStorage
 from invest_bot.dashboard.streamlit_preferences import render_dashboard_preferences_panel, sync_dashboard_preference_draft
 
 
@@ -108,15 +109,7 @@ def render_sidebar(service: DashboardDataService, schedule_status) -> None:
 
         st.divider()
         st.markdown(
-            f"""
-            <div class="sidebar-info-card">
-              <div class="sidebar-info-title">데이터 위치</div>
-              <div class="sidebar-info-label">원본 데이터</div>
-              <div class="sidebar-info-value">{escape(str(service.raw_root))}</div>
-              <div class="sidebar-info-label">분석 데이터</div>
-              <div class="sidebar-info-value">{escape(str(service.processed_root))}</div>
-            </div>
-            """,
+            sidebar_storage_info_html(service),
             unsafe_allow_html=True,
         )
 
@@ -136,6 +129,25 @@ def render_sidebar(service: DashboardDataService, schedule_status) -> None:
 
         st.divider()
         render_dashboard_preferences_panel()
+
+
+def sidebar_storage_info_html(service: DashboardDataService) -> str:
+    storage = service.get_dataset_storage()
+    if storage is None:
+        details = (
+            ("원본 데이터", str(service.raw_root)),
+            ("분석 데이터", str(service.processed_root)),
+        )
+    else:
+        description = "데이터베이스 스냅샷" if isinstance(storage, DbFrameStorage) else "연결된 저장소"
+        details = (("원본·분석 데이터", description),)
+
+    rows = "".join(
+        f'<div class="sidebar-info-label">{escape(label)}</div>'
+        f'<div class="sidebar-info-value">{escape(value)}</div>'
+        for label, value in details
+    )
+    return f'<div class="sidebar-info-card"><div class="sidebar-info-title">데이터 저장 방식</div>{rows}</div>'
 
 
 def render_header(selected_tab: str | None = None) -> None:

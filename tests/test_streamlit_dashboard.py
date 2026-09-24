@@ -3208,6 +3208,26 @@ def test_dashboard_navigation_uses_user_friendly_labels_and_legacy_aliases() -> 
     assert resolve_tab_name("알 수 없음") == "홈"
 
 
+def test_sidebar_storage_info_matches_active_storage_without_exposing_database_url() -> None:
+    from invest_bot.db.frame_storage import DbFrameStorage
+
+    database_service = DashboardDataService(
+        dataset_storage=DbFrameStorage("sqlite+pysqlite:///:memory:")
+    )
+    database_html = streamlit_layout_module.sidebar_storage_info_html(database_service)
+    assert "데이터베이스 스냅샷" in database_html
+    assert "data/raw/domestic_stock" not in database_html
+    assert "sqlite+pysqlite" not in database_html
+
+    file_service = DashboardDataService(
+        raw_root="data/example/raw", processed_root="data/example/processed"
+    )
+    file_html = streamlit_layout_module.sidebar_storage_info_html(file_service)
+    assert "data/example/raw" in file_html
+    assert "data/example/processed" in file_html
+    assert "데이터베이스 스냅샷" not in file_html
+
+
 def test_dashboard_tab_query_params_keep_selected_tab_on_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_query_params: dict[str, str] = {"tab": "투자 리포트"}
     fake_st = SimpleNamespace(query_params=fake_query_params)
