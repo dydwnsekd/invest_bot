@@ -68,7 +68,7 @@ DB 문서의 구체적인 차이와 현재 확인 경로는 [개념 지도](conc
 | H-QUANT-0913 | [퀀트 개선 보고](../operations/session_reports/2026-09-13_quant.md) | evidence | historical | 퀀트 · 담당 브랜치와 9월 16일 통합 검증 |
 | H-OPS-0913 | [운영 개선 보고](../operations/session_reports/2026-09-13_operations.md) | evidence | historical | 운영 · 담당 브랜치 검증 |
 | H-QA-0913 | [QA 개선 보고](../operations/session_reports/2026-09-13_qa.md) | evidence | historical | QA · 담당 브랜치 검증과 당시 환경 제약 |
-| H-DASHBOARD-0919 | [대시보드 검토 보고](../operations/session_reports/2026-09-19_dashboard.md) | evidence | historical | 대시보드 · 9월 19일 미커밋 검토본의 변경·측정·검증 |
+| H-DASHBOARD-0919 | [대시보드 검증 기록](../operations/session_reports/2026-09-19_dashboard.md) | evidence | historical | 대시보드 · 9월 19~24일 변경·측정·검증의 날짜별 기록 |
 
 ## 대체 관계와 유지 규칙
 

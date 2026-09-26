@@ -1,8 +1,15 @@
 # invest_bot 개선 작업 세션
 
-## 공통 기준
+## 현재 상태 (2026-09-25)
 
-2026-09-19 현재: 대시보드 변경을 원본 작업 폴더로 반영하고 기본 suite `390 passed, 1 deselected`를 확인했다. 사용자 요청에 따라 **커밋 전 검토 상태**로 유지한다. 기존 worktree는 보존했으며 다른 역할 작업은 재개하지 않았다. [변경·검증 보고서](session_reports/2026-09-19_dashboard.md)
+- 대시보드 조회·이력·수집 실패 표시 개선은 `073f2a2` 이후 `main`에 반영됐다. 관심종목 카드 HTML, 홈 시각, 사이드바 저장 방식 안내도 `4a9eec4`·`1eddb78`에 반영됐고 검증 기록은 `517e4a9`까지 갱신됐다.
+- 로컬 `main`과 `origin/main`은 `517e4a9`로 일치한다. 운영 서비스의 최신 코드 배포 여부는 확인하지 않았다.
+- 남은 대시보드 작업은 관심종목 반복 조회 분석(2026-09-22 측정 60 SELECT/rerun)과 운영 배포 확인이다. 기존 역할별 작업의 순차 진행 원칙은 유지한다.
+- 상세한 날짜별 화면·테스트·성능 근거는 [대시보드 검증 기록](session_reports/2026-09-19_dashboard.md)을 따른다. 아래 작업 기준과 상태는 작성 당시의 기록이다.
+
+## 초기 작업 기준 (2026-09-13~19 기록)
+
+2026-09-19 당시 대시보드 변경을 원본 작업 폴더로 반영하고 기본 suite `390 passed, 1 deselected`를 확인했다. 그 시점에는 **커밋 전 검토 상태**였으며 이후 `main`에 반영됐다. 기존 worktree는 보존했으며 다른 역할 작업은 재개하지 않았다. [변경·검증 보고서](session_reports/2026-09-19_dashboard.md)
 
 - 작성일: 2026-09-13
 - 통합 작업: `Agent main`
@@ -65,7 +72,7 @@
 | --- | --- | --- | --- |
 | 데이터 수집·저장 개선 | `01a09f69-26a0-73a1-a41c-abb29ecb3bb2` | `/Users/yongjun/.codex/worktrees/2ea9/invest_bot` | 완료: 추가 수정까지 통합, 표적 28 passed |
 | 퀀트·백테스트·리포트 개선 | `01a09f6c-35f9-7173-a826-9dd3d935e48e` | `/Users/yongjun/.codex/worktrees/e3ce/invest_bot` | 완료: 날짜 처리 후속 수정 통합, 기본 회귀 379 passed |
-| 대시보드 구조·조회 개선 | `01a09f6c-6be5-7202-b419-e3868064b276` | `/Users/yongjun/.codex/worktrees/201c/invest_bot` | 9월 19일 원본 작업 폴더 반영·검증 완료, 사용자 검토 대기·미커밋; worktree 보존 |
+| 대시보드 구조·조회 개선 | `01a09f6c-6be5-7202-b419-e3868064b276` | `/Users/yongjun/.codex/worktrees/201c/invest_bot` | 9월 19일 검토 후 `main` 반영 완료; 후속 UI 수정도 별도 커밋, 원 worktree 보존 |
 | 운영·배포 안정화 | `01a09f6c-7e19-7590-97db-9a4d00780afc` | `/Users/yongjun/.codex/worktrees/fdb1/invest_bot` | 1차 완료·통합, 최종 연결 검증 대기 |
 | QA·독립 검증 체계 개선 | `01a09f6c-9079-7c52-985b-3ed039b3340b` | `/Users/yongjun/.codex/worktrees/cdc4/invest_bot` | 1차 완료·통합, 전체 통합 회귀 대기 |
 
