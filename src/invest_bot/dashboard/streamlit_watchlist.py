@@ -26,6 +26,8 @@ from invest_bot.dashboard.streamlit_reports import (
     selected_entry_key_index,
     sort_report_entries,
 )
+from invest_bot.db.contracts import DatasetFrameRecord
+from invest_bot.db.repositories import frame_from_json, normalize_symbol
 from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
@@ -84,7 +86,12 @@ def render_watchlist_tab(
         return
 
     processing_times = build_watchlist_processing_times(snapshot, favorite_symbols)
-    statuses = build_watchlist_data_statuses(service, favorite_symbols, processing_times=processing_times)
+    statuses = build_watchlist_data_statuses(
+        service,
+        favorite_symbols,
+        processing_times=processing_times,
+        latest_records=getattr(snapshot, "latest_records", None),
+    )
     render_watchlist_data_status(statuses)
 
     report_previews = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
@@ -245,14 +252,20 @@ def build_watchlist_data_statuses(
     *,
     today: date | None = None,
     processing_times: Mapping[str, WatchlistProcessingTimes] | None = None,
+    latest_records: Sequence[DatasetFrameRecord] | None = None,
 ) -> list[WatchlistDataStatus]:
     target_date = _latest_expected_market_date(today or date.today())
+    snapshot_records = (
+        {(record.dataset, record.symbol): record for record in latest_records}
+        if latest_records is not None else None
+    )
     return [
         build_watchlist_data_status(
             service,
             symbol,
             target_date=target_date,
             processing_times=(processing_times or {}).get(symbol),
+            snapshot_records=snapshot_records,
         )
         for symbol in sorted(favorite_symbols)
     ]
@@ -264,18 +277,26 @@ def build_watchlist_data_status(
     *,
     target_date: date,
     processing_times: WatchlistProcessingTimes | None = None,
+    snapshot_records: Mapping[tuple[str, str], DatasetFrameRecord] | None = None,
 ) -> WatchlistDataStatus:
     processing_times = processing_times or WatchlistProcessingTimes()
-    daily_date = _load_latest_dataset_date(service, "daily_prices", symbol, ("trade_date", "stck_bsop_date", "date"))
+    daily_date = _load_latest_dataset_date(
+        service, "daily_prices", symbol, ("trade_date", "stck_bsop_date", "date"), snapshot_records=snapshot_records,
+    )
     investor_date = _load_latest_dataset_date(
         service,
         "investor_daily_summary",
         symbol,
         ("trade_date", "stck_bsop_date", "date"),
+        snapshot_records=snapshot_records,
     )
-    indicator_date = _load_latest_dataset_date(service, "daily_prices_indicators", symbol, ("date", "trade_date", "stck_bsop_date"))
-    signal_date = _load_latest_dataset_date(service, "golden_cross_signals", symbol, ("date", "trade_date", "stck_bsop_date"))
-    report_date = _load_latest_dataset_date(service, "market_reports", symbol, ("date",))
+    indicator_date = _load_latest_dataset_date(
+        service, "daily_prices_indicators", symbol, ("date", "trade_date", "stck_bsop_date"), snapshot_records=snapshot_records,
+    )
+    signal_date = _load_latest_dataset_date(
+        service, "golden_cross_signals", symbol, ("date", "trade_date", "stck_bsop_date"), snapshot_records=snapshot_records,
+    )
+    report_date = _load_latest_dataset_date(service, "market_reports", symbol, ("date",), snapshot_records=snapshot_records)
 
     missing_sources = [label for label, value in (("가격", daily_date), ("수급", investor_date)) if value is None]
     stale_sources = [
@@ -590,8 +611,14 @@ def _load_latest_dataset_date(
     dataset: str,
     symbol: str,
     date_columns: Sequence[str],
+    *,
+    snapshot_records: Mapping[tuple[str, str], DatasetFrameRecord] | None = None,
 ) -> date | None:
-    frame = _load_latest_dataset_frame(service, dataset, symbol)
+    if snapshot_records is None:
+        frame = _load_latest_dataset_frame(service, dataset, symbol)
+    else:
+        record = snapshot_records.get((dataset, normalize_symbol(symbol)))
+        frame = frame_from_json(record.frame_json) if record is not None else None
     if frame is None or frame.empty:
         return None
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from xml.etree import ElementTree
@@ -51,6 +51,8 @@ class DatasetPreview:
 class DashboardSnapshot:
     raw_previews: list[DatasetPreview]
     processed_previews: list[DatasetPreview]
+    # None means file-backed; an empty tuple is an authoritative empty DB snapshot.
+    latest_records: tuple[DatasetFrameRecord, ...] | None = field(default=None, repr=False)
 
 
 @dataclass(slots=True)
@@ -271,6 +273,7 @@ class DashboardDataService:
                     records=latest_records,
                     symbol_name_map=symbol_name_map,
                 ),
+                latest_records=tuple(latest_records),
             )
         symbol_name_map = (
             self._load_symbol_name_map()
