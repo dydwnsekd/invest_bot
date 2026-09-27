@@ -1,6 +1,38 @@
-# 대시보드 개선·검증 기록 (2026-09-19~24)
+# 대시보드 개선·검증 기록 (2026-09-19~26)
 
-현재 통합 상태는 [대시보드 task](../../tasks/04_dashboard.md)를 따른다. 아래의 ‘커밋하지 않았다’는 표현과 테스트 수치는 각 날짜에 기록한 당시 상태다. 이 변경들은 이후 `main`에 커밋됐으며 로컬 `main`과 `origin/main`은 2026-09-25 기준 `517e4a9`로 일치한다.
+## 관심종목 반복 조회 개선 (2026-09-26 · 커밋 전 검토)
+
+기준 코드는 `ae34fff`이며 이번 변경은 사용자 검토를 위해 커밋·push·배포하지 않았다. 현재 통합 상태는 [대시보드 task](../../tasks/04_dashboard.md)를 따른다.
+
+### 변경과 데이터 갱신 계약
+
+- [DashboardSnapshot](../../../src/invest_bot/dashboard/service.py)에 이미 조회한 최신 DB record를 보관하고 [관심종목 상태 계산](../../../src/invest_bot/dashboard/streamlit_watchlist.py)에서 재사용한다. 네 종목 × 다섯 dataset의 최신 파일 조회와 frame 재조회, 총 40 SELECT를 제거했다.
+- 기존 frame의 날짜 열 우선순위와 상태 판정을 유지한다. filename에서 추론한 종목 대신 DB record의 symbol을 조회 키로 사용한다.
+- 재사용 범위는 한 번의 snapshot이다. 같은 snapshot은 읽은 값을 유지하고 다음 rerun의 새 snapshot에서 저장된 변경을 반영한다. 전역·TTL 캐시는 추가하지 않았다.
+- `latest_records=None`이면 기존 파일 읽기를 사용한다. 빈 tuple은 데이터가 없는 DB snapshot이므로 DB 재조회로 전환하지 않는다. 수집·갱신 실행 경로는 변경하지 않았다.
+
+### 실제 PostgreSQL 전후 측정
+
+동일 로컬 DB의 관심종목 네 개를 대상으로 Streamlit AppTest를 실행했다. 초기 warm-up과 호출 경로 계측을 분리하고, 전후 각각 7회 warm rerun에서 SELECT 수와 서버 처리 wall time을 측정했다. `PGOPTIONS='-c default_transaction_read_only=on'`, `INVEST_BOT_STOCK_MASTER_UPDATE_ON_STARTUP=false`를 적용했다.
+
+| 항목 | 수정 전 | 수정 후 |
+| --- | --- | --- |
+| SELECT / rerun | 60회 (7회 모두 동일) | 20회 (7회 모두 동일) |
+| 서버 rerun 중앙값 | 236.78ms | 197.47ms |
+| 서버 rerun 범위 | 233.31~268.54ms | 192.07~234.19ms |
+
+SELECT는 66.7%, 서버 rerun 중앙값은 약 16.6% 감소했다. 제거된 호출은 상태 계산의 `latest_for_symbol` 20회와 `load` 20회다. 전후 화면 문구·상태 metric·선택 목록과 Plotly chart spec을 직렬화하여 비교했고 모두 동일했다(SHA256 `f673c5879d0f38b27ed0b07a9e2a88405d4f77741a4ace53f1ad745d82c6c805`).
+
+이 수치는 현재 데이터 규모의 단일 사용자 로컬 측정이며 브라우저 paint·네트워크 지연을 포함하지 않는다. 동시 접속·대규모 데이터 성능이나 보편적인 응답시간 개선율을 보장하지 않는다. snapshot 수명 동안 기존 JSON record를 유지하므로 대규모 데이터의 메모리 영향은 별도 검증 대상이다.
+
+### 회귀·화면 검증
+
+- [새 회귀 테스트](../../../tests/test_watchlist_snapshot_queries.py): 기존 상태 결과와 일치, 상태 계산 추가 SELECT 0회, 최신 as-of record 선택, filename과 symbol 차이, 날짜 열 우선순위·유효하지 않은 값·누락·빈 frame, 같은 snapshot 보존과 다음 snapshot의 새 값 반영, CSV 저장 방식의 갱신을 검증했다. DB 회귀는 구현 전 실패를 확인했다.
+- `.venv/bin/python -m pytest -q`: **395 passed, 1 deselected**, 기존 Alembic 경고 6건. 별도 PostgreSQL migration 테스트 1개는 기본 suite에서 제외됐으며 이번 읽기 전용 성능 측정은 migration 검증을 대신하지 않는다.
+- 임시 로컬 서버의 실제 브라우저에서 관심종목 네 카드와 상태 집계, 삼성전자 상세 선택 후 종목·캔들 차트 표시를 확인했다. 임시 서버와 탭은 검증 후 종료했다.
+- 운영 서버·설정·데이터는 변경하지 않았다. 전용 lint/typecheck 설정이 없어 해당 도구 통과를 주장하지 않는다.
+
+아래 9월 19~24일 변경은 이후 `main`에 반영된 과거 기록이다. 각 절의 미커밋 표현·후속 작업·검증 수치는 해당 날짜의 상태이며, 위 9월 26일 변경은 아직 커밋하지 않았다.
 
 ## 사이드바 데이터 저장 방식 안내 수정 (2026-09-24)
 

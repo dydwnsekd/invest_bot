@@ -4,13 +4,14 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다.
 
-## 현재 상태 (2026-09-25)
+## 현재 상태 (2026-09-26)
 
 - [x] 대시보드 조회 축소·frame 재사용·백테스트 이력 UI 분리·수집 실패 표시를 `073f2a2`부터 `d8d91e9`까지 `main`에 반영
 - [x] 관심종목 카드 HTML 노출과 홈 시각 말줄임을 `4a9eec4`에 반영
 - [x] 사이드바 데이터 저장 방식 안내를 `1eddb78`에 반영하고 검증 기록을 `517e4a9`까지 갱신
-- [ ] 관심종목 화면의 반복 조회 분석: 2026-09-22 측정에서 60 SELECT/rerun ([측정 기록](../operations/session_reports/2026-09-19_dashboard.md#실제-postgresql-성능))
-- [ ] 최신 코드의 운영 배포 상태 확인. 로컬 `main`과 `origin/main`은 `517e4a9`로 일치하지만 운영 화면의 최신 배포 여부는 확인하지 않음
+- [x] 관심종목 반복 조회 개선 구현·검증 완료: 실제 DB SELECT 60→20회/rerun, 기본 suite 395 passed / 1 deselected. `ae34fff` 기준 작업 트리 변경이며 아직 미커밋 ([측정·검증 기록](../operations/session_reports/2026-09-19_dashboard.md))
+- [ ] 관심종목 조회 개선 변경의 사용자 검토 및 커밋
+- [ ] 최신 코드의 운영 배포 상태 확인. 현재 로컬 HEAD는 `ae34fff`이며 운영 화면의 최신 배포 여부는 확인하지 않음
 
 위 변경의 날짜별 테스트·화면 확인은 [대시보드 검증 기록](../operations/session_reports/2026-09-19_dashboard.md)에 있다. 아래는 작성 당시의 세션 기록이다.
 
