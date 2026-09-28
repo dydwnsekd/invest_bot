@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pandas as pd
 
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
+from invest_bot.db.contracts import DatasetFrameRecord
+from invest_bot.db.repositories import frame_from_json, normalize_symbol
 from invest_bot.jobs.scheduled_collection import load_schedule_status
 
 
@@ -23,9 +25,28 @@ DAILY_PRICE_COLUMN_MAP = {
 class DashboardFrameLoader:
     """Reuse immutable frame reads during one Streamlit render request."""
 
-    def __init__(self, service: DashboardDataService) -> None:
+    def __init__(
+        self,
+        service: DashboardDataService,
+        latest_records: Sequence[DatasetFrameRecord] | None = None,
+    ) -> None:
         self._service = service
         self._frames: dict[tuple[str, str], pd.DataFrame | None] = {}
+        self._latest_by_symbol = (
+            {(record.dataset, record.symbol): record for record in latest_records}
+            if latest_records is not None else None
+        )
+        self._latest_by_filename = (
+            {(record.dataset, record.filename): record for record in latest_records}
+            if latest_records is not None else None
+        )
+
+    def read_preview(self, source: DatasetPreview | Path) -> pd.DataFrame:
+        if isinstance(source, DatasetPreview) and self._latest_by_filename is not None:
+            record = self._latest_by_filename.get((source.name, source.path.name))
+            if record is not None and record.frame_json:
+                return frame_from_json(record.frame_json)
+        return read_preview_frame(self._service, source)
 
     def load_indicator(self, symbol: str) -> pd.DataFrame | None:
         return self._load_latest(
@@ -52,9 +73,18 @@ class DashboardFrameLoader:
         return _merge_investor_flow(base_frame, investor_frame)
 
     def _load_latest(self, dataset: str, symbol: str, *, root: Path) -> pd.DataFrame | None:
-        key = (dataset, symbol)
+        key = (dataset, normalize_symbol(symbol))
         if key not in self._frames:
-            self._frames[key] = _load_latest_dataset_frame(self._service, dataset, symbol, root=root)
+            if self._latest_by_symbol is None:
+                self._frames[key] = _load_latest_dataset_frame(self._service, dataset, symbol, root=root)
+            else:
+                record = self._latest_by_symbol.get(key)
+                if record is None:
+                    self._frames[key] = None
+                elif record.frame_json:
+                    self._frames[key] = frame_from_json(record.frame_json)
+                else:
+                    self._frames[key] = _load_latest_dataset_frame(self._service, dataset, symbol, root=root)
         frame = self._frames[key]
         return None if frame is None else frame.copy()
 

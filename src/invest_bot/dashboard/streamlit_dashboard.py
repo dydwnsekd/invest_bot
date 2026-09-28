@@ -56,12 +56,16 @@ def main() -> None:
     service = DashboardDataService(settings=settings)
     symbol_lookup = SymbolLookup()
     schedule_status = _load_optional_schedule_status()
-    read_preview_frame = partial(_read_preview_frame, service)
-    frame_loader = DashboardFrameLoader(service)
+    snapshot = service.build_snapshot()
+    frame_loader = DashboardFrameLoader(service, getattr(snapshot, "latest_records", None))
+    read_preview_frame = (
+        frame_loader.read_preview
+        if getattr(snapshot, "latest_records", None) is not None
+        else partial(_read_preview_frame, service)
+    )
     load_indicator_frame_for_symbol = frame_loader.load_indicator
     load_professional_frame_for_symbol = frame_loader.load_professional
 
-    snapshot = service.build_snapshot()
     test_report = service.load_test_report()
 
     if "selected_tab" not in st.session_state:
