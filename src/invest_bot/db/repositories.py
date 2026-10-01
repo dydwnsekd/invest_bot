@@ -250,32 +250,38 @@ class SqlAlchemyDatasetFrameRepository:
             )
 
     def list_latest(self, datasets: Sequence[str]) -> Sequence[DatasetFrameRecord]:
-        records: list[DatasetFrameRecord] = []
+        if not datasets:
+            return []
+        records_by_dataset: dict[str, list[DatasetFrameRecord]] = {dataset: [] for dataset in datasets}
+        seen_by_dataset: dict[str, set[str]] = {dataset: set() for dataset in datasets}
         with self.session_factory() as session:
-            for dataset in datasets:
-                rows = session.scalars(
-                    select(DatasetFrame)
-                    .where(DatasetFrame.dataset == dataset)
-                    .order_by(DatasetFrame.as_of_date.desc(), DatasetFrame.created_at.desc(), DatasetFrame.id.desc())
-                ).all()
-                seen_symbols: set[str] = set()
-                for row in rows:
-                    key = row.symbol or row.filename
-                    if key in seen_symbols:
-                        continue
-                    seen_symbols.add(key)
-                    records.append(
-                        DatasetFrameRecord(
-                            dataset=row.dataset,
-                            filename=row.filename,
-                            frame_json=row.frame_json,
-                            row_count=row.row_count,
-                            created_at=row.created_at,
-                            symbol=row.symbol or "",
-                            as_of_date=row.as_of_date,
-                        )
+            rows = session.scalars(
+                select(DatasetFrame)
+                .where(DatasetFrame.dataset.in_(datasets))
+                .order_by(
+                    DatasetFrame.dataset,
+                    DatasetFrame.as_of_date.desc(),
+                    DatasetFrame.created_at.desc(),
+                    DatasetFrame.id.desc(),
+                )
+            ).all()
+            for row in rows:
+                key = row.symbol or row.filename
+                if key in seen_by_dataset[row.dataset]:
+                    continue
+                seen_by_dataset[row.dataset].add(key)
+                records_by_dataset[row.dataset].append(
+                    DatasetFrameRecord(
+                        dataset=row.dataset,
+                        filename=row.filename,
+                        frame_json=row.frame_json,
+                        row_count=row.row_count,
+                        created_at=row.created_at,
+                        symbol=row.symbol or "",
+                        as_of_date=row.as_of_date,
                     )
-        return records
+                )
+        return [record for dataset in datasets for record in records_by_dataset[dataset]]
 
     def list_for_dataset(self, dataset: str) -> Sequence[DatasetFrameRecord]:
         with self.session_factory() as session:
