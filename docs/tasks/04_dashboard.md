@@ -4,9 +4,13 @@
 
 수집, 분석, 신호, 리포트, 테스트 상태를 브라우저에서 빠르게 확인하고 필요한 작업을 직접 실행할 수 있는 대시보드를 제공한다.
 
-## 리포트·차트 snapshot 재사용 (2026-09-28 · 커밋 전 검토)
+## 최신 dataset 목록 단일 조회 (2026-09-30 · 커밋 전 검토)
 
-관심종목 리포트와 선택 종목의 차트가 같은 rerun의 최신 DB record를 재사용한다. 파일 저장 방식은 기존 읽기 경로를 유지하며, 다음 rerun에서는 새 snapshot을 만든다. 실제 DB 네 관심종목 측정에서 SELECT 20→12회/rerun, 서버 rerun 중앙값 195.42→187.83ms였다. 전후 화면·차트 출력은 같았고 기본 suite는 396 passed / 1 deselected다. 이 추가 변경은 아직 커밋·push·배포하지 않았다. [측정·검증 기록](../operations/session_reports/2026-09-19_dashboard.md)
+관심종목 화면의 최신 dataset 목록 조회 10회를 단일 SELECT로 묶었다. 각 dataset의 최신 record 우선순위와 반환 순서를 유지한다. 실제 DB 네 관심종목의 SELECT는 12→3회/rerun, 서버 rerun 중앙값은 183.72→180.51ms였으며 화면·차트 출력과 PostgreSQL의 record 목록이 이전과 같았다. 기본 suite는 397 passed / 1 deselected다. 이번 변경은 미커밋이며 운영 배포 여부는 확인하지 않았다. [측정·검증 기록](../operations/session_reports/2026-09-19_dashboard.md)
+
+## 리포트·차트 snapshot 재사용 (2026-09-28 · 당시 검토)
+
+관심종목 리포트와 선택 종목의 차트가 같은 rerun의 최신 DB record를 재사용한다. 파일 저장 방식은 기존 읽기 경로를 유지하며, 다음 rerun에서는 새 snapshot을 만든다. 실제 DB 네 관심종목 측정에서 SELECT 20→12회/rerun, 서버 rerun 중앙값 195.42→187.83ms였다. 전후 화면·차트 출력은 같았고 기본 suite는 396 passed / 1 deselected다. 해당 변경은 코드 `63fdb31`, 문서 `bbcaa17`로 main에 반영됐다. 운영 배포 여부는 확인하지 않았다. [측정·검증 기록](../operations/session_reports/2026-09-19_dashboard.md)
 
 ## 관심종목 반복 조회 개선 (2026-09-26 구현 · 09-28 검증 보완)
 
@@ -15,7 +19,7 @@
 - 실제 DB 네 관심종목: SELECT 60→20회/rerun, 7회 측정 서버 rerun 중앙값 236.78→197.47ms
 - 전후 화면 출력·차트 spec 동일, 실제 브라우저의 상태 카드·종목 선택·차트 표시 확인
 - 기본 suite 395 passed / 1 deselected. 누락·빈 데이터·날짜 우선순위·다음 snapshot 갱신·CSV 회귀 포함
-- 개선 코드는 `00abb2d`, 문서는 `7d1aa33`으로 `main`과 `origin/main`에 반영됐다. 누락된 회귀 테스트는 2026-09-28 검증 보완 작업에서 커밋 대상으로 추가한다. 운영 배포 여부는 확인하지 않았다.
+- 개선 코드는 `00abb2d`, 문서는 `7d1aa33`으로 `main`과 `origin/main`에 반영됐다. 누락됐던 회귀 테스트는 후속 코드 커밋 `63fdb31`에 포함됐다. 운영 배포 여부는 확인하지 않았다.
 - 측정 범위와 한계: [9월 26일 검증 기록](../operations/session_reports/2026-09-19_dashboard.md)
 
 ## 완료된 항목

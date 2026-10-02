@@ -1,8 +1,23 @@
-# 대시보드 개선·검증 기록 (2026-09-19~28)
+# 대시보드 개선·검증 기록 (2026-09-19~30)
 
-## 리포트·차트 snapshot 재사용 (2026-09-28 · 커밋 전 검토)
+## 최신 dataset 목록 단일 조회 (2026-09-30 · 커밋 전 검토)
 
-기준 HEAD는 `7d1aa33`이다. 이전 관심종목 상태 계산의 DB record 재사용을 리포트 preview와 선택 종목의 지표·전문가 차트로 확장했다. [화면 조립](../../../src/invest_bot/dashboard/streamlit_dashboard.py)은 snapshot을 먼저 만들고, [frame loader](../../../src/invest_bot/dashboard/streamlit_state.py)에 그 snapshot의 최신 record를 전달한다. 파일 저장 방식은 기존 읽기를 유지한다. 같은 snapshot에서 읽은 값은 유지하고 다음 rerun의 새 snapshot에서 새 저장값을 읽으며, record가 없는 DB snapshot은 저장소를 재조회하지 않는다.
+기준 HEAD는 `bbcaa17`이다. [DB repository](../../../src/invest_bot/db/repositories.py)의 `list_latest`가 dataset마다 SELECT를 실행하던 부분을 지정 dataset 전체에 대한 SELECT 한 번으로 바꿨다. 각 dataset 안의 우선순위(`as_of_date DESC`, `created_at DESC`, `id DESC`), `symbol`이 없을 때 filename을 쓰는 중복 키, 요청한 dataset 순서는 유지한다. 빈 요청은 조회하지 않고, 중복 dataset 요청도 기존 반환 순서를 유지한다. 조회 횟수만 줄였으며 과거 이력을 읽고 Python에서 최신 record를 고르는 구조와 DB schema는 변경하지 않았다.
+
+동일 로컬 PostgreSQL과 관심종목 4개에 대해 읽기 전용 AppTest를 전후 각각 warm-up 후 7회 rerun했다.
+
+| 항목 | 수정 전 | 수정 후 |
+| --- | --- | --- |
+| SELECT / rerun | 12회 (7회 모두 동일) | 3회 (7회 모두 동일) |
+| 서버 rerun 중앙값 | 183.72ms | 180.51ms |
+
+9회 조회(75%)가 줄었고 서버 rerun 중앙값은 약 1.7% 감소했다. 전후 화면 문구·상태 metric·선택 목록·Plotly chart spec의 직렬화 출력은 byte 단위로 같았다(SHA256 `d5117ecbfa056dd1ae6be7670736e8486f7fcc21c8939e03f186f4dc18a4cb08`). 남은 SELECT는 종목명 목록·최신 dataset 목록·관심종목 목록 각 1회다. 로컬 PostgreSQL에서도 기존 dataset별 쿼리와 새 쿼리가 10개 dataset의 최신 record 30건을 **순서·메타데이터·JSON 내용까지 동일하게** 반환했다.
+
+[새 SQL 회귀 테스트](../../../tests/test_dataset_frame_list_latest_batch.py)는 단일 SELECT, 기준일·생성 시각·ID 동률 우선순위, null symbol과 filename, 요청 dataset 순서·중복·빈 요청을 검증한다. 구현 전에는 조회 수 2회로 실패했고 구현 후 관련 테스트와 기본 suite **397 passed, 1 deselected**가 통과했다(기존 Alembic 경고 6건). PostgreSQL migration 전용 테스트는 기본 suite에서 제외된다. 이 측정은 서버 처리 시간이며 브라우저 paint·네트워크 및 동시 접속 성능을 포함하지 않는다. 과거 record의 전체 전송량·메모리는 그대로이므로 데이터가 크게 늘어날 경우 DB에서 최신 행만 선택하는 개선을 별도로 검토해야 한다.
+
+## 리포트·차트 snapshot 재사용 (2026-09-28 · 당시 검토)
+
+구현 기준 HEAD는 `7d1aa33`이었다. 이후 코드 `63fdb31`, 문서 `bbcaa17`이 `main`·`origin/main`에 반영됐다. 이전 관심종목 상태 계산의 DB record 재사용을 리포트 preview와 선택 종목의 지표·전문가 차트로 확장했다. [화면 조립](../../../src/invest_bot/dashboard/streamlit_dashboard.py)은 snapshot을 먼저 만들고, [frame loader](../../../src/invest_bot/dashboard/streamlit_state.py)에 그 snapshot의 최신 record를 전달한다. 파일 저장 방식은 기존 읽기를 유지한다. 같은 snapshot에서 읽은 값은 유지하고 다음 rerun의 새 snapshot에서 새 저장값을 읽으며, record가 없는 DB snapshot은 저장소를 재조회하지 않는다.
 
 동일 로컬 PostgreSQL의 관심종목 네 개를 읽기 전용으로 측정했다. 전후 각각 warm-up 후 7회 서버 rerun을 실행했고 AppTest exception은 없었다.
 
@@ -13,11 +28,11 @@
 
 추가 SELECT 8회(40%)를 없앴고 서버 rerun 중앙값은 약 3.9% 줄었다. 전후 화면 문구·상태 metric·선택 목록·Plotly chart spec의 직렬화 결과가 완전히 같았다(SHA256 `a89fc6fb26250da3be9a6272418c884dcbc73c48771ad083c13817ac4a6801fc`). 남은 12회는 종목명 목록 1회, dataset별 최신 목록 10회, 관심종목 목록 1회로 계측됐다. 브라우저 paint·네트워크, 동시 접속·대규모 데이터 성능은 이 측정에 포함되지 않는다.
 
-[새 회귀 테스트](../../../tests/test_dashboard_snapshot_frame_loader.py)는 리포트·차트 frame의 추가 SELECT 0회, 읽은 frame의 복사 격리, 같은 snapshot 보존·다음 snapshot의 저장값 반영, 빈 DB snapshot의 재조회 방지를 확인한다. 구현 전에는 생성자 계약에서 실패했고, 구현 후 관련 151개와 기본 suite **396 passed, 1 deselected**가 통과했다(기존 Alembic 경고 6건). 임시 읽기 전용 서버의 실제 브라우저에서도 관심종목 상태 카드 4개, 삼성전자 상세 선택 및 캔들 차트 표시를 확인하고 서버·탭을 종료했다. 별도 PostgreSQL migration 테스트는 기본 suite에서 제외된다. 다음 성능 개선 후보는 dataset별 최신 목록 10회 조회의 통합이며 별도 검증이 필요하다.
+[새 회귀 테스트](../../../tests/test_dashboard_snapshot_frame_loader.py)는 리포트·차트 frame의 추가 SELECT 0회, 읽은 frame의 복사 격리, 같은 snapshot 보존·다음 snapshot의 저장값 반영, 빈 DB snapshot의 재조회 방지를 확인한다. 구현 전에는 생성자 계약에서 실패했고, 구현 후 관련 151개와 기본 suite **396 passed, 1 deselected**가 통과했다(기존 Alembic 경고 6건). 임시 읽기 전용 서버의 실제 브라우저에서도 관심종목 상태 카드 4개, 삼성전자 상세 선택 및 캔들 차트 표시를 확인하고 서버·탭을 종료했다. 별도 PostgreSQL migration 테스트는 기본 suite에서 제외된다. 당시 후속 단계였던 dataset별 최신 목록 통합은 위 9월 30일 변경에서 검증했다.
 
 ## 관심종목 반복 조회 개선 (2026-09-26 · 당시 검토)
 
-구현 기준 코드는 `ae34fff`였다. 이후 코드 `00abb2d`, 문서 `7d1aa33`이 `main`·`origin/main`에 반영됐다. 2026-09-28 누락된 회귀 테스트 파일을 확인하고 전체 기본 suite 395 passed / 1 deselected를 다시 검증했다. 테스트 파일은 별도 검증 보완 변경으로 커밋 대상에 추가한다. 운영 배포 여부는 확인하지 않았다. 현재 통합 상태는 [대시보드 task](../../tasks/04_dashboard.md)를 따른다.
+구현 기준 코드는 `ae34fff`였다. 이후 코드 `00abb2d`, 문서 `7d1aa33`이 `main`·`origin/main`에 반영됐다. 2026-09-28 누락된 회귀 테스트 파일을 확인하고 전체 기본 suite 395 passed / 1 deselected를 다시 검증했다. 테스트 파일은 후속 코드 커밋 `63fdb31`에 포함됐다. 운영 배포 여부는 확인하지 않았다. 현재 통합 상태는 [대시보드 task](../../tasks/04_dashboard.md)를 따른다.
 
 ### 변경과 데이터 갱신 계약
 
@@ -47,7 +62,7 @@ SELECT는 66.7%, 서버 rerun 중앙값은 약 16.6% 감소했다. 제거된 호
 - 임시 로컬 서버의 실제 브라우저에서 관심종목 네 카드와 상태 집계, 삼성전자 상세 선택 후 종목·캔들 차트 표시를 확인했다. 임시 서버와 탭은 검증 후 종료했다.
 - 운영 서버·설정·데이터는 변경하지 않았다. 전용 lint/typecheck 설정이 없어 해당 도구 통과를 주장하지 않는다.
 
-아래 9월 19~24일 변경은 이후 `main`에 반영된 과거 기록이다. 각 절의 미커밋 표현·후속 작업·검증 수치는 해당 날짜의 상태다. 위 9월 26일 변경도 당시 검토 후 main에 반영됐으나 회귀 테스트 파일은 별도 보완 중이다.
+아래 9월 19~24일 변경은 이후 `main`에 반영된 과거 기록이다. 각 절의 미커밋 표현·후속 작업·검증 수치는 해당 날짜의 상태다. 위 9월 26일 변경도 당시 검토 후 main에 반영됐고 누락된 회귀 테스트는 후속 커밋에 포함됐다.
 
 ## 사이드바 데이터 저장 방식 안내 수정 (2026-09-24)
 

@@ -4,15 +4,15 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다.
 
-## 현재 상태 (2026-09-28)
+## 현재 상태 (2026-09-30)
 
 - [x] 대시보드 조회 축소·frame 재사용·백테스트 이력 UI 분리·수집 실패 표시를 `073f2a2`부터 `d8d91e9`까지 `main`에 반영
 - [x] 관심종목 카드 HTML 노출과 홈 시각 말줄임을 `4a9eec4`에 반영
 - [x] 사이드바 데이터 저장 방식 안내를 `1eddb78`에 반영하고 검증 기록을 `517e4a9`까지 갱신
-- [x] 관심종목 반복 조회 개선 코드를 `00abb2d`, 검증 문서를 `7d1aa33`에 반영: 실제 DB SELECT 60→20회/rerun. 누락된 회귀 테스트 파일은 이번 검증 보완 작업에서 커밋 대상으로 추가 ([측정·검증 기록](../operations/session_reports/2026-09-19_dashboard.md))
-- [x] 리포트·차트의 같은 snapshot DB record 재사용 구현·검증: SELECT 20→12회/rerun, 기본 suite 396 passed / 1 deselected. 이번 변경은 커밋 전 검토 상태 ([검증 기록](../operations/session_reports/2026-09-19_dashboard.md))
-- [ ] dataset별 최신 목록 10회 조회의 통합은 별도 후속 단계
-- [ ] 최신 코드의 운영 배포 상태 확인. 로컬 `main`과 `origin/main`의 기준 커밋은 `7d1aa33`이며 운영 화면의 최신 배포 여부는 확인하지 않음
+- [x] 관심종목 반복 조회 개선 코드를 `00abb2d`, 검증 문서를 `7d1aa33`에 반영: 실제 DB SELECT 60→20회/rerun. 누락됐던 회귀 테스트는 후속 커밋 `63fdb31`에 포함 ([측정·검증 기록](../operations/session_reports/2026-09-19_dashboard.md))
+- [x] 리포트·차트의 같은 snapshot DB record 재사용 구현·검증: SELECT 20→12회/rerun, 기본 suite 396 passed / 1 deselected. 해당 변경은 `63fdb31`·`bbcaa17`로 main에 반영 ([검증 기록](../operations/session_reports/2026-09-19_dashboard.md))
+- [x] dataset별 최신 목록을 단일 SELECT로 통합: 관심종목 조회 12→3회/rerun, 기본 suite 397 passed / 1 deselected. 이번 변경은 커밋 전 검토 상태 ([9월 30일 검증 기록](../operations/session_reports/2026-09-19_dashboard.md))
+- [ ] 최신 코드의 운영 배포 상태 확인. 로컬 `main`과 `origin/main`의 기준 커밋은 `bbcaa17`이며 운영 화면의 최신 배포 여부는 확인하지 않음
 
 위 변경의 날짜별 테스트·화면 확인은 [대시보드 검증 기록](../operations/session_reports/2026-09-19_dashboard.md)에 있다. 아래는 작성 당시의 세션 기록이다.
 
