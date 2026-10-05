@@ -4,9 +4,13 @@
 
 수집, 분석, 신호, 리포트, 테스트 상태를 브라우저에서 빠르게 확인하고 필요한 작업을 직접 실행할 수 있는 대시보드를 제공한다.
 
-## 최신 dataset 목록 단일 조회 (2026-09-30 · 커밋 전 검토)
+## 다음 개선 계획 (2026-10-05)
 
-관심종목 화면의 최신 dataset 목록 조회 10회를 단일 SELECT로 묶었다. 각 dataset의 최신 record 우선순위와 반환 순서를 유지한다. 실제 DB 네 관심종목의 SELECT는 12→3회/rerun, 서버 rerun 중앙값은 183.72→180.51ms였으며 화면·차트 출력과 PostgreSQL의 record 목록이 이전과 같았다. 기본 suite는 397 passed / 1 deselected다. 이번 변경은 미커밋이며 운영 배포 여부는 확인하지 않았다. [측정·검증 기록](../operations/session_reports/2026-09-19_dashboard.md)
+다섯 역할의 검토를 통합한 [순차 실행 계획](../operations/improvement_plan_2026-10-05.md)을 따른다. 최신 수급 조회의 NULL 정렬을 먼저 수정한 뒤 차트 수급 연결·원본과 판단 기준일 안내를 개선한다. 전송 안내·대비·전체 배치는 독립 단위로 나눠 검증한다. 이 항목들은 계획이며 아직 구현하지 않았다.
+
+## 최신 dataset 목록 단일 조회 (2026-09-30 · 구현·검증 완료)
+
+관심종목 화면의 최신 dataset 목록 조회 10회를 단일 SELECT로 묶었다. 각 dataset의 최신 record 우선순위와 반환 순서를 유지한다. 실제 DB 네 관심종목의 SELECT는 12→3회/rerun, 서버 rerun 중앙값은 183.72→180.51ms였으며 화면·차트 출력과 PostgreSQL의 record 목록이 이전과 같았다. 기본 suite는 397 passed / 1 deselected다. 코드 `4047478`, 문서 `4ec8d3b`로 main에 반영됐다. 10월 3일 조회 관련 파일 네 개의 원본/컨테이너 hash 일치와 web HTTP 200을 확인했다. 이는 당시 배포 확인이며 현재 서비스 상태를 보증하지 않는다. [측정·검증 기록](../operations/session_reports/2026-09-19_dashboard.md)
 
 ## 리포트·차트 snapshot 재사용 (2026-09-28 · 당시 검토)
 

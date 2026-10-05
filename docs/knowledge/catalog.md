@@ -44,6 +44,7 @@
 | D-DB-ERD | [DB ERD](../architecture/db_migration_erd.md) | reference | review-required | 데이터 · schema와 같은 차이, 전체 최신 ERD 아님 |
 | D-REPOSITORIES | [repository 계약](../architecture/repository_interfaces.md) | reference | review-required | 데이터 · 쓰기 정책은 실제 계약·구현과 대조 |
 | D-DB-PLAN | [DB 구현 계획](../architecture/db_migration_plan.md) | plan | proposed | 데이터 · 미완료 구조 개편 제안 |
+| D-IMPROVEMENT-PLAN-1005 | [개선 우선순위와 실행 계획](../operations/improvement_plan_2026-10-05.md) | plan | proposed | 통합 · 역할별 순차 검토와 개선 완료 조건 |
 | D-DB-OPS-PLAN | [DB 운영 계획](../operations/db_migration_plan.md) | plan | proposed | 운영 · 구조 개편의 운영 관점, 현재 구현 명세 아님 |
 | D-DB-OPS-ERD | [운영 ERD](../operations/db_erd.md) | reference | review-required | 운영 · 최신 테이블·쓰기 경계 재검토 필요 |
 | D-STRATEGY-REFERENCE | [전략 후보 설명](../strategies/01_reference_strategies.md) | reference | review-required | 퀀트 · 원본 reference 미포함; 아이디어 설명 재검토, 구현 여부는 D-BACKTEST |
