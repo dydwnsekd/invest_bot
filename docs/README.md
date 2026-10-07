@@ -12,6 +12,7 @@
 | 작업 규칙·새 세션 시작 | [agent 가이드](../agent.md) |
 | 데이터와 기능의 관계 | [개념 지도](knowledge/concepts.md) |
 | 현재 완료·대기 항목 | [task 요약](tasks/00_summary.md) |
+| 다음 개선 작업·우선순위·역할별 상태 | [개선 작업 색인](operations/improvements/README.md)과 역할별 작업 문서 |
 | 기존 역할별 작업을 어디서 이어갈지 | [개선 작업 추적](operations/improvement_sessions_2026-09-13.md) |
 | 화면과 사용자 동작의 설계 기준 | [DESIGN](../DESIGN.md) |
 | 지표·리포트 값의 의미 | [지표 가이드](analysis/indicator_guide.md), [리포트 가이드](analysis/market_report_guide.md) |
@@ -24,7 +25,7 @@
 
 ## 읽는 순서
 
-처음 들어오면 프로젝트 README → 이 문서 → 개념 지도 → 담당 주제의 문서 순서로 읽는다. 작업을 재개할 때는 task 요약에서 완료·대기를 확인한 후 관련 코드와 테스트를 확인한다.
+처음 들어오면 프로젝트 README → 이 문서 → 개념 지도 → 담당 주제의 문서 순서로 읽는다. 작업 질문·재개 시 개선 작업 색인과 담당 역할 문서에서 우선순위·상태·완료 조건을 먼저 읽는다. task 요약의 기존 완료 범위와 관련 코드·테스트를 대조한다.
 
 등록부에서 `proposed`인 문서는 아직 구현되지 않은 내용을 포함한다. `historical` 문서의 미완료 목록은 최신 task를 덮어쓰지 않는다. `review-required` 문서는 알려진 차이를 먼저 읽는다.
 

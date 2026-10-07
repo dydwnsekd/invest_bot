@@ -2,7 +2,7 @@
 
 프로젝트 전체 작업 현황을 빠르게 확인하기 위한 요약 문서입니다.
 
-문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다.
+문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다. 다음 개선 작업·우선순위·진행 상태는 [개선 작업 색인](../operations/improvements/README.md)과 담당 역할 문서를 먼저 확인합니다.
 
 ## 현재 상태 (2026-10-05)
 
@@ -15,7 +15,7 @@
 - [x] 10월 3일 배포 확인: 조회 관련 파일 네 개의 컨테이너/원본 hash 일치와 web HTTP 200 확인. 당시 scheduler 설정 보완 후 두 종목 수집 성공도 확인. 10월 5일 서비스 상태를 보증하는 검증은 아님
 - [x] 현재 원본 main `1bd1dfa`: scheduler를 포함한 restart 수정과 start/stop 스크립트 반영
 - [x] 기존 데이터·퀀트·대시보드·운영·QA 세션을 하나씩 재사용해 개선 검토 완료. 운영 읽기 전용 비교로 NULL 기준일 snapshot이 최신 수급을 가리는 조회 문제 확인
-- [x] [새 개선 우선순위와 순차 실행 계획](../operations/improvement_plan_2026-10-05.md) 작성. 다음 최소 단위는 최신 snapshot 정렬과 SQLite/PostgreSQL 회귀. 기능 구현은 아직 시작하지 않음
+- [x] [개선 통합 계획](../operations/improvement_plan_2026-10-05.md)과 [작업 색인·역할별 문서](../operations/improvements/README.md) 작성. 기능16개·QA3개의 우선순위·상태·완료 조건 정리. 다음 최소 단위는 G01a 최신 snapshot 정렬과 QA01의 SQLite/PostgreSQL 회귀. 현재 진행 상태는 역할 문서에서 관리
 
 위 변경의 날짜별 테스트·화면 확인은 [대시보드 검증 기록](../operations/session_reports/2026-09-19_dashboard.md)에 있다. 아래는 작성 당시의 세션 기록이다.
 

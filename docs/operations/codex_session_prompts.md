@@ -9,9 +9,12 @@
 1. [`README.md`](../../README.md)
 2. [`agent.md`](../../agent.md)
 3. [지식 홈](../README.md)과 [문서 등록부](../knowledge/catalog.md)에서 문서 상태 확인
-4. [`docs/tasks/00_summary.md`](../tasks/00_summary.md)와 자신의 작업 범위에 해당하는 task 문서
+4. [개선 작업 색인](improvements/README.md)과 담당 역할 작업 문서
+5. [`docs/tasks/00_summary.md`](../tasks/00_summary.md)와 자신의 작업 범위에 해당하는 task 문서
 
 역할별 기존 작업 하나를 유지하고 한 번에 하나씩 진행한다. 과거 계획의 병렬 실행 예시는 현재 사용자 요청을 덮어쓰지 않는다. 새로운 문서나 갱신은 [OKF 규약](../../OKF.md)에 따른다.
+
+작업 질의는 색인의 ID·우선순위와 역할 문서의 상태·선행 조건·완료 조건을 기준으로 답한다. 실행 뒤에는 담당 문서의 상태·검증 기록을 갱신한다.
 
 공통적으로 요청하면 좋은 항목:
 

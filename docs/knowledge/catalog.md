@@ -31,6 +31,7 @@
 | D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | plan | proposed | 거래 · 아직 구현하지 않은 주문 기능 |
 | D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 초기화 모드와 로그 |
 | D-SESSIONS | [개선 작업 추적](../operations/improvement_sessions_2026-09-13.md) | status | active | 통합 · 역할별 단일 작업·순차 실행 |
+| D-IMPROVEMENTS | [개선 작업 색인](../operations/improvements/README.md) | index | active | 통합 · 다음 작업·우선순위·역할별 상태의 진입점 |
 | D-INDICATORS | [지표 가이드](../analysis/indicator_guide.md) | reference | active | 퀀트 · 지표 의미 |
 | D-REPORT | [리포트 가이드](../analysis/market_report_guide.md) | reference | active | 퀀트 · 기준일·출력 필드·해석 |
 | D-RUNTIME | [Python·테스트](../operations/python_runtime_and_test_guide.md) | runbook | active | QA · 검증 실행법; 옛 수치는 해당 시점 기록 |
@@ -45,6 +46,11 @@
 | D-REPOSITORIES | [repository 계약](../architecture/repository_interfaces.md) | reference | review-required | 데이터 · 쓰기 정책은 실제 계약·구현과 대조 |
 | D-DB-PLAN | [DB 구현 계획](../architecture/db_migration_plan.md) | plan | proposed | 데이터 · 미완료 구조 개편 제안 |
 | D-IMPROVEMENT-PLAN-1005 | [개선 우선순위와 실행 계획](../operations/improvement_plan_2026-10-05.md) | plan | proposed | 통합 · 역할별 순차 검토와 개선 완료 조건 |
+| D-IMPROVEMENT-DATA | [데이터 작업](../operations/improvements/data.md) | plan | proposed | 데이터 · G01a·G01b·G08a 상태·근거·완료 조건 |
+| D-IMPROVEMENT-QUANT | [퀀트 작업](../operations/improvements/quant.md) | plan | proposed | 퀀트 · G03·G04·G08c 상태·근거·완료 조건 |
+| D-IMPROVEMENT-DASHBOARD | [대시보드 작업](../operations/improvements/dashboard.md) | plan | proposed | 대시보드 · 수급·상태·안내·디자인·입력 범위 |
+| D-IMPROVEMENT-OPERATIONS | [운영 작업](../operations/improvements/operations.md) | plan | proposed | 운영 · G02·G07a·G07b 상태·근거·완료 조건 |
+| D-IMPROVEMENT-QA | [QA 작업](../operations/improvements/qa.md) | plan | proposed | QA · QA01·QA02·QA03 독립 검증·CI 조건 |
 | D-DB-OPS-PLAN | [DB 운영 계획](../operations/db_migration_plan.md) | plan | proposed | 운영 · 구조 개편의 운영 관점, 현재 구현 명세 아님 |
 | D-DB-OPS-ERD | [운영 ERD](../operations/db_erd.md) | reference | review-required | 운영 · 최신 테이블·쓰기 경계 재검토 필요 |
 | D-STRATEGY-REFERENCE | [전략 후보 설명](../strategies/01_reference_strategies.md) | reference | review-required | 퀀트 · 원본 reference 미포함; 아이디어 설명 재검토, 구현 여부는 D-BACKTEST |
