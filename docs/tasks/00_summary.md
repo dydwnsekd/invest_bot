@@ -4,7 +4,7 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다. 다음 개선 작업·우선순위·진행 상태는 [개선 작업 색인](../operations/improvements/README.md)과 담당 역할 문서를 먼저 확인합니다.
 
-## 현재 상태 (2026-10-05)
+## 현재 상태 (2026-10-09)
 
 - [x] 대시보드 조회 축소·frame 재사용·백테스트 이력 UI 분리·수집 실패 표시를 `073f2a2`부터 `d8d91e9`까지 `main`에 반영
 - [x] 관심종목 카드 HTML 노출과 홈 시각 말줄임을 `4a9eec4`에 반영
@@ -13,9 +13,13 @@
 - [x] 리포트·차트의 같은 snapshot DB record 재사용 구현·검증: SELECT 20→12회/rerun, 기본 suite 396 passed / 1 deselected. 해당 변경은 `63fdb31`·`bbcaa17`로 main에 반영 ([검증 기록](../operations/session_reports/2026-09-19_dashboard.md))
 - [x] dataset별 최신 목록을 단일 SELECT로 통합: 관심종목 조회 12→3회/rerun, 기본 suite 397 passed / 1 deselected. 코드 `4047478`, 문서 `4ec8d3b`로 main 반영 완료 ([9월 30일 검증 기록](../operations/session_reports/2026-09-19_dashboard.md))
 - [x] 10월 3일 배포 확인: 조회 관련 파일 네 개의 컨테이너/원본 hash 일치와 web HTTP 200 확인. 당시 scheduler 설정 보완 후 두 종목 수집 성공도 확인. 10월 5일 서비스 상태를 보증하는 검증은 아님
-- [x] 현재 원본 main `1bd1dfa`: scheduler를 포함한 restart 수정과 start/stop 스크립트 반영
+- [x] scheduler를 포함한 restart 수정과 start/stop 스크립트는 `1bd1dfa`까지 반영. 이후 개선 작업 문서는 `4d4fd9b`까지 커밋됨
 - [x] 기존 데이터·퀀트·대시보드·운영·QA 세션을 하나씩 재사용해 개선 검토 완료. 운영 읽기 전용 비교로 NULL 기준일 snapshot이 최신 수급을 가리는 조회 문제 확인
-- [x] [개선 통합 계획](../operations/improvement_plan_2026-10-05.md)과 [작업 색인·역할별 문서](../operations/improvements/README.md) 작성. 기능16개·QA3개의 우선순위·상태·완료 조건 정리. 다음 최소 단위는 G01a 최신 snapshot 정렬과 QA01의 SQLite/PostgreSQL 회귀. 현재 진행 상태는 역할 문서에서 관리
+- [x] [개선 통합 계획](../operations/improvement_plan_2026-10-05.md)과 [작업 색인·역할별 문서](../operations/improvements/README.md) 작성. 기능16개·QA3개의 우선순위·상태·완료 조건 정리. 현재 진행 상태는 역할 문서에서 관리
+
+## G01a·QA01 순차 작업 (2026-10-09)
+
+원본 main `4d4fd9b`의 미커밋 작업 트리에 최신 snapshot NULL 정렬 수정과 양쪽 DB 공통 회귀를 통합했다. 기존 데이터 세션 구현→QA 독립 검증 순서로 진행했다. 최종 기본 suite 398 passed / 2 deselected, CI와 같은 PostgreSQL 선택 명령 2 passed다. 임시 DB는 제거됐다. 구현·로컬 QA는 통과했고 원격 CI·배포는 미실행이라 두 작업 상태는 검증 대기다. [검증 기록](../operations/session_reports/2026-10-09_latest_snapshot_ordering.md). 다음 구현 후보는 G02이며 상세 상태는 [개선 작업 색인](../operations/improvements/README.md)을 따른다.
 
 위 변경의 날짜별 테스트·화면 확인은 [대시보드 검증 기록](../operations/session_reports/2026-09-19_dashboard.md)에 있다. 아래는 작성 당시의 세션 기록이다.
 

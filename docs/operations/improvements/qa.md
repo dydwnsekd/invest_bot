@@ -6,15 +6,15 @@
 
 | ID | 우선순위 | 작업 | 상태 |
 | --- | --- | --- | --- |
-| QA01 | P1 | SQLite·PostgreSQL 최신 정렬과 CI | 대기 |
+| QA01 | P1 | SQLite·PostgreSQL 최신 정렬과 CI | 검증 대기 |
 | QA02 | P1 | 실제 renderer 호출 경계·조회·브라우저 | 대기 |
 | QA03 | P2 | 실제 조합 artifact 저장·재로드 | 대기 |
 
 <a id="qa01"></a>
 ## QA01 — SQLite·PostgreSQL 최신 정렬과 CI
 
-- **우선순위:** P1 · **상태:** 대기 · **연결:** [G01a](data.md#g01a)의 완료 판정 전. fixture·기대값은 수정 전 준비할 수 있다.
-- **근거:** [PostgreSQL 테스트:24](../../../tests/integration/test_postgresql_migrations.py)는 migration·테이블·revision만 검사하고 [CI:52](../../../.github/workflows/tests.yml)도 이 파일만 선택한다. [SQLite 회귀](../../../tests/test_dataset_frame_list_latest_batch.py)는 같은 종목의 dated/NULL 경쟁을 다루지 않는다. 따라서 기존 CI 성공은 운영에서 확인한 정렬 결함의 수정 증거가 아니다.
+- **우선순위:** P1 · **상태:** 검증 대기 · **연결:** [G01a](data.md#g01a)의 완료 판정 전. fixture·기대값은 수정 전 준비할 수 있다.
+- **근거:** 10월 5일 검토 당시 [PostgreSQL 테스트:24](../../../tests/integration/test_postgresql_migrations.py)는 migration·테이블·revision만 검사하고 [CI:52](../../../.github/workflows/tests.yml)도 이 파일만 선택한다. [SQLite 회귀](../../../tests/test_dataset_frame_list_latest_batch.py)는 같은 종목의 dated/NULL 경쟁을 다루지 않는다. 따라서 기존 CI 성공은 운영에서 확인한 정렬 결함의 수정 증거가 아니다.
 - **작업:** 데이터 담당의 repository 회귀와 격리 PostgreSQL 환경·CI 실행을 연결한다. 기능 테스트 파일의 소유권은 데이터 담당에게 두고 QA의 통합 파일·workflow는 QA가 담당한다.
 - **완료 조건:** 같은 fixture로 세 조회 메서드의 dated/NULL·동률 id·NULL fallback 기대값을 양쪽 DB에서 검증한다. PostgreSQL CI가 해당 테스트를 실제 실행한 결과가 있다. 실행하지 못한 DB는 미검증으로 남긴다.
 - **증거:** HEAD/작업 트리·임시 DB 종류·선택한 테스트·명령·결과·운영 DB 미사용을 기록한다. skip/xfail로 실패를 숨기지 않는다.
@@ -41,3 +41,5 @@
 
 2026-10-05: 원본 main과 통합 계획을 독립적으로 읽어 세 검증 공백을 확인했다. QA 세션의 이번 검토에서는 파일 변경·테스트 실행·운영 호출을 수행하지 않았다. 세 작업은 완료된 QA 결과가 아니라 앞으로 보완할 항목이다. 진행 시 [색인의 갱신 규칙](README.md)을 따른다.
 
+
+2026-10-09 최종 결과: QA01의 독립 코드 리뷰·로컬 DB 검증을 완료했다. [신규 PostgreSQL 정렬 테스트](../../../tests/integration/test_postgresql_dataset_frame_ordering.py)는 localhost/테스트 DB 보호와 UUID 스키마 격리·정리를 적용한다. CI 실행 대상을 tests/integration으로 연결했고 같은 실행 명령이 2개를 선택·통과했다. 수정 전 HEAD repository를 복원하면 같은 회귀가 예상한 1 failed이며, 통과·실패 뒤 QA 스키마도 정리됐다. 원본 통합 후 기본 suite 398 passed / 2 deselected, PostgreSQL 2 passed. 원격 GitHub Actions는 커밋 전이라 미실행이며 QA01 상태는 **검증 대기**다. [검증 기록](../session_reports/2026-10-09_latest_snapshot_ordering.md). 임시 DB 제거 확인 완료.

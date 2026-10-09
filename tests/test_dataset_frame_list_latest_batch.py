@@ -7,6 +7,7 @@ from sqlalchemy import Engine, event
 from invest_bot.db.contracts import DatasetFrameRecord
 from invest_bot.db.frame_storage import DbFrameStorage
 from tests.helpers import init_test_db
+from tests.dataset_frame_ordering_fixture import assert_dataset_frame_ordering, seed_dataset_frame_ordering
 
 
 def test_list_latest_uses_one_query_and_preserves_dataset_and_record_order(tmp_path):
@@ -58,3 +59,25 @@ def test_list_latest_uses_one_query_and_preserves_dataset_and_record_order(tmp_p
     assert [r.dataset for r in duplicated] == [
         "daily_prices", "market_reports", "market_reports", "market_reports", "daily_prices",
     ]
+
+
+def test_dataset_frame_queries_preserve_null_fallback_and_tie_breaking(tmp_path):
+    database_url = f"sqlite:///{tmp_path / 'ordering.db'}"
+    init_test_db(database_url)
+    repository = DbFrameStorage(database_url).repository
+    seed_dataset_frame_ordering(repository)
+
+    assert_dataset_frame_ordering(repository)
+
+    selects = []
+
+    def observe(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            selects.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", observe)
+    try:
+        repository.list_latest(("market_reports", "daily_prices"))
+    finally:
+        event.remove(Engine, "before_cursor_execute", observe)
+    assert len(selects) == 1

@@ -76,6 +76,7 @@ DB 문서의 구체적인 차이와 현재 확인 경로는 [개념 지도](conc
 | H-OPS-0913 | [운영 개선 보고](../operations/session_reports/2026-09-13_operations.md) | evidence | historical | 운영 · 담당 브랜치 검증 |
 | H-QA-0913 | [QA 개선 보고](../operations/session_reports/2026-09-13_qa.md) | evidence | historical | QA · 담당 브랜치 검증과 당시 환경 제약 |
 | H-DASHBOARD-0919 | [대시보드 검증 기록](../operations/session_reports/2026-09-19_dashboard.md) | evidence | historical | 대시보드 · 9월 19~30일 변경·측정·검증의 날짜별 기록 |
+| H-SNAPSHOT-1009 | [최신 snapshot 정렬 검증](../operations/session_reports/2026-10-09_latest_snapshot_ordering.md) | evidence | historical | 데이터·QA · G01a·QA01 구현·DB 회귀·CI 연결; 원격 CI 미실행 |
 
 ## 대체 관계와 유지 규칙
 

@@ -6,18 +6,18 @@
 
 | ID | 우선순위 | 작업 | 상태 |
 | --- | --- | --- | --- |
-| G01a | P1 | 최신 snapshot NULL 정렬 | 대기 |
+| G01a | P1 | 최신 snapshot NULL 정렬 | 검증 대기 |
 | G01b | P2 | 숫자형 snapshot 날짜 정규화 | 대기 |
 | G08a | P2 | 요청한 일봉 수집 기간 확보 | 대기 |
 
 <a id="g01a"></a>
 ## G01a — 최신 snapshot NULL 정렬
 
-- **우선순위:** P1 · **상태:** 대기 · **선행:** 없음 · **연결:** [QA01](qa.md#qa01).
-- **근거:** [repository:237·263](../../../src/invest_bot/db/repositories.py)의 날짜 내림차순에 NULL 위치가 명시되지 않았다. 10월 5일 메인의 운영 PostgreSQL 읽기 전용 비교에서 삼성전자·SK하이닉스의 오래된 NULL·0행 수급 snapshot이 선택됐다. NULL을 뒤로 보내면 두 종목의 10월 2일·30행 snapshot이 선택됐다. 실제 조회 결함을 확인했으며 데이터는 수정하지 않았다.
+- **우선순위:** P1 · **상태:** 검증 대기 · **선행:** 없음 · **연결:** [QA01](qa.md#qa01).
+- **근거:** 10월 5일 검토 당시 [repository:237·263](../../../src/invest_bot/db/repositories.py)의 날짜 내림차순에 NULL 위치가 명시되지 않았다. 10월 5일 메인의 운영 PostgreSQL 읽기 전용 비교에서 삼성전자·SK하이닉스의 오래된 NULL·0행 수급 snapshot이 선택됐다. NULL을 뒤로 보내면 두 종목의 10월 2일·30행 snapshot이 선택됐다. 실제 조회 결함을 확인했으며 데이터는 수정하지 않았다.
 - **작업:** `latest_for_symbol`, `list_latest`, `list_for_dataset`의 최신 관측일 우선·NULL fallback·동률 선택 계약을 일치시킨다. 실패/빈 수집 이력의 표시와 유효 데이터 선택을 혼동하지 않는다.
 - **완료 조건:** 같은 synthetic fixture를 임시 SQLite와 격리 PostgreSQL에 넣어 dated/NULL 경쟁, 날짜·생성시간 동률의 id 선택, NULL만 있는 fallback을 명시한 기대값과 비교한다. 세 메서드가 일치하고 PostgreSQL CI가 새 회귀를 실제 선택해야 한다. snapshot 이후 추가 조회0회 계약도 보존한다.
-- **검증 경로:** [최신 목록 회귀](../../../tests/test_dataset_frame_list_latest_batch.py), [조회 횟수 회귀](../../../tests/test_watchlist_snapshot_queries.py), [현재 PostgreSQL migration 테스트](../../../tests/integration/test_postgresql_migrations.py), [CI](../../../.github/workflows/tests.yml). 현재 PostgreSQL 테스트는 migration 검증이므로 repository 회귀를 추가해야 한다. PostgreSQL 미실행은 통과로 기록하지 않는다.
+- **검증 경로:** [최신 목록 회귀](../../../tests/test_dataset_frame_list_latest_batch.py), [조회 횟수 회귀](../../../tests/test_watchlist_snapshot_queries.py), [현재 PostgreSQL migration 테스트](../../../tests/integration/test_postgresql_migrations.py), [CI](../../../.github/workflows/tests.yml). 10월 5일 기존 PostgreSQL 테스트는 migration 검증만 했다. 10월 9일 [정렬 회귀](../../../tests/integration/test_postgresql_dataset_frame_ordering.py)를 추가하고 CI에 연결했다. PostgreSQL 미실행은 통과로 기록하지 않는다.
 
 <a id="g01b"></a>
 ## G01b — 숫자형 snapshot 날짜 정규화
@@ -45,3 +45,9 @@
 
 2026-10-05: 검토 완료, 신규 구현 없음. 데이터 세션은 메모리 fixture만 사용했고 운영 DB·외부 API를 호출하지 않았다. G01a의 운영 SQL 비교는 메인의 별도 검증이다. 각 작업 진행 시 [색인의 갱신 규칙](README.md)을 따라 이 항목에 기록한다.
 
+
+2026-10-09: 원본 main `4d4fd9b`를 기준으로 기존 데이터 세션의 격리 복사본에서 G01a 구현 시작. 메인은 원본 통합과 상태 문서를 담당하고, QA01은 데이터 작업 종료 후 순차 실행한다. 커밋·배포는 수행하지 않는다.
+
+2026-10-09: 데이터 세션의 격리본 구현을 원본에 반영했다. 세 조회의 NULL 정렬을 명시하고 DB 공통 행 선택 fixture를 추가했다. SQL 문자열 형태만 검사하는 격리본 테스트는 실제 PostgreSQL 행 선택 회귀로 대체한다. QA01 독립 검증 대기.
+
+2026-10-09 최종 결과: G01a 구현·로컬 검증 완료, 원격 CI 확인 전이라 상태는 **검증 대기**다. 기본 suite 398 passed / 2 deselected, PostgreSQL migration·공통 정렬 회귀 2 passed. QA는 같은 회귀가 수정 전 코드에서 실패하는 것을 확인했고 차단 결함을 발견하지 않았다. 임시 PostgreSQL은 제거됐다. [검증 기록](../session_reports/2026-10-09_latest_snapshot_ordering.md). 커밋·운영 재배포·원격 GitHub Actions는 미실행이다. 커밋 후 새 PostgreSQL 회귀가 포함된 CI 성공을 확인하면 완료로 갱신한다.

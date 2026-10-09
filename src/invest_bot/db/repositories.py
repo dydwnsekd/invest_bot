@@ -234,7 +234,7 @@ class SqlAlchemyDatasetFrameRepository:
             row = session.scalar(
                 select(DatasetFrame)
                 .where(DatasetFrame.dataset == dataset, DatasetFrame.symbol == normalized)
-                .order_by(DatasetFrame.as_of_date.desc(), DatasetFrame.created_at.desc(), DatasetFrame.id.desc())
+                .order_by(DatasetFrame.as_of_date.desc().nulls_last(), DatasetFrame.created_at.desc(), DatasetFrame.id.desc())
                 .limit(1)
             )
             if row is None:
@@ -260,7 +260,7 @@ class SqlAlchemyDatasetFrameRepository:
                 .where(DatasetFrame.dataset.in_(datasets))
                 .order_by(
                     DatasetFrame.dataset,
-                    DatasetFrame.as_of_date.desc(),
+                    DatasetFrame.as_of_date.desc().nulls_last(),
                     DatasetFrame.created_at.desc(),
                     DatasetFrame.id.desc(),
                 )
@@ -288,7 +288,7 @@ class SqlAlchemyDatasetFrameRepository:
             rows = session.scalars(
                 select(DatasetFrame)
                 .where(DatasetFrame.dataset == dataset)
-                .order_by(DatasetFrame.as_of_date.desc(), DatasetFrame.created_at.desc(), DatasetFrame.id.desc())
+                .order_by(DatasetFrame.as_of_date.desc().nulls_last(), DatasetFrame.created_at.desc(), DatasetFrame.id.desc())
             ).all()
             return [
                 DatasetFrameRecord(
