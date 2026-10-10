@@ -4,7 +4,7 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다. 다음 개선 작업·우선순위·진행 상태는 [개선 작업 색인](../operations/improvements/README.md)과 담당 역할 문서를 먼저 확인합니다.
 
-## 현재 상태 (2026-10-09)
+## 현재 상태 (2026-10-10)
 
 - [x] 대시보드 조회 축소·frame 재사용·백테스트 이력 UI 분리·수집 실패 표시를 `073f2a2`부터 `d8d91e9`까지 `main`에 반영
 - [x] 관심종목 카드 HTML 노출과 홈 시각 말줄임을 `4a9eec4`에 반영
@@ -16,6 +16,12 @@
 - [x] scheduler를 포함한 restart 수정과 start/stop 스크립트는 `1bd1dfa`까지 반영. 이후 개선 작업 문서는 `4d4fd9b`까지 커밋됨
 - [x] 기존 데이터·퀀트·대시보드·운영·QA 세션을 하나씩 재사용해 개선 검토 완료. 운영 읽기 전용 비교로 NULL 기준일 snapshot이 최신 수급을 가리는 조회 문제 확인
 - [x] [개선 통합 계획](../operations/improvement_plan_2026-10-05.md)과 [작업 색인·역할별 문서](../operations/improvements/README.md) 작성. 기능16개·QA3개의 우선순위·상태·완료 조건 정리. 현재 진행 상태는 역할 문서에서 관리
+- [x] G01a·QA01을 `b29c346`으로 main에 커밋. 로컬 DB 회귀는 통과했고 원격 CI는 GitHub CLI 미인증으로 조회하지 못해 검증 대기 유지
+- [x] G02 시작·재시작 사전검증과 실패 중단을 기존 운영→QA 세션 순서로 구현·검증. 관련118 passed, 원본 기본508 passed / 2 deselected. 커밋 전이며 실제 Docker 기동은 미검증
+
+## G02 순차 작업 (2026-10-10)
+
+원본 main `b29c346` + 미커밋 작업 트리에서 G02를 완료했다. start/restart는 Compose 확인→빌드→검사 전용 CLI를 통과한 뒤 서비스를 시작하며, restart는 그 후 기존 서비스를 내린다. 실패 종료코드·외부 cwd·공백 경로와 스케줄 타입을 보완했고 수집 없는 `--validate-config`를 추가했다. 현재 스케줄 파일도 검사에 통과했다. 기본 suite508 passed / 2 deselected, 관련 회귀118 passed다. 실제 Docker·커밋·push는 수행하지 않았다. [검증 기록](../operations/session_reports/2026-10-10_start_restart_preflight.md), [실행 가이드](07_operations_docs.md#시작재시작-사전검증-2026-10-10). 다음 구현 후보는 G03이며 전체 상태는 [개선 작업 색인](../operations/improvements/README.md)을 따른다.
 
 ## G01a·QA01 순차 작업 (2026-10-09)
 

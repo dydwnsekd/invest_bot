@@ -8,4 +8,7 @@ if [[ ! -f config/collection_schedule.yaml ]]; then
   exit 1
 fi
 
-docker compose up -d
+docker compose config --quiet
+docker compose build
+docker compose run --rm --no-deps scheduler python scripts/run_scheduled_collection.py --validate-config
+docker compose up -d db migrate scheduler web

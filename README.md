@@ -368,6 +368,18 @@ pip install -r requirements.txt -r requirements-dev.txt
 - 호스트 Python 실행: `db_host: localhost`
 - Docker Compose 내부 실행: `db_host_docker: db`
 
+전체 서비스는 프로젝트 루트의 스크립트로 관리합니다. 스크립트는 다른 디렉터리에서 호출해도 해당 프로젝트를 대상으로 실행합니다.
+
+```bash
+./start.sh
+./restart.sh
+./stop.sh
+```
+
+`start.sh`와 `restart.sh`는 Compose 설정 확인 → 이미지 빌드 → scheduler 컨테이너의 스케줄 설정 검사 순으로 진행합니다. 모두 통과하면 `db`, `migrate`, `scheduler`, `web`을 시작합니다. `restart.sh`는 검사 통과 후 기존 서비스를 내립니다. 설정·빌드·검사 실패 시 비정상 종료하며 서비스 중단·시작 명령으로 넘어가지 않습니다. `start.sh`도 매번 빌드를 확인하므로 첫 실행이나 변경 후 실행에는 시간이 필요할 수 있습니다. `stop.sh`는 컨테이너를 보존하고 전체 서비스를 정지합니다. 설정 타입과 검사의 범위는 [운영 가이드](docs/tasks/07_operations_docs.md#시작재시작-사전검증-2026-10-10)를 참고하세요.
+
+Compose 명령을 직접 실행하는 경우 아래 순서를 사용할 수 있습니다. 사전검증을 포함하려면 위 스크립트를 사용합니다.
+
 전체 이미지 빌드:
 
 ```bash
@@ -476,6 +488,14 @@ python scripts/run_collection.py --symbols-file symbols.txt --days 365
 기본 수집값은 이를 확보하기 쉽도록 365일 조회 기준으로 맞춰져 있습니다. 대시보드의 데이터 갱신과 백테스트 준비 화면에서는 날짜 범위를 클릭해 캘린더로 시작일과 종료일을 선택할 수 있습니다.
 
 ### 4. 정기 다중 종목 수집
+
+수집 없이 설정만 검사:
+
+```powershell
+python scripts/run_scheduled_collection.py --validate-config
+```
+
+다른 설정 파일은 `--config 경로`로 지정합니다. 검사는 수집·마스터 동기화·DB 연결·수집 로그 기록을 실행하지 않습니다.
 
 1회 실행:
 

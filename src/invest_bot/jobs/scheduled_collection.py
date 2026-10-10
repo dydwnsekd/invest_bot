@@ -35,9 +35,27 @@ class CollectionScheduleConfig:
                 "Copy config/collection_schedule.yaml.example to config/collection_schedule.yaml first."
             )
 
-        payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        try:
+            payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            raise ValueError("Collection schedule must contain valid YAML.") from None
+        except (OSError, UnicodeError):
+            raise ValueError("Collection schedule file could not be read.") from None
+        if payload is None:
+            payload = {}
+        if not isinstance(payload, dict):
+            raise ValueError("Collection schedule must be a YAML mapping.")
         raw_symbols = payload.get("symbols", [])
+        if raw_symbols is None:
+            raw_symbols = []
+        if not isinstance(raw_symbols, (str, list)) or (
+            isinstance(raw_symbols, list)
+            and any(isinstance(value, bool) or not isinstance(value, (str, int)) for value in raw_symbols)
+        ):
+            raise ValueError("symbols must be a CSV string or a list of strings or integers.")
         symbols_file = payload.get("symbols_file")
+        if symbols_file is not None and not isinstance(symbols_file, str):
+            raise ValueError("symbols_file must be a file path string.")
 
         symbols = _normalize_symbols(raw_symbols)
         if symbols_file:
@@ -47,17 +65,41 @@ class CollectionScheduleConfig:
         if not symbols:
             raise ValueError("Collection schedule must define at least one symbol.")
 
-        log_path = Path(str(payload.get("log_path", DEFAULT_SCHEDULE_LOG_PATH)))
+        raw_log_path = payload.get("log_path", DEFAULT_SCHEDULE_LOG_PATH)
+        if not isinstance(raw_log_path, str) or not raw_log_path.strip():
+            raise ValueError("log_path must be a non-empty file path string.")
+        log_path = Path(raw_log_path)
         if not log_path.is_absolute():
             log_path = config_path.parent / log_path
 
+        run_on_startup = payload.get("run_on_startup", True)
+        if isinstance(run_on_startup, str) and run_on_startup.strip().lower() in {"true", "false"}:
+            run_on_startup = run_on_startup.strip().lower() == "true"
+        if not isinstance(run_on_startup, bool):
+            raise ValueError("run_on_startup must be a boolean or the string 'true' or 'false'.")
+
         return cls(
             symbols=symbols,
-            days=max(int(payload.get("days", DEFAULT_COLLECTION_LOOKBACK_DAYS)), 1),
-            interval_minutes=max(int(payload.get("interval_minutes", 1440)), 1),
-            run_on_startup=bool(payload.get("run_on_startup", True)),
+            days=_positive_integer(payload.get("days", DEFAULT_COLLECTION_LOOKBACK_DAYS), "days"),
+            interval_minutes=_positive_integer(payload.get("interval_minutes", 1440), "interval_minutes"),
+            run_on_startup=run_on_startup,
             log_path=log_path,
         )
+
+
+def _positive_integer(value: object, field: str) -> int:
+    error = f"{field} must be a positive integer or a decimal integer string."
+    if isinstance(value, str):
+        value = value.strip()
+        if not value.isascii() or not value.isdecimal():
+            raise ValueError(error)
+        try:
+            value = int(value)
+        except ValueError:
+            raise ValueError(error) from None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(error)
+    return value
 
 
 @dataclass(slots=True)
@@ -166,7 +208,10 @@ def _normalize_symbols(raw_symbols: object) -> list[str]:
 def _load_symbols_from_file(path: Path) -> list[str]:
     if not path.exists():
         raise FileNotFoundError(f"Symbol list file was not found: '{path}'.")
-    return _normalize_symbols(path.read_text(encoding="utf-8").splitlines())
+    try:
+        return _normalize_symbols(path.read_text(encoding="utf-8").splitlines())
+    except UnicodeError:
+        raise ValueError("Symbol list file must contain UTF-8 text.") from None
 
 
 def _should_continue(completed_runs: int, max_runs: int | None) -> bool:
@@ -218,6 +263,7 @@ def load_schedule_status(path: str | Path | None = None, tail: int = 20) -> Coll
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run scheduled domestic stock collection.")
     parser.add_argument("--config", dest="config_path", help="Optional path to a collection schedule YAML file.")
+    parser.add_argument("--validate-config", action="store_true", help="Validate the schedule and exit without collecting.")
     parser.add_argument("--once", action="store_true", help="Run a single collection cycle and exit.")
     parser.add_argument("--max-runs", type=int, default=None, help="Optional max collection cycles before exit.")
     return parser.parse_args()
@@ -225,7 +271,15 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    schedule = CollectionScheduleConfig.from_file(args.config_path)
+    try:
+        schedule = CollectionScheduleConfig.from_file(args.config_path)
+    except OSError:
+        raise SystemExit("Invalid collection schedule: schedule or symbol list file could not be read.") from None
+    except ValueError as exc:
+        raise SystemExit(f"Invalid collection schedule: {exc}") from None
+    if args.validate_config:
+        print("Collection schedule configuration is valid.")
+        return
     runner = ScheduledCollectionRunner(schedule=schedule, before_run_fn=sync_stock_master)
 
     if args.once:

@@ -4,6 +4,8 @@
 
 담당 세션은 **QA·독립 검증 체계 개선**이다. 이전 결과는 [9월 보고서](../session_reports/2026-09-13_qa.md), 현재 순서는 [작업 색인](README.md)을 따른다. QA는 기능 구현을 중복 소유하지 않고 검증 공백·환경·CI·독립 완료 판정을 맡는다.
 
+G02 기능에 연결한 10월 10일 독립 검증도 수행했다. 아래 QA01~03과 별도로 기존 QA 세션을 재사용했고, G02 상태와 완료 조건은 [운영 역할 문서](operations.md#g02)에서 관리한다.
+
 | ID | 우선순위 | 작업 | 상태 |
 | --- | --- | --- | --- |
 | QA01 | P1 | SQLite·PostgreSQL 최신 정렬과 CI | 검증 대기 |
@@ -43,3 +45,7 @@
 
 
 2026-10-09 최종 결과: QA01의 독립 코드 리뷰·로컬 DB 검증을 완료했다. [신규 PostgreSQL 정렬 테스트](../../../tests/integration/test_postgresql_dataset_frame_ordering.py)는 localhost/테스트 DB 보호와 UUID 스키마 격리·정리를 적용한다. CI 실행 대상을 tests/integration으로 연결했고 같은 실행 명령이 2개를 선택·통과했다. 수정 전 HEAD repository를 복원하면 같은 회귀가 예상한 1 failed이며, 통과·실패 뒤 QA 스키마도 정리됐다. 원본 통합 후 기본 suite 398 passed / 2 deselected, PostgreSQL 2 passed. 원격 GitHub Actions는 커밋 전이라 미실행이며 QA01 상태는 **검증 대기**다. [검증 기록](../session_reports/2026-10-09_latest_snapshot_ordering.md). 임시 DB 제거 확인 완료.
+
+2026-10-10: G01a·QA01 관련 변경이 main `b29c346`으로 커밋된 것을 확인했다. 원격 CI 조회는 로컬 GitHub CLI 미인증으로 실행되지 않아 성공 여부 미확인이다. 검증 대기 상태를 유지하며 독립적인 G02를 진행한다.
+
+2026-10-10 G02 최종 결과: 기존 운영 세션이 종료된 뒤 QA 세션에서 원본 `b29c346` + G02를 별도 임시 복사해 검증했다. 담당 회귀83 passed와 독립 경계36 passed, 차단 결함 없음이다. 메인이 동작 경계35개를 원본에 통합했고 관련118 passed, 기본508 passed / 2 deselected를 새로 확인했다. 외부 cwd·공백 경로·실패 코드·기본 설정 경로·파일/타입 오류와 검사 전용 CLI의 수집·DB·network·로그0회를 검증했다. 실제 Docker·mount 권한·readiness·원격 CI는 미검증이며 G02는 모의 완료 조건을 충족해 완료다. QA01~03의 상태는 그대로 유지한다. [검증 기록](../session_reports/2026-10-10_start_restart_preflight.md).

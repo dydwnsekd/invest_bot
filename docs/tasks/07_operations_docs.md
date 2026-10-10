@@ -23,6 +23,47 @@
 - [x] 공유 runtime 로그 확인 가이드
 - [ ] 릴리즈/배포 방식 정리
 
+## 시작·재시작 사전검증 (2026-10-10)
+
+프로젝트 루트의 `start.sh`, `restart.sh`, `stop.sh`를 사용합니다. 세 스크립트는 자신의 디렉터리로 이동하므로 외부 작업 디렉터리와 공백 있는 프로젝트 경로에서도 같은 프로젝트를 대상으로 실행합니다.
+
+| 명령 | 실행 순서 |
+| --- | --- |
+| `./start.sh` | 스케줄 파일 존재 확인 → `docker compose config --quiet` → `docker compose build` → 설정 검사 → `up -d db migrate scheduler web` |
+| `./restart.sh` | 같은 사전검증 → `down` → `up -d db migrate scheduler web` |
+| `./stop.sh` | `docker compose stop`으로 전체 서비스 정지 |
+
+각 단계가 실패하면 해당 종료코드로 중단합니다. 사전검증 실패 시 `down`과 `up`을 실행하지 않으며, `down` 실패 시 `up`을 실행하지 않습니다. 시작도 이미지 빌드를 확인하므로 변경된 검사 코드가 사용됩니다. 호스트의 Python 가상환경은 이 스크립트의 실행 조건이 아닙니다.
+
+설정 검사는 새로 빌드한 scheduler 이미지에서 다음 명령으로 실행합니다. `--no-deps`로 DB·migration을 시작하지 않습니다.
+
+```bash
+docker compose run --rm --no-deps scheduler python scripts/run_scheduled_collection.py --validate-config
+```
+
+Python 환경이 이미 준비된 경우 다음 명령으로 같은 검사를 수행할 수 있습니다. 경로를 생략하면 프로젝트의 `config/collection_schedule.yaml`을 읽습니다.
+
+```bash
+python scripts/run_scheduled_collection.py --validate-config
+python scripts/run_scheduled_collection.py --config /path/to/schedule.yaml --validate-config
+```
+
+`--validate-config`는 설정과 종목 파일을 읽고 해석한 뒤 종료합니다. 수집기·마스터 동기화·runner 생성·DB/네트워크 연결·수집 로그 생성은 수행하지 않습니다. 성공 문구는 설정의 유효성을 뜻합니다. 자격정보의 유효성, 로그 경로의 쓰기 권한, 외부 연결과 서비스 준비 상태는 이 검사에서 확인하지 않으며 [G07b](../operations/improvements/operations.md#g07b)가 후속 작업입니다.
+
+### 스케줄 설정 수용 정책
+
+| 설정 | 수용하는 값 | 거부하는 값·조건 |
+| --- | --- | --- |
+| `days`, `interval_minutes` | 양의 정수 또는 ASCII 숫자로만 구성된 정수 문자열. 문자열 앞뒤 공백은 제거 | 0, 음수, 실수, boolean, null, 빈 문자열, 소수점·기호가 있는 문자열 |
+| `run_on_startup` | YAML boolean 또는 대소문자·앞뒤 공백을 무시한 문자열 `true`/`false` | 숫자·null·목록·매핑과 그 밖의 문자열. 문자열 `"false"`는 False로 해석 |
+| `symbols` | 쉼표로 구분한 문자열 또는 문자열·정수의 목록 | boolean·실수·중첩 목록·매핑. 종목 파일까지 합친 결과가 비면 오류 |
+| `symbols_file` | 파일 경로 문자열 또는 생략·null | 다른 타입, 지정한 파일의 누락·읽기 실패·UTF-8 오류 |
+| `log_path` | 공백만 있는 값이 아닌 경로 문자열 | 다른 타입·빈 문자열·공백 문자열 |
+
+종목 파일과 로그의 상대경로는 스케줄 설정 파일의 디렉터리를 기준으로 해석합니다. 종목 중복 제거와 기본값(`days: 365`, `interval_minutes: 1440`, `run_on_startup: true`)은 유지합니다. 최상위 YAML은 매핑이어야 하며 파싱·설정 오류는 입력 내용을 출력하지 않는 필드별 메시지로 알립니다.
+
+구현과 모의 검증 근거는 [G02 검증 기록](../operations/session_reports/2026-10-10_start_restart_preflight.md)에 있습니다. 실제 컨테이너 시작·재시작은 이번 작업에서 수행하지 않았습니다.
+
 ## 실행 경계와 로그 확인 (2026-09-15)
 
 - 스키마만 적용: `python scripts/init_db.py --mode migrate-only`

@@ -1,13 +1,130 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
 
 import pytest
+import yaml
 
+from invest_bot.jobs import scheduled_collection
 from invest_bot.jobs.collect_market_data import DEFAULT_COLLECTION_LOOKBACK_DAYS
 from invest_bot.jobs.scheduled_collection import CollectionScheduleConfig, ScheduledCollectionRunner, load_schedule_status
 from tests.helpers import make_test_dir
+
+
+@pytest.mark.parametrize("field", ["days", "interval_minutes"])
+@pytest.mark.parametrize("value", [0, -1, 1.5, 1.0, True, False, "1.5", "invalid", "", None])
+def test_schedule_rejects_invalid_positive_integers(tmp_path, field, value):
+    config_file = tmp_path / "schedule.yaml"
+    config_file.write_text(
+        yaml.safe_dump({"symbols": ["005930"], field: value}), encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match=field):
+        CollectionScheduleConfig.from_file(config_file)
+
+
+@pytest.mark.parametrize("value", [1, "15", " 60 "])
+def test_schedule_accepts_positive_integer_values_and_numeric_strings(tmp_path, value):
+    config_file = tmp_path / "schedule.yaml"
+    config_file.write_text(
+        yaml.safe_dump({"symbols": ["005930"], "days": value, "interval_minutes": value}),
+        encoding="utf-8",
+    )
+
+    schedule = CollectionScheduleConfig.from_file(config_file)
+
+    assert schedule.days == int(value)
+    assert schedule.interval_minutes == int(value)
+
+
+@pytest.mark.parametrize("value,expected", [(True, True), (False, False), ("true", True), ("false", False), (" FALSE ", False)])
+def test_schedule_parses_boolean_without_python_truthiness(tmp_path, value, expected):
+    config_file = tmp_path / "schedule.yaml"
+    config_file.write_text(
+        yaml.safe_dump({"symbols": ["005930"], "run_on_startup": value}), encoding="utf-8"
+    )
+
+    assert CollectionScheduleConfig.from_file(config_file).run_on_startup is expected
+
+
+@pytest.mark.parametrize("value", [0, 1, "", "yes", "no", [], {}, None])
+def test_schedule_rejects_ambiguous_boolean_values(tmp_path, value):
+    config_file = tmp_path / "schedule.yaml"
+    config_file.write_text(
+        yaml.safe_dump({"symbols": ["005930"], "run_on_startup": value}), encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="run_on_startup"):
+        CollectionScheduleConfig.from_file(config_file)
+
+
+@pytest.mark.parametrize("text", [
+    "- not-a-mapping\n", "false\n", "0\n", "symbols: 5930\n",
+    "symbols: {code: '005930'}\n", "symbols: [true]\n",
+    "symbols: [[005930]]\n", "symbols: ['005930']\nsymbols_file: true\n",
+    "symbols: ['005930']\nlog_path: []\n", "symbols: ['005930']\nlog_path: null\n",
+])
+def test_schedule_rejects_wrong_yaml_types(tmp_path, text):
+    config_file = tmp_path / "schedule.yaml"
+    config_file.write_text(text, encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        CollectionScheduleConfig.from_file(config_file)
+
+
+def test_schedule_preserves_csv_symbols_file_deduplication_and_relative_log(tmp_path):
+    (tmp_path / "symbols.csv").write_text("000660\n035420\n005930\n", encoding="utf-8")
+    config_file = tmp_path / "schedule.yaml"
+    config_file.write_text(
+        "symbols: '005930,000660'\nsymbols_file: symbols.csv\nlog_path: ../runtime/collection.log\n",
+        encoding="utf-8",
+    )
+
+    schedule = CollectionScheduleConfig.from_file(config_file)
+
+    assert schedule.symbols == ["005930", "000660", "035420"]
+    assert schedule.log_path == tmp_path / ".." / "runtime" / "collection.log"
+    assert schedule.days == 365
+    assert schedule.interval_minutes == 1440
+    assert schedule.run_on_startup is True
+
+
+@pytest.mark.parametrize("args,count,waits", [
+    (["--once"], 1, []),
+    (["--max-runs", "2"], 2, [60, 60]),
+])
+def test_schedule_main_preserves_once_and_normal_loop(tmp_path, monkeypatch, args, count, waits):
+    config_file = tmp_path / "schedule.yaml"
+    config_file.write_text(
+        "symbols: ['005930']\nrun_on_startup: false\ninterval_minutes: 1\nlog_path: collection.log\n",
+        encoding="utf-8",
+    )
+    collected = []
+    synced = []
+    sleeps = []
+
+    def collector(symbols, days):
+        collected.append((symbols, days))
+        return {"success_count": 1, "failed_count": 0}
+
+    def runner(schedule, before_run_fn):
+        return ScheduledCollectionRunner(
+            schedule=schedule, before_run_fn=before_run_fn,
+            collector_fn=collector, sleep_fn=sleeps.append,
+        )
+
+    monkeypatch.setattr(sys, "argv", ["scheduler", "--config", str(config_file), *args])
+    monkeypatch.setattr(scheduled_collection, "sync_stock_master", lambda: synced.append("sync"))
+    monkeypatch.setattr(scheduled_collection, "ScheduledCollectionRunner", runner)
+
+    scheduled_collection.main()
+
+    assert collected == [(["005930"], 365)] * count
+    assert synced == ["sync"] * count
+    assert sleeps == waits
+    assert load_schedule_status(config_file).total_logged_runs == count
 
 
 def test_collection_schedule_config_loads_symbols_and_symbols_file():

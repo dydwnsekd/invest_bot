@@ -29,7 +29,7 @@
 | D-DASHBOARD | [대시보드](../tasks/04_dashboard.md) | status | active | 대시보드 · 현재 UI 기능; 날짜별 작업은 기록 |
 | D-BACKTEST | [전략·백테스트](../tasks/05_strategy_backtest.md) | status | active | 퀀트 · 구현된 전략과 백테스트 규칙 |
 | D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | plan | proposed | 거래 · 아직 구현하지 않은 주문 기능 |
-| D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 초기화 모드와 로그 |
+| D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 시작·재시작 사전검증, 설정 타입, 초기화 모드와 로그 |
 | D-SESSIONS | [개선 작업 추적](../operations/improvement_sessions_2026-09-13.md) | status | active | 통합 · 역할별 단일 작업·순차 실행 |
 | D-IMPROVEMENTS | [개선 작업 색인](../operations/improvements/README.md) | index | active | 통합 · 다음 작업·우선순위·역할별 상태의 진입점 |
 | D-INDICATORS | [지표 가이드](../analysis/indicator_guide.md) | reference | active | 퀀트 · 지표 의미 |
@@ -77,6 +77,7 @@ DB 문서의 구체적인 차이와 현재 확인 경로는 [개념 지도](conc
 | H-QA-0913 | [QA 개선 보고](../operations/session_reports/2026-09-13_qa.md) | evidence | historical | QA · 담당 브랜치 검증과 당시 환경 제약 |
 | H-DASHBOARD-0919 | [대시보드 검증 기록](../operations/session_reports/2026-09-19_dashboard.md) | evidence | historical | 대시보드 · 9월 19~30일 변경·측정·검증의 날짜별 기록 |
 | H-SNAPSHOT-1009 | [최신 snapshot 정렬 검증](../operations/session_reports/2026-10-09_latest_snapshot_ordering.md) | evidence | historical | 데이터·QA · G01a·QA01 구현·DB 회귀·CI 연결; 원격 CI 미실행 |
+| H-PREFLIGHT-1010 | [시작·재시작 사전검증](../operations/session_reports/2026-10-10_start_restart_preflight.md) | evidence | historical | 운영·QA · G02 실패 중단·설정 검사·fake Docker 회귀; 실제 Docker 미검증 |
 
 ## 대체 관계와 유지 규칙
 

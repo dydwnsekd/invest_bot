@@ -51,3 +51,5 @@
 2026-10-09: 데이터 세션의 격리본 구현을 원본에 반영했다. 세 조회의 NULL 정렬을 명시하고 DB 공통 행 선택 fixture를 추가했다. SQL 문자열 형태만 검사하는 격리본 테스트는 실제 PostgreSQL 행 선택 회귀로 대체한다. QA01 독립 검증 대기.
 
 2026-10-09 최종 결과: G01a 구현·로컬 검증 완료, 원격 CI 확인 전이라 상태는 **검증 대기**다. 기본 suite 398 passed / 2 deselected, PostgreSQL migration·공통 정렬 회귀 2 passed. QA는 같은 회귀가 수정 전 코드에서 실패하는 것을 확인했고 차단 결함을 발견하지 않았다. 임시 PostgreSQL은 제거됐다. [검증 기록](../session_reports/2026-10-09_latest_snapshot_ordering.md). 커밋·운영 재배포·원격 GitHub Actions는 미실행이다. 커밋 후 새 PostgreSQL 회귀가 포함된 CI 성공을 확인하면 완료로 갱신한다.
+
+2026-10-10: G01a·QA01 관련 변경이 main `b29c346`으로 커밋된 것을 확인했다. 원격 CI 조회는 로컬 GitHub CLI 미인증으로 실행되지 않아 성공 여부 미확인이다. 검증 대기 상태를 유지하며 독립적인 G02를 진행한다.
