@@ -7,6 +7,7 @@ from typing import Mapping, Sequence
 
 import pandas as pd
 
+from .dates import duplicate_trading_date_reason
 from .strategy_registry import (
     BACKTEST_STRATEGY_SPECS,
     DAILY_PRICES_INDICATORS,
@@ -125,6 +126,12 @@ def _check_strategy(
         if missing:
             missing_columns[dataset_id] = tuple(missing)
             reasons.append(f"missing columns in {dataset_id}: {', '.join(missing)}")
+        else:
+            date_column = next((column for column in ("date", *date_aliases) if column in frame.columns), None)
+            if date_column:
+                duplicate_reason = duplicate_trading_date_reason(frame, date_column, source=dataset_id)
+                if duplicate_reason:
+                    reasons.append(duplicate_reason)
 
     if strategy_id == "investor-flow-custom" and not reasons:
         alignment_reason = _investor_flow_alignment_reason(

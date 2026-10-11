@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from .dates import require_unique_trading_dates
+
 
 DEFAULT_MARK_TO_MARKET_INITIAL_EQUITY = 1_000_000.0
 DAILY_EQUITY_COLUMNS = ["date", "equity", "equity_return_pct", "position_state"]
@@ -24,6 +26,7 @@ class NormalizedSignalBacktestRunner:
             empty = pd.DataFrame(columns=self._trade_columns())
             return BacktestResult(trades=empty, summary=self._build_summary(symbol, empty, signal_rows))
 
+        require_unique_trading_dates(signal_rows, source=f"{symbol} signal rows")
         frame = signal_rows.copy()
         frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
         frame = frame.sort_values("date").reset_index(drop=True)
@@ -214,6 +217,7 @@ def build_daily_mark_to_market_equity_curve(
 def _normalized_price_frame(signal_rows: pd.DataFrame) -> pd.DataFrame:
     if signal_rows.empty or not {"date", "close"}.issubset(signal_rows.columns):
         return pd.DataFrame(columns=["date", "close"])
+    require_unique_trading_dates(signal_rows, source="daily equity price rows")
     return (
         signal_rows.loc[:, ["date", "close"]]
         .assign(
@@ -221,7 +225,6 @@ def _normalized_price_frame(signal_rows: pd.DataFrame) -> pd.DataFrame:
             close=lambda frame: pd.to_numeric(frame["close"], errors="coerce"),
         )
         .dropna(subset=["date", "close"])
-        .drop_duplicates(subset=["date"], keep="last")
         .sort_values("date")
         .reset_index(drop=True)
     )

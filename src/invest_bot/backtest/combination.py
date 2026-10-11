@@ -8,6 +8,8 @@ from typing import Mapping
 
 import pandas as pd
 
+from .dates import require_unique_trading_dates
+
 
 COMBINATION_MODE_AND = "and"
 COMBINATION_MODE_OR = "or"
@@ -88,9 +90,10 @@ def combine_strategy_signal_rows(
         required_columns = {"date", "close", "signal"}
         if not required_columns.issubset(frame.columns):
             raise ValueError(f"{strategy_id} 전략 신호에 날짜·종가·신호가 부족합니다.")
+        require_unique_trading_dates(frame, source=f"{strategy_id} strategy signal rows")
         normalized = frame[["date", "close", "signal"]].copy()
         normalized["date"] = pd.to_datetime(normalized["date"], errors="coerce")
-        normalized = normalized.dropna(subset=["date", "close"]).sort_values("date").drop_duplicates("date", keep="last")
+        normalized = normalized.dropna(subset=["date", "close"]).sort_values("date")
         normalized["signal"] = normalized["signal"].fillna("hold").astype(str).str.lower()
         normalized = normalized.rename(columns={"close": f"close_{strategy_id}", "signal": f"signal_{strategy_id}"})
         merged = normalized if merged is None else merged.merge(normalized, on="date", how="inner", validate="one_to_one")

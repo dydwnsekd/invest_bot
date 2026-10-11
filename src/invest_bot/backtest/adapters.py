@@ -16,6 +16,7 @@ from invest_bot.strategy import (
 )
 from invest_bot.strategy.base import StrategyResult
 
+from .dates import require_unique_trading_dates
 from .readiness import RunReadinessGate, build_run_readiness_gate
 from .parameters import resolve_backtest_parameters
 from .strategy_registry import (
@@ -227,6 +228,7 @@ def _apply_strategy_result(frame: pd.DataFrame, index: int, signal_result: Strat
 
 
 def _normalize_existing_signal_frame(frame: pd.DataFrame, spec: BacktestStrategySpec) -> pd.DataFrame:
+    require_unique_trading_dates(frame, source=GOLDEN_CROSS_SIGNALS)
     result = frame.copy()
     result["date"] = pd.to_datetime(result["date"], errors="coerce")
     result = result.sort_values("date").reset_index(drop=True)

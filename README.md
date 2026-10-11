@@ -334,7 +334,7 @@ invest_bot/
 
 DB 접근 정보와 KIS API 키/시크릿은 `config/app.yaml` 또는 런타임 환경변수로 관리합니다.
 같은 항목이 둘 다 있으면 `INVEST_BOT_*` 환경변수가 `config/app.yaml`보다 우선합니다.
-Docker Compose는 로컬 `config/` 디렉터리를 컨테이너에 read-only로 마운트하며, 이미지 빌드 레이어에는 실제 `config/app.yaml`을 포함하지 않습니다.
+Docker Compose는 로컬 `config/` 디렉터리를 컨테이너에 read-only로 마운트합니다. `.dockerignore`는 `.env`, 실제 `config/app.yaml`, `config/kis_credentials.yaml`, `config/collection_schedule.yaml`을 빌드에서 제외하고 예시 설정 파일은 포함합니다. 제외 규칙 변경은 다음 이미지 빌드부터 적용됩니다.
 기본 예시값은 로컬 실행 시 `db_host: localhost`, Docker Compose 내부 실행 시 `db_host_docker: db`를 자동 사용하도록 맞춰져 있습니다.
 `config/kis_credentials.yaml`은 더 이상 읽지 않습니다.
 
@@ -590,6 +590,8 @@ python scripts/run_backtest.py 005930
 - `buy` 신호 발생 시 다음 거래일 종가 진입
 - `sell` 신호 발생 시 다음 거래일 종가 청산
 - 미청산 포지션은 마지막 거래일 종가로 강제 종료
+
+일별 백테스트 입력은 **종목별·전략별로 거래일당 한 행**이어야 합니다. 같은 날짜의 중복은 종가·신호가 같아도 차단하며, 문자열과 Timestamp가 같은 날이거나 하루 안의 시각만 다른 경우도 중복입니다. 준비 확인·신호 생성·직접 실행·일별 평가곡선·전략 조합에서 임의로 마지막 행을 선택하지 않습니다. 차단 사유에는 데이터셋과 예시 날짜가 표시됩니다. 여러 종목이나 여러 전략의 개별 입력에 같은 거래일이 있는 것은 정상입니다. 자세한 기준은 [백테스트 날짜 유일성 규칙](docs/tasks/05_strategy_backtest.md#일별-입력의-날짜-유일성-2026-10-11)을 참고하세요.
 
 산출물 persistence identity:
 

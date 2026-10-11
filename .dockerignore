@@ -12,3 +12,5 @@ data
 logs
 .env
 config/app.yaml
+config/kis_credentials.yaml
+config/collection_schedule.yaml

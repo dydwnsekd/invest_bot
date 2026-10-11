@@ -49,3 +49,9 @@
 2026-10-10: 원본 main `b29c346` 기준으로 기존 운영 세션에서 G02 격리 구현을 시작했다. Docker mock과 임시 설정만 사용하고 실제 서비스/환경 설정을 변경하지 않는다. 구현 종료 후 기존 QA 세션을 순차 실행하고 메인이 원본 통합·문서 갱신을 담당한다.
 
 2026-10-10: 운영 세션의 6개 파일 패치와 QA의 추가 경계 회귀를 원본에 반영했다. 운영→QA를 순차 실행했고 원본 관련 회귀118 passed, 기본 suite508 passed / 2 deselected로 G02를 완료 처리했다. 실제 Docker·재시작·commit/push는 수행하지 않았다. 상세 대상·명령·제약은 [검증 기록](../session_reports/2026-10-10_start_restart_preflight.md)에 있다.
+
+2026-10-10 후속 확인: G02 변경이 `7fb6435`로 main에 커밋된 것을 확인했다. 에이전트가 커밋·push·운영 재시작을 실행한 것은 아니며 앞선 로컬 검증·실제 Docker 미검증 범위는 그대로다.
+
+2026-10-11 Docker 설정 제외 보완: 사용자 요청으로 기존 운영 세션의 작은 패치를 원본에 통합했다. [.dockerignore](../../../.dockerignore)에 실제 `config/kis_credentials.yaml`과 `config/collection_schedule.yaml`을 추가해 기존 `.env`·`config/app.yaml`과 함께 빌드에서 제외한다. 예시 파일 포함·별도 Dockerfile ignore 미존재·공백을 정적으로 확인했고 `tests/test_db_migration_artifacts.py::test_dockerignore_excludes_runtime_secret_files`는1 passed다. [설정 안내](../../../README.md#설정-파일)를 갱신했다. 실제 키 조회·이미지 빌드·재시작·커밋·push는 하지 않았다. 변경은 다음 이미지 빌드부터 적용되며 기존 이미지의 인증 파일 제거를 검증한 결과는 아니다. G07a/G07b는 대기를 유지한다.
+
+2026-10-11 커밋 반영: 사용자 요청으로 위 Docker 제외 규칙과 G03 소스·회귀·관련 문서를 이 문서를 포함한 main 커밋에 묶는다. 실제 설정 파일과 기존 백업 파일은 커밋에서 제외하며 이미지 빌드·재시작·배포는 실행하지 않는다. 검증 수치는 각 변경의 실행 시점과 범위를 따른다.
