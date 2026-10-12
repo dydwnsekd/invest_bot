@@ -7,6 +7,19 @@ from datetime import date, datetime
 import pandas as pd
 
 
+def local_trading_dates(values: pd.Series) -> pd.Series:
+    """Return local calendar dates (including NaT) in original row order.
+
+    Use positional indexes so repeated input labels cannot misalign prices.
+    Already-parsed dates retain their local day without timezone conversion.
+    """
+    values = values.reset_index(drop=True)
+    already_parsed = values.map(lambda value: isinstance(value, date))
+    dates = values[already_parsed].map(lambda value: value.date() if isinstance(value, datetime) else value)
+    parsed = pd.to_datetime(values[~already_parsed], errors="coerce", format="mixed")
+    return pd.concat([dates, parsed.map(lambda value: value.date())]).sort_index()
+
+
 def duplicate_trading_date_reason(
     frame: pd.DataFrame,
     column: str = "date",
@@ -22,11 +35,7 @@ def duplicate_trading_date_reason(
     """
     if column not in frame.columns or frame.empty:
         return None
-    values = frame[column]
-    already_parsed = values.map(lambda value: isinstance(value, date))
-    dates = values[already_parsed].dropna().map(lambda value: value.date() if isinstance(value, datetime) else value)
-    parsed = pd.to_datetime(values[~already_parsed], errors="coerce", format="mixed")
-    dates = pd.concat([dates, parsed.dropna().map(lambda value: value.date())], ignore_index=True)
+    dates = local_trading_dates(frame[column]).dropna()
     duplicates = sorted(set(dates[dates.duplicated()]))
     if not duplicates:
         return None

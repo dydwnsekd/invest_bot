@@ -123,6 +123,7 @@ def render_backtest_tab(
         '<div class="section-copy">선택한 종목과 전략 조합이 실제로 준비되었는지 먼저 확인한 뒤, 사용자가 직접 준비 실행과 백테스트 실행을 제어할 수 있도록 구성했습니다.</div>',
         unsafe_allow_html=True,
     )
+    st.caption("기본 골든크로스 저장 신호는 실행 시 현재 지표의 거래일·종가와 대조합니다. 불일치하면 준비 실행으로 신호를 다시 생성해 주세요.")
 
     symbol_entries = _resolve_symbol_entries(snapshot, symbol_lookup)
     selection_map = {entry.symbol: entry for entry in symbol_entries}
@@ -649,6 +650,8 @@ def _run_backtest_action(
             "success",
         )
     except Exception as error:  # noqa: BLE001
+        st.session_state.pop(BACKTEST_RESULTS_KEY, None)
+        st.session_state[BACKTEST_BLOCKED_REASONS_KEY] = (str(error),)
         set_action_message(f"백테스트 실행 중 오류가 발생했습니다: {error}", "error")
     st.rerun()
 
@@ -787,6 +790,8 @@ def _build_input_sources_for_strategy(
         strategy_id == "golden-cross"
         and is_default_backtest_parameters(strategy_id, parameters)
         and inputs.golden_cross_signal.filename is not None
+        and inputs.golden_cross_signal.frame is not None
+        and {"date", "close", "signal"}.issubset(inputs.golden_cross_signal.frame.columns)
     )
     return BacktestInputSources(
         indicator_source_dataset=DAILY_PRICES_INDICATORS,

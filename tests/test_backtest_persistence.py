@@ -28,6 +28,10 @@ def test_backtest_generator_persists_symbol_first_files_with_run_identity_and_pr
         ]
     )
     processed_storage.save("golden_cross_signals", "005930_20260305.csv", signal_frame)
+    processed_storage.save(
+        "daily_prices_indicators", "005930_20260305.csv",
+        signal_frame.loc[:, ["date", "close"]].assign(ma_5=100.0, ma_20=100.0),
+    )
 
     request = BacktestRequest(
         symbol="005930",

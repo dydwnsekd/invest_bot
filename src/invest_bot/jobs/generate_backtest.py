@@ -8,6 +8,7 @@ import pandas as pd
 from pandas.errors import EmptyDataError
 
 from invest_bot.backtest import DEFAULT_BACKTEST_RUNNER, GOLDEN_CROSS_SIGNALS, build_strategy_signal_rows
+from invest_bot.backtest.dates import require_unique_trading_dates
 from invest_bot.backtest.persistence import (
     BACKTEST_SUMMARY_OUTPUT,
     BACKTEST_TRADES_OUTPUT,
@@ -56,12 +57,25 @@ class GoldenCrossBacktestGenerator:
             frame = self.processed_storage.load(GOLDEN_CROSS_SIGNALS, request.source_filename)
         except EmptyDataError:
             frame = pd.DataFrame(columns=["date", "close", "signal"])
-        signal_rows = build_strategy_signal_rows("golden-cross", {GOLDEN_CROSS_SIGNALS: frame})
+        require_unique_trading_dates(frame, source=GOLDEN_CROSS_SIGNALS)
+        missing = sorted({"date", "close", "signal"} - set(frame.columns))
+        if missing:
+            raise ValueError(f"{GOLDEN_CROSS_SIGNALS} '{request.source_filename}' is missing columns: {', '.join(missing)}")
+        datasets = {GOLDEN_CROSS_SIGNALS: frame}
+        indicator_filename = request.indicator_filename
+        if indicator_filename is None:
+            indicator_filename = self.processed_storage.latest_filename(DAILY_PRICES_INDICATORS, request.symbol)
+        if indicator_filename is not None:
+            try:
+                datasets[DAILY_PRICES_INDICATORS] = self.processed_storage.load(DAILY_PRICES_INDICATORS, indicator_filename)
+            except EmptyDataError as error:
+                raise ValueError(f"{DAILY_PRICES_INDICATORS} '{indicator_filename}' is empty") from error
+        signal_rows = build_strategy_signal_rows("golden-cross", datasets)
         return attach_input_sources(
             signal_rows,
             BacktestInputSources(
-                indicator_source_dataset=DAILY_PRICES_INDICATORS if request.indicator_filename else None,
-                indicator_source_filename=request.indicator_filename,
+                indicator_source_dataset=DAILY_PRICES_INDICATORS if indicator_filename is not None else None,
+                indicator_source_filename=indicator_filename,
                 signal_source_dataset=GOLDEN_CROSS_SIGNALS,
                 signal_source_filename=request.source_filename,
                 investor_source_dataset=INVESTOR_DAILY if request.investor_filename else None,

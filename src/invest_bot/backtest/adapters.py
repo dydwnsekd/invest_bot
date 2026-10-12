@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Callable, Mapping
 
 import pandas as pd
@@ -16,7 +17,7 @@ from invest_bot.strategy import (
 )
 from invest_bot.strategy.base import StrategyResult
 
-from .dates import require_unique_trading_dates
+from .dates import local_trading_dates, require_unique_trading_dates
 from .readiness import RunReadinessGate, build_run_readiness_gate
 from .parameters import resolve_backtest_parameters
 from .strategy_registry import (
@@ -118,7 +119,10 @@ def _adapt_golden_cross(
         and signal_frame is not None
         and {"date", "close", "signal"}.issubset(signal_frame.columns)
     ):
-        return _normalize_existing_signal_frame(signal_frame, spec)
+        indicator_frame = datasets.get(DAILY_PRICES_INDICATORS)
+        if indicator_frame is not None:
+            _validate_saved_signal_alignment(signal_frame, indicator_frame)
+        return _normalize_existing_signal_frame(signal_frame, spec, validated_alignment=indicator_frame is not None)
 
     frame = _prepare_price_frame(datasets.get(DAILY_PRICES_INDICATORS))
     result = frame.copy()
@@ -227,10 +231,59 @@ def _apply_strategy_result(frame: pd.DataFrame, index: int, signal_result: Strat
         frame.at[index, key] = value
 
 
-def _normalize_existing_signal_frame(frame: pd.DataFrame, spec: BacktestStrategySpec) -> pd.DataFrame:
+def _validate_saved_signal_alignment(saved: pd.DataFrame, current: pd.DataFrame) -> None:
+    """Reject saved default signals that do not describe the current prices."""
+    require_unique_trading_dates(saved, source=GOLDEN_CROSS_SIGNALS)
+    require_unique_trading_dates(current, source=DAILY_PRICES_INDICATORS)
+    saved_prices = _alignment_prices(saved, GOLDEN_CROSS_SIGNALS)
+    current_prices = _alignment_prices(current, DAILY_PRICES_INDICATORS)
+    missing = sorted(set(current_prices.index) - set(saved_prices.index))
+    extra = sorted(set(saved_prices.index) - set(current_prices.index))
+    if missing or extra:
+        details = []
+        if missing:
+            details.append(f"missing saved dates: {', '.join(value.isoformat() for value in missing[:3])}")
+        if extra:
+            details.append(f"extra saved dates: {', '.join(value.isoformat() for value in extra[:3])}")
+        raise ValueError(
+            f"{GOLDEN_CROSS_SIGNALS} trading dates do not match {DAILY_PRICES_INDICATORS}; " + "; ".join(details)
+        )
+    mismatches = saved_prices.reindex(current_prices.index).ne(current_prices)
+    if mismatches.any():
+        sample = ", ".join(value.isoformat() for value in sorted(current_prices.index[mismatches])[:3])
+        raise ValueError(f"{GOLDEN_CROSS_SIGNALS} close mismatch with {DAILY_PRICES_INDICATORS} for trading dates: {sample}")
+
+
+def _alignment_prices(frame: pd.DataFrame, source: str) -> pd.Series:
+    dates = local_trading_dates(frame["date"])
+    if dates.isna().any():
+        raise ValueError(f"{source} has invalid trading dates; cannot verify saved signal alignment")
+    raw_prices = frame["close"].reset_index(drop=True)
+    unsupported = raw_prices.map(lambda value: isinstance(value, (bool, complex, date)))
+    prices = pd.to_numeric(raw_prices.mask(unsupported), errors="coerce")
+    valid = prices.notna() & prices.gt(0) & prices.lt(float("inf"))
+    if not valid.all():
+        sample = ", ".join(value.isoformat() for value in sorted(dates[~valid])[:3])
+        raise ValueError(f"{source} has invalid close values for trading dates: {sample}; expected positive finite numeric close")
+    return pd.Series(prices.to_numpy(), index=dates.to_numpy())
+
+
+def _normalize_existing_signal_frame(
+    frame: pd.DataFrame, spec: BacktestStrategySpec, *, validated_alignment: bool = False
+) -> pd.DataFrame:
     require_unique_trading_dates(frame, source=GOLDEN_CROSS_SIGNALS)
     result = frame.copy()
-    result["date"] = pd.to_datetime(result["date"], errors="coerce")
+    try:
+        parsed = pd.to_datetime(result["date"], errors="coerce")
+    except (TypeError, ValueError):
+        if not validated_alignment:
+            raise
+        parsed = pd.to_datetime(local_trading_dates(frame["date"]))
+    if validated_alignment and (parsed.isna().any() or parsed.dtype == object):
+        # Alignment proved every original date valid. Do not lose mixed-offset
+        # rows in downstream datetime parsing: use their verified local days.
+        parsed = pd.to_datetime(local_trading_dates(frame["date"]))
+    result["date"] = parsed.to_numpy()
     result = result.sort_values("date").reset_index(drop=True)
     result["strategy_id"] = spec.strategy_id
     result["strategy_name"] = spec.strategy_name

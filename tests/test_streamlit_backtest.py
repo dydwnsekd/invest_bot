@@ -885,3 +885,55 @@ def test_streamlit_dashboard_main_routes_backtest_tab(monkeypatch: pytest.Monkey
     assert captured["settings"] is settings
     assert captured["snapshot"] is snapshot
     assert captured["symbol_lookup"] == "lookup"
+
+
+@pytest.mark.parametrize("case", ["stale", "extra", "close"])
+def test_saved_signal_alignment_failure_clears_previous_result(
+    monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    indicator = pd.DataFrame({
+        "date": ["2026-04-01", "2026-04-02", "2026-04-03"],
+        "close": [100.0, 101.0, 102.0], "ma_5": [98.0, 100.0, 101.0], "ma_20": [99.0, 99.0, 100.0],
+    })
+    saved = indicator.loc[:, ["date", "close"]].assign(signal=["buy", "hold", "sell"])
+    if case == "stale":
+        saved = saved.iloc[:2].copy()
+    elif case == "extra":
+        saved = pd.concat([saved, pd.DataFrame({"date": ["2026-04-04"], "close": [110.0], "signal": ["hold"]})], ignore_index=True)
+    else:
+        saved.loc[1, "close"] = 999.0
+    fake_st = _FakeStreamlit()
+    fake_st.session_state[BACKTEST_RESULTS_KEY] = {"previous_result": True}
+    monkeypatch.setattr(streamlit_backtest_module, "st", fake_st)
+    monkeypatch.setattr(
+        streamlit_backtest_module.DEFAULT_BACKTEST_RUNNER, "run",
+        lambda *args, **kwargs: pytest.fail("불일치 신호는 runner에 전달하면 안 됩니다."),
+    )
+    streamlit_backtest_module._run_backtest_action(
+        selected_items=[streamlit_backtest_module.ResolvedSymbol("005930", "005930", "삼성전자")],
+        selected_strategy_ids=["golden-cross"],
+        loaded_inputs={"005930": _loaded_inputs(indicator=indicator, golden_signal=saved)},
+        strategy_parameters={}, combination_settings=None,
+    )
+    assert BACKTEST_RESULTS_KEY not in fake_st.session_state
+    assert fake_st.session_state["action_message_type"] == "error"
+    assert "golden_cross_signals" in fake_st.session_state["action_message"]
+    assert "daily_prices_indicators" in fake_st.session_state["action_message"]
+    reasons = fake_st.session_state[streamlit_backtest_module.BACKTEST_BLOCKED_REASONS_KEY]
+    assert len(reasons) == 1
+    assert ("close mismatch" if case == "close" else "trading dates") in reasons[0]
+
+
+@pytest.mark.parametrize(("kind", "custom", "uses_saved"), [
+    ("valid", False, True), ("malformed", False, False),
+    ("absent", False, False), ("valid", True, False),
+])
+def test_signal_provenance_matches_actual_adapter_selection(kind: str, custom: bool, uses_saved: bool) -> None:
+    saved = None if kind == "absent" else pd.DataFrame({"unrelated": [1]})
+    if kind == "valid":
+        saved = pd.DataFrame({"date": ["2026-04-01"], "close": [100.0], "signal": ["hold"]})
+    inputs = _loaded_inputs(golden_signal=saved)
+    parameters = {"short_window": 3.0, "long_window": 7.0} if custom else streamlit_backtest_module.default_backtest_parameters("golden-cross")
+    sources = streamlit_backtest_module._build_input_sources_for_strategy("golden-cross", inputs, parameters)
+    assert sources.signal_source_dataset == ("golden_cross_signals" if uses_saved else None)
+    assert sources.signal_source_filename == (inputs.golden_cross_signal.filename if uses_saved else None)

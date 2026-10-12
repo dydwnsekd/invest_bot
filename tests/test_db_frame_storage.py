@@ -141,10 +141,17 @@ def test_db_backed_analysis_and_dashboard_flow() -> None:
     )
     report_generator.save_report("005930_20260305.csv", report)
 
+    backtest_indicator_filename = "005930_backtest_indicators.csv"
+    storage.save(
+        "daily_prices_indicators", backtest_indicator_filename,
+        signal_frame.loc[:, ["date", "close", "ma_5", "ma_20"]],
+    )
     backtest_generator = GoldenCrossBacktestGenerator(processed_storage=storage)
     backtest = backtest_generator.run_backtest(
         "005930",
-        backtest_generator.load_signal_frame(BacktestRequest(symbol="005930", source_filename="005930_20260305.csv")),
+        backtest_generator.load_signal_frame(BacktestRequest(
+            symbol="005930", source_filename="005930_20260305.csv", indicator_filename=backtest_indicator_filename,
+        )),
     )
     backtest_generator.save_trades("005930_20260305.csv", backtest.trades)
     backtest_generator.save_summary("005930_20260305.csv", backtest.summary)
