@@ -79,6 +79,7 @@ DB 문서의 구체적인 차이와 현재 확인 경로는 [개념 지도](conc
 | H-SNAPSHOT-1009 | [최신 snapshot 정렬 검증](../operations/session_reports/2026-10-09_latest_snapshot_ordering.md) | evidence | historical | 데이터·QA · G01a·QA01 구현·DB 회귀·CI 연결; 원격 CI 미실행 |
 | H-PREFLIGHT-1010 | [시작·재시작 사전검증](../operations/session_reports/2026-10-10_start_restart_preflight.md) | evidence | historical | 운영·QA · G02 실패 중단·설정 검사·fake Docker 회귀; 실제 Docker 미검증 |
 | H-BACKTEST-DATES-1010 | [백테스트 중복 거래일 검증](../operations/session_reports/2026-10-10_backtest_duplicate_dates.md) | evidence | historical | 퀀트·QA · G03 중복 차단·혼합 Timestamp 보완; 관련152·기본635 통과 |
+| H-BACKTEST-SIGNALS-1012 | [저장 신호 정합성 검증](../operations/session_reports/2026-10-12_saved_signal_alignment.md) | evidence | historical | 퀀트·QA · G04 날짜·가격 대조·지표 실제 연결·UI 차단; 관련339·기본780 통과 |
 
 ## 대체 관계와 유지 규칙
 

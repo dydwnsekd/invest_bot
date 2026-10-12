@@ -8,6 +8,8 @@ G02 기능에 연결한 10월 10일 독립 검증도 수행했다. 아래 QA01~0
 
 G03에 연결한 10월 11일 독립 검증은 혼합 Timestamp 판정 결함을 발견한 뒤 보완 코드의 재검증까지 마쳤다. G03 상태와 입력 계약은 [퀀트 역할 문서](quant.md#g03)에서 관리하며 QA01~03의 상태를 바꾸는 결과는 아니다.
 
+G04에 연결한 10월 12일 독립 검증을 완료했다. 담당 구현 종료 후 메인의 UI 연결까지 포함한 기능8파일 해시가 시작·종료에 일치하고 관련339개(기존265 + 독립74)를 새로 통과했다. QA 종료 뒤 메인의 원본 통합 관련339개·기본780개도 통과했다. G04 상태는 [퀀트 역할 문서](quant.md#g04), 증거는 [검증 기록](../session_reports/2026-10-12_saved_signal_alignment.md)에서 관리하며 QA01~03은 재개하지 않았다.
+
 | ID | 우선순위 | 작업 | 상태 |
 | --- | --- | --- | --- |
 | QA01 | P1 | SQLite·PostgreSQL 최신 정렬과 CI | 검증 대기 |
@@ -42,6 +44,8 @@ G03에 연결한 10월 11일 독립 검증은 혼합 Timestamp 판정 결함을 
 - **검증 경로:** [persistence 회귀](../../../tests/test_backtest_persistence.py), [조합](../../../tests/test_backtest_combination.py), [대시보드 백테스트](../../../tests/test_streamlit_backtest.py). 실제 생성 결과를 사용했는지 명시한다.
 
 ## 실행 기록
+
+2026-10-12 G04 최종 결과: 8파일이 manifest와 일치하는 격리본에서 기존265개·독립74개를 검증해339 passed / 26 warnings, 차단 결함 없음이다. 최초 확대 실행338 passed / 1 failed는 일반 안내 문구까지 결과 제목으로 오인한 신규 QA assertion으로, 정확한 결과 제목을 검사하도록 QA 파일만 보정해 별도339개 실행을 통과했다. 실패 로그는 보존했다. 실제 adapter·generator/CLI·임시 CSV 저장·UI action/execute/render를 사용해 날짜 집합·미세 가격 차이·양쪽 무효값·반복/MultiIndex·입력 attrs 보존·정상 체결/MDD·단일 실패의 runner/context/persistence0회·stale 결과 삭제를 확인했다. 원본 최종 관련339 passed, 기본780 passed / 2 deselected이며 기능9파일·설정4개·백업 보존도 확인했다. 실제 브라우저·운영 DB/API·배포·원격 CI·배치 전체 원자성은 미검증이다. QA01~03 상태는 유지한다. [검증 기록](../session_reports/2026-10-12_saved_signal_alignment.md).
 
 2026-10-05: 원본 main과 통합 계획을 독립적으로 읽어 세 검증 공백을 확인했다. QA 세션의 이번 검토에서는 파일 변경·테스트 실행·운영 호출을 수행하지 않았다. 세 작업은 완료된 QA 결과가 아니라 앞으로 보완할 항목이다. 진행 시 [색인의 갱신 규칙](README.md)을 따른다.
 
