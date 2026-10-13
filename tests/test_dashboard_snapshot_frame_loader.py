@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pandas as pd
 from sqlalchemy import Engine, event
 
 from invest_bot.dashboard.service import DashboardDataService
 from invest_bot.dashboard.streamlit_state import DashboardFrameLoader
 from invest_bot.db.frame_storage import DbFrameStorage
+from invest_bot.db.contracts import DatasetFrameRecord
+from invest_bot.db.repositories import frame_to_json
 from tests.helpers import init_test_db
 
 
@@ -68,3 +72,83 @@ def test_snapshot_reuses_report_and_chart_frames_without_queries_and_refreshes_n
     next_snapshot = service.build_snapshot()
     next_loader = DashboardFrameLoader(service, next_snapshot.latest_records)
     assert next_loader.load_indicator("005930").iloc[-1]["close"] == 200
+
+
+def test_summary_flow_snapshot_selection_queries_cache_and_next_render(tmp_path, monkeypatch):
+    database_url = f"sqlite:///{tmp_path / 'summary_flow.db'}"
+    init_test_db(database_url)
+    storage = DbFrameStorage(database_url)
+    service = DashboardDataService(dataset_storage=storage)
+    monkeypatch.setattr(service, "_load_symbol_name_map", lambda: {})
+    for symbol, value in (("005930", 12), ("000660", -8)):
+        storage.save("daily_prices_indicators", f"{symbol}_prices.csv", pd.DataFrame([
+            {"date": "2026-10-02", "open": 99, "high": 101, "low": 98, "close": 100, "volume": 1000},
+        ]))
+        storage.save("investor_daily", f"{symbol}_detail.csv", pd.DataFrame([{"foreign_net": 999}]))
+        storage.save("investor_daily_summary", f"{symbol}_dated.csv", pd.DataFrame([
+            {"date": "2026-10-02", "foreign_net": value},
+        ]))
+        # G01a: a newer NULL-date empty record cannot shadow the valid dated summary.
+        storage.repository.save(DatasetFrameRecord(
+            dataset="investor_daily_summary", filename=f"{symbol}_empty.csv", symbol=symbol,
+            frame_json=frame_to_json(pd.DataFrame()), row_count=0,
+            created_at=datetime(2099, 1, 1, tzinfo=UTC), as_of_date=None,
+        ))
+    selects = []
+
+    def observe(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            selects.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", observe)
+    try:
+        snapshot = service.build_snapshot()
+        assert len(selects) == 1  # symbol-name lookup stubbed; one batched snapshot SELECT
+        selects.clear()
+        loader = DashboardFrameLoader(service, snapshot.latest_records)
+        for symbol, value in (("005930", 12), ("000660", -8)):
+            frame = loader.load_professional(symbol)
+            assert frame is not None and frame.loc[0, "foreign_net"] == value
+            frame.loc[0, "foreign_net"] = -999
+            assert loader.load_professional(symbol).loc[0, "foreign_net"] == value
+        assert selects == []
+    finally:
+        event.remove(Engine, "before_cursor_execute", observe)
+
+    storage.save("investor_daily_summary", "005930_dated.csv", pd.DataFrame([
+        {"date": "2026-10-02", "foreign_net": 25},
+    ]))
+    assert loader.load_professional("005930").loc[0, "foreign_net"] == 12
+    next_snapshot = service.build_snapshot()
+    next_loader = DashboardFrameLoader(service, next_snapshot.latest_records)
+    assert next_loader.load_professional("005930").loc[0, "foreign_net"] == 25
+
+
+def test_db_mode_without_snapshot_preserves_compact_date_and_request_cache(tmp_path, monkeypatch):
+    database_url = f"sqlite:///{tmp_path / 'summary_db_mode.db'}"
+    init_test_db(database_url)
+    storage = DbFrameStorage(database_url)
+    service = DashboardDataService(dataset_storage=storage)
+    storage.save("daily_prices_indicators", "005930_prices.csv", pd.DataFrame([
+        {"date": "2026-10-02", "open": 99, "high": 101, "low": 98, "close": 100, "volume": 1000},
+    ]))
+    storage.save("investor_daily_summary", "005930_summary.csv", pd.DataFrame([
+        {"date": 20261002, "foreign_net": "0"},
+    ]))
+    selects = []
+
+    def observe(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            selects.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", observe)
+    try:
+        loader = DashboardFrameLoader(service)
+        result = loader.load_professional("005930")
+        assert result is not None and result.loc[0, "foreign_net"] == 0
+        assert len(selects) == 4  # price latest/load, missing detail, summary record
+        selects.clear()
+        assert loader.load_professional("005930").loc[0, "foreign_net"] == 0
+        assert selects == []
+    finally:
+        event.remove(Engine, "before_cursor_execute", observe)

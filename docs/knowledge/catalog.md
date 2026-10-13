@@ -26,7 +26,7 @@
 | D-ENV | [환경](../tasks/01_environment.md) | status | active | 운영 · 환경 작업 |
 | D-DATA | [수집](../tasks/02_data_collection.md) | status | active | 데이터 · 수집 작업 |
 | D-ANALYSIS | [분석](../tasks/03_analysis.md) | status | active | 퀀트 · 지표 작업 |
-| D-DASHBOARD | [대시보드](../tasks/04_dashboard.md) | status | active | 대시보드 · 현재 UI 기능; 날짜별 작업은 기록 |
+| D-DASHBOARD | [대시보드](../tasks/04_dashboard.md) | status | active | 대시보드 · 현재 UI 기능·G05a 수급 연결 검증; 날짜별 작업은 기록 |
 | D-BACKTEST | [전략·백테스트](../tasks/05_strategy_backtest.md) | status | active | 퀀트 · 구현된 전략과 백테스트 규칙 |
 | D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | plan | proposed | 거래 · 아직 구현하지 않은 주문 기능 |
 | D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 시작·재시작 사전검증, 설정 타입, 초기화 모드와 로그 |

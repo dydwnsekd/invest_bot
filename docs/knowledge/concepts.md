@@ -1,6 +1,6 @@
 # 개념과 구현 근거
 
-기준: 2026-09-17, 제품 커밋 `569cd97`. 이 페이지는 확인한 핵심 개념의 지도이며 모든 소스 코드를 설명하는 명세는 아니다. 세부 사용자 설명은 해당 주제의 가이드에 둔다.
+최초 기준: 2026-09-17, 제품 커밋 `569cd97`. 저장 신호·날짜 계약은 각 연결 문서의 이후 검증을 따르며, 차트 수급 항목은 2026-10-13 main `b9fd5da` + G05a 변경을 확인했으며, 2026-10-14 기능 단위로 main에 반영했다. 이 페이지는 확인한 핵심 개념의 지도이며 모든 소스 코드를 설명하는 명세는 아니다. 세부 사용자 설명은 해당 주제의 가이드에 둔다.
 
 ## 개념 사전
 
@@ -14,6 +14,7 @@
 | K-EQUITY | 백테스트의 일별 평가금액. 요약 MDD는 초기자산 peak와 보유 중 손실을 포함한다. 종목별 입력의 같은 거래일 중복은 [날짜 유일성 계약](../tasks/05_strategy_backtest.md#일별-입력의-날짜-유일성-2026-10-11)으로 차단한다. | [백테스트 runner](../../src/invest_bot/backtest/runner.py) | [일별 곡선·낙폭 테스트](../../tests/test_backtest_adapters_runner.py), [날짜 계약](../../tests/test_backtest_dates.py) |
 | K-MIGRATION | 스키마 변경은 Alembic으로 적용한다. 초기화의 migrate-only와 full 모드는 외부 마스터 동기화 여부가 다르다. | [초기화](../../scripts/init_db.py), [migration 실행](../../src/invest_bot/db/migrate_runtime.py) | [초기화 모드](../../tests/test_init_db_modes.py), [실제 subprocess](../../tests/test_init_db_script.py) |
 | K-DASHBOARD | 조회 화면과 명시적 실행 동작을 구분하는 Streamlit 제품 표면. 미통합 worktree 변경은 현재 기능으로 간주하지 않는다. | [대시보드 진입점](../../src/invest_bot/dashboard/streamlit_dashboard.py) | [대시보드 회귀](../../tests/test_streamlit_dashboard.py) |
+| K-CHART-FLOW | 실제 관측일별 차트 수급. 유효 detail 우선, 무효 시 summary 자체의 날짜·값을 사용하며 서로 다른 source의 빈칸을 섞지 않는다. 차트의 미관측과 실제 0, 리포트 생성기의 입력 정책을 구분한다. [현재 차트 계약](../tasks/04_dashboard.md#차트-summary-수급-연결-2026-10-13). | [chart loader](../../src/invest_bot/dashboard/streamlit_state.py), [집계·caption](../../src/invest_bot/dashboard/streamlit_charts.py) | [기능 회귀](../../tests/test_dashboard_summary_flow.py), [메인 경계 검증](../../tests/test_g05a_boundary_qa.py), [화면 검증](../tasks/04_dashboard.md#차트-summary-수급-연결-2026-10-13) |
 
 ## 관계
 
@@ -25,6 +26,8 @@
 | K-EQUITY | consumes | K-STRATEGY | 전략 신호를 체결·평가금액으로 해석 |
 | K-DASHBOARD | consumes | K-ASOF | 리포트 기준일과 해석을 표시 |
 | K-DASHBOARD | consumes | K-EQUITY | 백테스트 결과를 표시 |
+| K-CHART-FLOW | consumes | K-SNAPSHOT | 같은 조회 요청의 수급 원본을 재사용 |
+| K-DASHBOARD | consumes | K-CHART-FLOW | 가격 차트에 실제 관측일 수급과 누락 사유를 표시 |
 
 각 개념 행의 구현·검증 링크는 각각 `describes`, `verified-by` 관계를 제공한다. 문서의 ID는 [등록부](catalog.md)에서 찾는다.
 

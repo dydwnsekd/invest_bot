@@ -231,11 +231,11 @@ def aggregate_professional_chart_frame(frame: pd.DataFrame, timeframe: str) -> p
     else:
         period = normalized["date"].dt.to_period("W-FRI" if resolved_timeframe == "weekly" else "M")
         group_keys = period.astype(str)
-        aggregations: dict[str, str] = {"date": "last", "open": "first", "high": "max", "low": "min", "close": "last"}
+        aggregations = {"date": "last", "open": "first", "high": "max", "low": "min", "close": "last"}
         if "volume" in normalized.columns:
             aggregations["volume"] = "sum"
         for column in flow_series_columns(normalized):
-            aggregations[column] = "sum"
+            aggregations[column] = lambda values: values.sum(min_count=1)
         aggregated = (
             normalized.assign(_period_key=group_keys)
             .groupby("_period_key", sort=True, as_index=False)
@@ -510,7 +510,8 @@ def render_chart_selector(
     key_prefix: str,
     height: int = 280,
 ) -> None:
-    if is_professional_stock_dataset(dataset_name, frame):
+    professional_stock = is_professional_stock_dataset(dataset_name, frame)
+    if professional_stock:
         if preferred_chart_library() == "plotly" and go is not None and make_subplots is not None:
             _render_professional_chart_selector(frame, key_prefix=key_prefix, height=height)
             return
@@ -545,6 +546,8 @@ def render_chart_selector(
     st.caption(
         f"조회 기간: {range_state.dates[0].isoformat()} ~ {range_state.dates[1].isoformat()}"
     )
+    if professional_stock:
+        _render_investor_flow_caption(frame, filtered_frame)
     chart = build_chart(filtered_frame, selected_key, height=height, library=preferred_chart_library())
     if chart is None:
         st.info("선택한 차트를 그리기 위한 컬럼이 부족합니다.")
@@ -583,8 +586,7 @@ def _render_professional_chart_selector(
     if aggregated.empty:
         st.info("선택한 기간에 표시할 차트 데이터가 없습니다.")
         return
-    if not flow_series_columns(aggregated):
-        st.caption("수급 데이터 없음")
+    _render_investor_flow_caption(frame, filtered_frame)
     chart = build_professional_plotly_chart(
         aggregated,
         timeframe=timeframe_key,
@@ -594,6 +596,16 @@ def _render_professional_chart_selector(
         st.info("전문가용 차트를 그리기 위한 컬럼이 부족합니다.")
         return
     render_chart(chart, key_prefix=key_prefix)
+
+
+def _render_investor_flow_caption(frame: pd.DataFrame, filtered_frame: pd.DataFrame) -> None:
+    message = frame.attrs.get("investor_flow_message")
+    if not flow_series_columns(filtered_frame):
+        if flow_series_columns(frame):
+            message = "수급 데이터 없음: 선택한 조회 기간에는 날짜가 일치하는 수급 관측값이 없습니다."
+        st.caption(message or "수급 데이터 없음")
+    elif message:
+        st.caption(message)
 
 
 def render_range_controls(

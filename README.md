@@ -16,9 +16,13 @@
 
 ## 현재 구현 범위
 
-### 대시보드 개선 검토본 (2026-09-19)
+### 차트 summary 수급 연결 (2026-10-13 구현)
 
-현재 작업 폴더에 snapshot 재조회 축소, 화면 갱신 범위의 데이터 재사용, 백테스트 이력 UI 분리와 정기 수집 실패 표시 보완을 반영했습니다. 기본 테스트는 `390 passed, 1 deselected`이며 사용자 검토를 위해 커밋하지 않았습니다. [변경 내용과 확인 순서](docs/operations/session_reports/2026-09-19_dashboard.md)를 참고하세요.
+날짜별 상세 수급을 사용할 수 없으면 저장된 summary의 실제 관측일·순매수로 차트를 표시합니다. 누락이나 날짜 불일치는 값을 만들지 않고 이유를 안내하며, 주·월봉에서도 미관측과 실제 0을 구분합니다. 관련199개·기본832개와 가상 데이터 실제 브라우저를 검증했습니다. QA 세션은 사용량 제한으로 중단돼 메인이 경계 검증을 보완했으며 별도 독립 판정은 미완료입니다. [검증 기록](docs/tasks/04_dashboard.md#차트-summary-수급-연결-2026-10-13), [현재 개선 순서](docs/operations/improvements/README.md)를 참고하세요.
+
+2026-10-14 G05a의 코드·회귀·관련 문서를 기능 단위로 main에 반영했습니다. 커밋 범위만 격리한 재검증에서도 관련199개·기본832개가 통과했습니다.
+
+9월 snapshot 재조회 축소·frame 재사용·백테스트 이력 분리·수집 실패 표시 개선은 이후 main에 반영됐습니다. 당시 `390 passed, 1 deselected`는 해당 변경의 과거 증거이며 [9월 검증 기록](docs/operations/session_reports/2026-09-19_dashboard.md)에 남아 있습니다.
 
 ### 개선 작업 통합 진행 중 (2026-09-15)
 
@@ -249,7 +253,8 @@
   - `일봉` / `주봉` / `월봉` selector와 날짜 기준 shared x-axis hover / zoom 지원
   - 빠른 조회 기간과 직접 조회 기간을 같은 유효 기간으로 동기화
   - 가격 y축과 hover 가격은 천 단위 쉼표 형식으로 표시
-  - 기존 저장 `daily_prices_indicators` / `daily_prices` / `investor_daily`만 사용하며 새 데이터 수집은 하지 않음
+  - 기존 저장 `daily_prices_indicators` / `daily_prices` / `investor_daily` / `investor_daily_summary`를 사용하며 새 데이터 수집은 하지 않음
+  - 유효한 dated detail 우선, 무효 시 summary 자체의 실제 날짜·값 사용. source 사이의 빈 날짜·투자자 값은 섞지 않으며 누락·날짜 불일치 사유 표시
   - Plotly 미사용 환경에서는 Altair fallback 유지
 - 전략별 판단 요약 및 상태별 색상 표시
   - 전략명과 주요 판단 근거는 한글 표시
