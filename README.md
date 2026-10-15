@@ -643,6 +643,21 @@ python scripts/run_backtest.py 005930
 - 고급 전략 파라미터 튜닝(자동 탐색·최적값 추천 등)
 - 브라우저 세션을 넘어서는 사용자별 화면 설정 저장 정책
 
+### 고정 2년 snapshot의 전략·가격 수익률 비교
+
+2026-10-13에 수집한 기존16종목 history snapshot을 대상으로 7종 기본 전략을 실행하고, 같은 기간 수정종가 매수 후 보유와 비교합니다. 일반 백테스트·수집 설정은 변경하지 않습니다.
+
+```bash
+python scripts/run_backtest_comparison.py --as-of 2026-10-12 --output data/backtests/2026-10-13
+python scripts/render_backtest_comparison.py
+```
+
+첫 명령은 DB 접속이 필요하며 기존 `backtest_summaries`·`backtest_trades`에 결과를 저장합니다. 입력 파일은 `<종목>_20241013_20261013_history.csv` 지표/골든크로스, `<종목>_20241013_20261012_history.csv` 수급 summary로 고정합니다. 평가기간별 run ID·파일명은 구분하고 하나의 비교 배치 ID로 묶습니다. 전체485거래일112회와 지표 준비 이후426거래일112회를 별도 현금 시작으로 계산합니다. 두 번째 명령은 JSON·CSV를 이용해 외부 자원 없는 HTML을 생성합니다.
+
+2026-10-16 이 비교 기능의 코드·회귀·문서를 기능 단위로 main에 반영했습니다. 커밋 후보만 격리한 새 검증에서 전용11개·기본869개가 통과했고 기존 로컬 결과의 HTML 생성과 CSV 링크 대상898개를 정적으로 확인했습니다.
+
+HTML은 `data/reports/backtest-comparison-2026-10-13.html`, 거래·신호·평가금액·요약 CSV는 `data/backtests/2026-10-13/`에 생성됩니다. 같은 상대 경로 구조를 유지하면 CSV 링크가 동작합니다. 현재 결과·가정·실제 DB 실행 검증은 [비교 리포트의 검증 범위](docs/tasks/05_strategy_backtest.md#비교-리포트-검증-범위)를 참고하세요. 비용·배당0, 소수점 주식 허용이며 실제 계좌 수익률이나 배당 포함 총수익률을 비교한 것은 아닙니다.
+
 ### 9. 대시보드 실행
 
 ```powershell
