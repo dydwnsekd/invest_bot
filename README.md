@@ -658,6 +658,21 @@ python scripts/render_backtest_comparison.py
 
 HTML은 `data/reports/backtest-comparison-2026-10-13.html`, 거래·신호·평가금액·요약 CSV는 `data/backtests/2026-10-13/`에 생성됩니다. 같은 상대 경로 구조를 유지하면 CSV 링크가 동작합니다. 현재 결과·가정·실제 DB 실행 검증은 [비교 리포트의 검증 범위](docs/tasks/05_strategy_backtest.md#비교-리포트-검증-범위)를 참고하세요. 비용·배당0, 소수점 주식 허용이며 실제 계좌 수익률이나 배당 포함 총수익률을 비교한 것은 아닙니다.
 
+### 슬라이딩 윈도우·다중 전략 연구
+
+고정16종목의 최신10/13 가격·수급과 KODEX200의2년 가격 CSV를 이용합니다. 기본7전략, 신호 혼합7종, 독립 자금배분3종을 같은 입력·체결·비용 기준으로 비교합니다.
+
+```bash
+python scripts/run_rolling_backtest_research.py --cost-rate 0.001
+python scripts/render_rolling_backtest_report.py
+```
+
+기본 입력은 `data/weekly-trend/2026-10-13/`, `data/history/2026-10-13/`, 별도 `--benchmark-input data/rolling-inputs/2026-10-13/069500_prices.csv`입니다. 출력 폴더에 입력 파일을 미리 넣을 필요가 없습니다. `--output <새 폴더> --validate-inputs-only`로 날짜·관측일·중복 수급 정합성을 먼저 확인할 수 있습니다. 실제 계산은 DB/API를 호출하지 않으며, 운영 백테스트나 조합 이력 계약을 변경하지 않습니다.
+
+준비 이후427거래일에서20·60·120·240행 창을20행씩 이동합니다. 66개 창과 전체/최근5일을 별도 현금 시작으로 평가합니다. 비용은 매수·매도 각각0.10%이며 세율이 아닙니다. 겹친 창의 수익률을 연결하지 않고 길이별 분포를 제공합니다. 120행 훈련/20행 테스트의15개 비중복 테스트 블록은 선택 규칙과 블록 재시작 가정을 별도로 표시합니다.
+
+산출물은 `data/reports/rolling-mixed-backtest-2026-10-13.html`, 근거는 `data/rolling-backtests/2026-10-13/`입니다. HTML의 모든 표 제목으로 열별 오름차순·내림차순 정렬이 가능합니다. `기간별 종목 한눈에 보기`에서 기간 길이·평가 날짜·전략을 선택하고 종목명/코드를 검색하면, 같은 조건의 16종목 수익률·MDD·보유/ETF 대비 차이를 비교할 수 있습니다. 기본은 최신20거래일·모멘텀 단독이며, 종목명을 누르면 검색 가능한 종목별 상세로 이동합니다. 외부 자원 없이 HTML만 열어도 탐색 기능이 작동합니다. 전체 입력 snapshot·신호·거래·주요 구간 일별 평가금액을 함께 보존합니다. [실행 검증과 한계](docs/tasks/05_strategy_backtest.md#슬라이딩-연구-검증-범위)를 참고하세요. G08c 대시보드 조합 설정 저장·재로드는 이 별도 CSV 연구와 구분하며 대기 상태를 유지합니다.
+
 ### 9. 대시보드 실행
 
 ```powershell

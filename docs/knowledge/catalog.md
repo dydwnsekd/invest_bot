@@ -27,7 +27,7 @@
 | D-DATA | [수집](../tasks/02_data_collection.md) | status | active | 데이터 · 수집 작업·명시적 기간 보충 수집 검증 |
 | D-ANALYSIS | [분석](../tasks/03_analysis.md) | status | active | 퀀트 · 지표 작업 |
 | D-DASHBOARD | [대시보드](../tasks/04_dashboard.md) | status | active | 대시보드 · 현재 UI 기능·G05a 수급 연결 검증; 날짜별 작업은 기록 |
-| D-BACKTEST | [전략·백테스트](../tasks/05_strategy_backtest.md) | status | active | 퀀트 · 구현된 전략과 백테스트 규칙·매수 후 보유 비교 |
+| D-BACKTEST | [전략·백테스트](../tasks/05_strategy_backtest.md) | status | active | 퀀트 · 구현된 전략과 백테스트 규칙·매수 후 보유 비교·슬라이딩 혼합 연구 |
 | D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | plan | proposed | 거래 · 아직 구현하지 않은 주문 기능 |
 | D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 시작·재시작 사전검증, 설정 타입, 초기화 모드와 로그 |
 | D-SESSIONS | [개선 작업 추적](../operations/improvement_sessions_2026-09-13.md) | status | active | 통합 · 역할별 단일 작업·순차 실행 |
