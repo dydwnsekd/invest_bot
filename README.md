@@ -337,6 +337,10 @@ invest_bot/
 
 실제 설정 파일은 `.gitignore`에 포함되어 있습니다.
 
+Git 제외 규칙은 `.env` 변형·실행 설정의 로컬 복사본, 인증 토큰 캐시·Streamlit secrets·개인 키, 로컬 DB·덤프·백업, 실행 기록·로그와 캡처 이미지를 포함합니다. `data/` 아래 원본 데이터·백테스트 CSV/JSON·생성 HTML도 제외합니다. 소스·테스트·설정 예시와 `.streamlit/config.toml`은 계속 관리합니다.
+
+캐시나 결과의 저장 경로를 변경하면 `git check-ignore -v --no-index <파일 경로>`로 제외 여부를 확인합니다. `.gitignore`는 이미 추적 중인 파일이나 과거 커밋을 제거하지 않습니다.
+
 DB 접근 정보와 KIS API 키/시크릿은 `config/app.yaml` 또는 런타임 환경변수로 관리합니다.
 같은 항목이 둘 다 있으면 `INVEST_BOT_*` 환경변수가 `config/app.yaml`보다 우선합니다.
 Docker Compose는 로컬 `config/` 디렉터리를 컨테이너에 read-only로 마운트합니다. `.dockerignore`는 `.env`, 실제 `config/app.yaml`, `config/kis_credentials.yaml`, `config/collection_schedule.yaml`을 빌드에서 제외하고 예시 설정 파일은 포함합니다. 제외 규칙 변경은 다음 이미지 빌드부터 적용됩니다.

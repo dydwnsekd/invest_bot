@@ -148,6 +148,89 @@ config/app.yaml
 config/kis_credentials.yaml
 config/collection_schedule.yaml
 
+# Local environment variants; keep shareable configuration templates
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
+/config/app.*.yaml
+/config/app.*.yml
+/config/app.yaml.*
+/config/kis_credentials*.yaml
+/config/kis_credentials*.yml
+/config/kis_credentials.yaml.*
+/config/collection_schedule.*.yaml
+/config/collection_schedule.*.yml
+/config/collection_schedule.yaml.*
+!/config/*.example
+!/config/*.sample
+!/config/*.template
+
+# Authentication caches and private credentials
+kis_token*.json
+access_token*.json
+token_cache*.json
+/.streamlit/secrets.toml
+/.streamlit/secrets.*.toml
+/.aws/
+/.ssh/
+/secrets/
+/credentials/
+/.codex/auth.json
+/.codex/sessions/
+/.codex/log/
+/.codex/state*.sqlite*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local database files, sidecars and compressed database exports
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.dump
+*.pgdump
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+*.sql.zst
+/backup/
+/backups/
+/dumps/
+
+# Editor backups can retain credentials removed from the original file
+*~
+*.bak
+*.backup
+*.orig
+*.rej
+*.swp
+*.swo
+
+# Local execution state and rotated logs
+/.runtime/
+/.omx/
+/logs/
+*.log.*
+
+# Local screenshots and raster images (case-insensitive extensions)
+*.[pP][nN][gG]
+*.[jJ][pP][gG]
+*.[jJ][pP][eE][gG]
+*.[gG][iI][fF]
+*.[wW][eE][bB][pP]
+*.[bB][mM][pP]
+*.[tT][iI][fF]
+*.[tT][iI][fF][fF]
+*.[hH][eE][iI][cC]
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -213,6 +296,13 @@ __marimo__/
 # Local pytest temp artifacts
 pytest-cache-files-*/
 data/
+
+# Reports generated during the 2026-10-13 session
+/docs/operations/session_reports/2026-10-13_backtest_comparison.md
+/docs/operations/session_reports/2026-10-13_chart_summary_flow.md
+/docs/operations/session_reports/2026-10-13_history_backfill.md
+/docs/operations/session_reports/2026-10-13_rolling_mixed_backtest.md
+
 /.docker/
 /.idea/
 
