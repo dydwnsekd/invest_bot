@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview, TestReportPreview
+from invest_bot.dashboard.data_status import WatchlistDataStatus, build_snapshot_data_statuses, format_status_dates
 from invest_bot.dashboard.streamlit_formatters import (
     compact_datetime,
     format_symbol_display,
@@ -23,6 +24,7 @@ class OverviewDataStatus:
     detail: str
     report_date: date | None
     signal_date: date | None
+    symbol_statuses: tuple[WatchlistDataStatus, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +53,10 @@ def render_overview_tab(
     ]
     report_rows = collect_latest_rows(report_previews, read_preview_frame=read_preview_frame)
     signal_rows = collect_latest_rows(signal_previews, read_preview_frame=read_preview_frame)
-    trust_status = build_overview_trust_status(report_rows, signal_rows, test_report)
+    symbol_statuses = build_snapshot_data_statuses(service, snapshot, read_preview_frame=read_preview_frame)
+    trust_status = build_overview_trust_status(
+        report_rows, signal_rows, test_report, symbol_statuses=symbol_statuses,
+    )
 
     render_overview_trust_status(
         trust_status,
@@ -63,7 +68,7 @@ def render_overview_tab(
     top_left, top_right = st.columns([1.35, 1], gap="large")
 
     with top_left:
-        render_today_briefing(report_rows, signal_rows, service=service)
+        render_today_briefing(report_rows, signal_rows, service=service, data_status=trust_status.data_status)
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
         render_watch_targets(report_rows, signal_rows, service=service)
 
@@ -113,12 +118,29 @@ def build_overview_trust_status(
     test_report: TestReportPreview | None,
     *,
     today: date | None = None,
+    symbol_statuses: list[WatchlistDataStatus] | None = None,
 ) -> OverviewTrustStatus:
     report_date = latest_row_date(report_rows)
     signal_date = latest_row_date(signal_rows)
     reference_today = today or date.today()
     latest_expected_date = latest_weekday(reference_today)
     data_status = build_overview_data_status(report_date, signal_date, latest_expected_date=latest_expected_date)
+    if symbol_statuses:
+        attention = [status for status in symbol_statuses if status.needs_update]
+        if attention:
+            priority = {"데이터 갱신 필요": 0, "기준일 불일치": 1, "분석 갱신 필요": 2}
+            primary = min(attention, key=lambda status: priority.get(status.label, 3))
+            detail = primary.detail + " 대상 종목: " + ", ".join(
+                f"{status.symbol}({status.label})" for status in attention
+            )
+            data_status = OverviewDataStatus(
+                primary.label, detail, report_date, signal_date, tuple(symbol_statuses),
+            )
+        else:
+            data_status = OverviewDataStatus(
+                "기준일 확인됨", "가격·수급 원본과 종목별 분석·신호·리포트 기준일이 확인되었습니다.",
+                report_date, signal_date, tuple(symbol_statuses),
+            )
 
     if test_report and test_report.failed:
         detail = "저장된 테스트 결과에 실패 항목이 있습니다. 투자 판단 전에 시스템 검증을 확인해 주세요."
@@ -213,8 +235,13 @@ def render_overview_trust_status(
         else:
             st.warning(f"데이터 확인 필요 · {status.detail}")
 
+        if status.data_status.symbol_statuses:
+            with st.expander("종목별 원본·판단 기준일"):
+                for symbol_status in status.data_status.symbol_statuses:
+                    st.caption(f"{symbol_status.symbol} · {symbol_status.label} · {format_status_dates(symbol_status)}")
+
         status_columns = st.columns(3)
-        status_columns[0].metric("시장 기준일", format_market_reference_date(status.data_status))
+        status_columns[0].metric("판단 기준일", format_market_reference_date(status.data_status))
         render_overview_timestamp_metric(
             status_columns[1], "마지막 수집 완료", format_collection_finished_at(schedule_status)
         )
@@ -282,7 +309,7 @@ def compact_trust_label(label: str) -> str:
     }.get(label, label)
 
 
-def render_today_briefing(report_rows, signal_rows, *, service: DashboardDataService) -> None:
+def render_today_briefing(report_rows, signal_rows, *, service: DashboardDataService, data_status=None) -> None:
     with st.container(border=True):
         st.markdown('<div class="eyebrow inline-eyebrow">오늘의 투자 브리핑</div>', unsafe_allow_html=True)
         st.markdown('<h3 class="section-title">먼저 확인할 종목과 판단 근거</h3>', unsafe_allow_html=True)
@@ -292,7 +319,7 @@ def render_today_briefing(report_rows, signal_rows, *, service: DashboardDataSer
         )
 
         if not report_rows:
-            st.info("아직 투자 리포트가 없습니다. 데이터 갱신에서 전체 파이프라인을 실행하면 브리핑이 채워집니다.")
+            st.info(data_status.detail if data_status and data_status.symbol_statuses else "아직 투자 리포트가 없습니다. 데이터 갱신에서 필요한 원본과 분석 단계를 확인해 주세요.")
             return
 
         primary_preview, primary_row = report_rows[0]
@@ -422,9 +449,11 @@ def build_overview_next_actions(
         actions.append(("시스템 검증", "테스트 실패가 있으니 시스템 검증에서 실패 항목을 먼저 확인하세요.", "시스템 검증"))
 
     if data_needs_attention:
-        actions.append(("데이터 갱신", trust_status.data_status.detail, "데이터 갱신"))
+        labels = {status.label for status in trust_status.data_status.symbol_statuses if status.needs_update}
+        title = "분석 갱신" if labels == {"분석 갱신 필요"} else "기준일 확인" if labels == {"기준일 불일치"} else "데이터 갱신"
+        actions.append((title, trust_status.data_status.detail, "데이터 갱신"))
     elif schedule_needs_attention:
-        actions.append(("데이터 갱신", "정기 수집 로그가 없으면 데이터 갱신에서 수집과 리포트 생성을 실행하세요.", "데이터 갱신"))
+        actions.append(("데이터 갱신", "정기 수집 로그가 없습니다. 데이터 갱신에서 정기 수집 설정과 로그 경로를 확인하세요.", "데이터 갱신"))
     elif schedule_failed:
         actions.append(("수집 실패 확인", "최근 정기 수집에 실패가 있어 데이터 갱신에서 실패 종목을 다시 실행하세요.", "데이터 갱신"))
     elif not tests_failed:

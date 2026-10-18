@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
 from datetime import date, datetime, timedelta
 from html import escape
 from pathlib import Path
@@ -13,6 +12,18 @@ import streamlit as st
 from invest_bot.config.settings import AppSettings
 from invest_bot.dashboard.report_favorites import ReportFavoritesStore
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.dashboard.data_status import (
+    WatchlistDataStatus,
+    WatchlistProcessingTimes,
+    _dataset_root,
+    _latest_expected_market_date,
+    _load_latest_dataset_date,
+    _load_latest_dataset_frame,
+    build_watchlist_data_status,
+    build_watchlist_data_statuses,
+    build_watchlist_processing_times,
+    build_report_data_status,
+)
 from invest_bot.dashboard.streamlit_formatters import compact_datetime
 from invest_bot.dashboard.streamlit_reports import (
     build_candidate_pending_selection_key,
@@ -26,8 +37,6 @@ from invest_bot.dashboard.streamlit_reports import (
     selected_entry_key_index,
     sort_report_entries,
 )
-from invest_bot.db.contracts import DatasetFrameRecord
-from invest_bot.db.repositories import frame_from_json, normalize_symbol
 from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
@@ -38,30 +47,6 @@ WATCHLIST_SELECTION_KEY = "watchlist_selected_entry_key"
 WATCHLIST_SORT_OPTION_KEY = "watchlist_sort_option"
 WATCHLIST_BOOTSTRAP_DAYS = 365
 LOGGER = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class WatchlistDataStatus:
-    symbol: str
-    label: str
-    detail: str
-    daily_date: date | None
-    investor_date: date | None
-    indicator_date: date | None
-    signal_date: date | None
-    report_date: date | None
-    collection_created_at: datetime | None = None
-    analysis_created_at: datetime | None = None
-
-    @property
-    def needs_update(self) -> bool:
-        return self.label != "최신"
-
-
-@dataclass(frozen=True, slots=True)
-class WatchlistProcessingTimes:
-    collection_created_at: datetime | None = None
-    analysis_created_at: datetime | None = None
 
 
 def render_watchlist_tab(
@@ -169,6 +154,7 @@ def render_watchlist_tab(
         load_professional_frame_for_symbol=load_professional_frame_for_symbol,
         favorites_store=favorites_store,
         is_favorite=bool(selected_entry["is_favorite"]),
+        data_status=build_report_data_status(service, snapshot, str(selected_entry["symbol"]), selected_entry["frame"].iloc[-1], read_preview_frame=read_preview_frame),
     )
 
 
@@ -246,149 +232,12 @@ def _open_data_refresh_for_symbols(symbols: Sequence[str]) -> None:
     st.rerun()
 
 
-def build_watchlist_data_statuses(
-    service: DashboardDataService,
-    favorite_symbols: set[str],
-    *,
-    today: date | None = None,
-    processing_times: Mapping[str, WatchlistProcessingTimes] | None = None,
-    latest_records: Sequence[DatasetFrameRecord] | None = None,
-) -> list[WatchlistDataStatus]:
-    target_date = _latest_expected_market_date(today or date.today())
-    snapshot_records = (
-        {(record.dataset, record.symbol): record for record in latest_records}
-        if latest_records is not None else None
-    )
-    return [
-        build_watchlist_data_status(
-            service,
-            symbol,
-            target_date=target_date,
-            processing_times=(processing_times or {}).get(symbol),
-            snapshot_records=snapshot_records,
-        )
-        for symbol in sorted(favorite_symbols)
-    ]
-
-
-def build_watchlist_data_status(
-    service: DashboardDataService,
-    symbol: str,
-    *,
-    target_date: date,
-    processing_times: WatchlistProcessingTimes | None = None,
-    snapshot_records: Mapping[tuple[str, str], DatasetFrameRecord] | None = None,
-) -> WatchlistDataStatus:
-    processing_times = processing_times or WatchlistProcessingTimes()
-    daily_date = _load_latest_dataset_date(
-        service, "daily_prices", symbol, ("trade_date", "stck_bsop_date", "date"), snapshot_records=snapshot_records,
-    )
-    investor_date = _load_latest_dataset_date(
-        service,
-        "investor_daily_summary",
-        symbol,
-        ("trade_date", "stck_bsop_date", "date"),
-        snapshot_records=snapshot_records,
-    )
-    indicator_date = _load_latest_dataset_date(
-        service, "daily_prices_indicators", symbol, ("date", "trade_date", "stck_bsop_date"), snapshot_records=snapshot_records,
-    )
-    signal_date = _load_latest_dataset_date(
-        service, "golden_cross_signals", symbol, ("date", "trade_date", "stck_bsop_date"), snapshot_records=snapshot_records,
-    )
-    report_date = _load_latest_dataset_date(service, "market_reports", symbol, ("date",), snapshot_records=snapshot_records)
-
-    missing_sources = [label for label, value in (("가격", daily_date), ("수급", investor_date)) if value is None]
-    stale_sources = [
-        label
-        for label, value in (("가격", daily_date), ("수급", investor_date))
-        if value is not None and value < target_date
-    ]
-    if missing_sources or stale_sources:
-        affected = ", ".join([*missing_sources, *stale_sources])
-        return WatchlistDataStatus(
-            symbol=symbol,
-            label="데이터 갱신 필요",
-            detail=f"{affected} 데이터가 최신 영업일({target_date.isoformat()}) 기준으로 준비되지 않았습니다.",
-            daily_date=daily_date,
-            investor_date=investor_date,
-            indicator_date=indicator_date,
-            signal_date=signal_date,
-            report_date=report_date,
-            collection_created_at=processing_times.collection_created_at,
-            analysis_created_at=processing_times.analysis_created_at,
-        )
-
-    assert daily_date is not None
-    assert investor_date is not None
-    analysis_reference_date = max(daily_date, investor_date)
-    outdated_outputs = [
-        label
-        for label, value, reference_date in (
-            ("분석", indicator_date, daily_date),
-            ("신호", signal_date, daily_date),
-            ("리포트", report_date, analysis_reference_date),
-        )
-        if value is None or value < reference_date
-    ]
-    if outdated_outputs:
-        return WatchlistDataStatus(
-            symbol=symbol,
-            label="분석 갱신 필요",
-            detail=f"가격·수급 데이터는 최신입니다. {', '.join(outdated_outputs)} 결과를 다시 생성하세요.",
-            daily_date=daily_date,
-            investor_date=investor_date,
-            indicator_date=indicator_date,
-            signal_date=signal_date,
-            report_date=report_date,
-            collection_created_at=processing_times.collection_created_at,
-            analysis_created_at=processing_times.analysis_created_at,
-        )
-
-    return WatchlistDataStatus(
-        symbol=symbol,
-        label="최신",
-        detail=f"가격·수급·분석·신호·리포트가 최신 영업일({target_date.isoformat()}) 기준으로 준비되었습니다.",
-        daily_date=daily_date,
-        investor_date=investor_date,
-        indicator_date=indicator_date,
-        signal_date=signal_date,
-        report_date=report_date,
-        collection_created_at=processing_times.collection_created_at,
-        analysis_created_at=processing_times.analysis_created_at,
-    )
-
-
 def _format_status_date(value: date | None) -> str:
     return value.isoformat() if value is not None else "없음"
 
 
 def _format_status_timestamp(value: datetime | None) -> str:
     return compact_datetime(value.isoformat() if value is not None else "")
-
-
-def build_watchlist_processing_times(snapshot, favorite_symbols: set[str]) -> dict[str, WatchlistProcessingTimes]:
-    collection_datasets = {"daily_prices", "investor_daily", "investor_daily_summary"}
-    analysis_datasets = {"daily_prices_indicators", "golden_cross_signals", "market_reports"}
-    collection_times: dict[str, datetime] = {}
-    analysis_times: dict[str, datetime] = {}
-
-    for preview in getattr(snapshot, "raw_previews", []):
-        if preview.symbol not in favorite_symbols or preview.name not in collection_datasets or preview.created_at is None:
-            continue
-        collection_times[preview.symbol] = max(collection_times.get(preview.symbol, preview.created_at), preview.created_at)
-    for preview in getattr(snapshot, "processed_previews", []):
-        if preview.symbol not in favorite_symbols or preview.name not in analysis_datasets or preview.created_at is None:
-            continue
-        analysis_times[preview.symbol] = max(analysis_times.get(preview.symbol, preview.created_at), preview.created_at)
-
-    return {
-        symbol: WatchlistProcessingTimes(
-            collection_created_at=collection_times.get(symbol),
-            analysis_created_at=analysis_times.get(symbol),
-        )
-        for symbol in favorite_symbols
-    }
 
 
 def render_watchlist_overview(
@@ -532,12 +381,6 @@ def refresh_favorite_symbols_if_needed(
     }
 
 
-def _latest_expected_market_date(today: date) -> date:
-    if today.weekday() < 5:
-        return today
-    return today - timedelta(days=today.weekday() - 4)
-
-
 def _resolve_collection_window(
     *,
     target_date: date,
@@ -606,56 +449,6 @@ def _should_save_merged_daily_snapshot(existing_daily_frame: pd.DataFrame | None
     return start_date > _resolve_first_daily_date(existing_daily_frame)
 
 
-def _load_latest_dataset_date(
-    service: DashboardDataService,
-    dataset: str,
-    symbol: str,
-    date_columns: Sequence[str],
-    *,
-    snapshot_records: Mapping[tuple[str, str], DatasetFrameRecord] | None = None,
-) -> date | None:
-    if snapshot_records is None:
-        frame = _load_latest_dataset_frame(service, dataset, symbol)
-    else:
-        record = snapshot_records.get((dataset, normalize_symbol(symbol)))
-        frame = frame_from_json(record.frame_json) if record is not None else None
-    if frame is None or frame.empty:
-        return None
-
-    for column in date_columns:
-        if column not in frame.columns:
-            continue
-        parsed = pd.to_datetime(frame[column], errors="coerce")
-        parsed = parsed.dropna()
-        if parsed.empty:
-            continue
-        return parsed.max().date()
-    return None
-
-
-def _load_latest_dataset_frame(service: DashboardDataService, dataset: str, symbol: str) -> pd.DataFrame | None:
-    storage = service.get_dataset_storage()
-    if storage is not None:
-        filename = storage.latest_filename(dataset, symbol)
-        if filename is None:
-            return None
-        try:
-            return storage.load(dataset, filename)
-        except FileNotFoundError:
-            return None
-
-    dataset_root = _dataset_root(service, dataset)
-    if not dataset_root.exists():
-        return None
-    matches = sorted(dataset_root.glob(f"{symbol}_*.csv"), key=lambda item: item.stat().st_mtime, reverse=True)
-    if not matches:
-        return None
-    try:
-        return pd.read_csv(matches[0])
-    except (FileNotFoundError, pd.errors.EmptyDataError):
-        return pd.DataFrame()
-
-
 def _merge_daily_price_frames(existing_frame: pd.DataFrame, new_frame: pd.DataFrame) -> pd.DataFrame:
     combined = pd.concat([existing_frame.copy(), new_frame.copy()], ignore_index=True)
     date_column = _resolve_daily_date_column(combined)
@@ -703,9 +496,3 @@ def _build_daily_price_summary_frame(symbol: str, start_date: date, end_date: da
             }
         ]
     )
-
-
-def _dataset_root(service: DashboardDataService, dataset: str) -> Path:
-    if dataset in service.RAW_DATASETS:
-        return service.raw_root / dataset
-    return service.processed_root / dataset

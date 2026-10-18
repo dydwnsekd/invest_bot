@@ -8,6 +8,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from invest_bot.dashboard.report_favorites import ReportFavoritesStore
+from invest_bot.dashboard.data_status import WatchlistDataStatus, build_report_data_status, format_status_dates
 from invest_bot.dashboard.service import DashboardDataService, DatasetPreview
 from invest_bot.dashboard.streamlit_charts import render_chart_selector
 from invest_bot.dashboard.streamlit_formatters import (
@@ -141,6 +142,7 @@ def render_reports_tab(
         load_professional_frame_for_symbol=load_professional_frame_for_symbol,
         favorites_store=favorites_store,
         is_favorite=bool(selected_entry["is_favorite"]),
+        data_status=build_report_data_status(service, snapshot, str(selected_entry["symbol"]), selected_entry["frame"].iloc[-1], read_preview_frame=read_preview_frame) if service is not None else None,
     )
 
 
@@ -326,7 +328,13 @@ def resolve_report_selection_from_state(
     if pending_entry_key is not None and get_report_entry_by_key(report_entries, str(pending_entry_key)) is not None:
         st.session_state[selection_key] = str(pending_entry_key)
         st.session_state[build_candidate_scroll_key(selection_key)] = True
-    return resolve_selected_report_key(report_entries, st.session_state.get(selection_key))
+    # Streamlit removes inactive widgets; keep the selected identity separately.
+    saved_key = f"{selection_key}__saved"
+    current_key = st.session_state.get(selection_key, st.session_state.get(saved_key))
+    resolved_key = resolve_selected_report_key(report_entries, current_key)
+    if resolved_key is not None:
+        st.session_state[saved_key] = resolved_key
+    return resolved_key
 
 
 def resolve_selected_report_entry(
@@ -519,6 +527,7 @@ def render_market_report_card(
     load_professional_frame_for_symbol: Callable[[str], pd.DataFrame | None] | None = None,
     favorites_store: ReportFavoritesStore | None = None,
     is_favorite: bool = False,
+    data_status: WatchlistDataStatus | None = None,
 ) -> None:
     frame = frame if frame is not None else read_preview_frame(preview)
     if frame.empty:
@@ -550,7 +559,7 @@ def render_market_report_card(
               <div class="report-decision-grid">
                 <div><span>전략 합의도</span><strong>{escape(decision_context['agreement_label'])}</strong><p>{escape(decision_context['agreement_detail'])}</p></div>
                 <div><span>판단 데이터</span><strong>{escape(decision_context['data_detail'])}</strong><p>수익 가능성 신뢰도가 아닌, 표시 데이터의 충족 상태입니다.</p></div>
-                <div><span>기준일</span><strong>{escape(format_report_date(row.get("date", "")) or "정보 없음")}</strong><p>기준일이 오래되면 데이터 갱신 후 다시 확인합니다.</p></div>
+                <div><span>판단 기준일</span><strong>{escape(format_report_date(row.get("date", "")) or "정보 없음")}</strong><p>{escape(data_status.detail if data_status else "이 리포트에 저장된 판단 날짜입니다. 원본과 분석 기준일을 함께 확인하세요.")}</p></div>
               </div>
               <div class="report-focus-meta">
                 <div><span>추세</span><strong>{escape(state_label(service, str(row.get("trend_state", "unknown"))))}</strong></div>
@@ -570,6 +579,13 @@ def render_market_report_card(
             )
             st.session_state["action_message_type"] = "success"
             st.rerun()
+
+        if data_status is not None:
+            st.caption(format_status_dates(data_status))
+            if data_status.needs_update:
+                st.warning(f"{data_status.label} · {data_status.detail}")
+            else:
+                st.info(data_status.detail)
 
         detail_columns = st.columns(4)
         detail_columns[0].metric("종가", format_number(row.get("close")))

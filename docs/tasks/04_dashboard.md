@@ -4,9 +4,27 @@
 
 수집, 분석, 신호, 리포트, 테스트 상태를 브라우저에서 빠르게 확인하고 필요한 작업을 직접 실행할 수 있는 대시보드를 제공한다.
 
-## 다음 개선 계획 (2026-10-17 확인)
+## 다음 개선 계획 (2026-10-18 확인)
 
-현재 순서는 [개선 작업 색인](../operations/improvements/README.md)을 따른다. 최신 수급 NULL 정렬은 구현·로컬 검증을 통과했고 원격 CI 확인이 남았다. G05a 차트 수급 연결은 아래와 같이 완료했으며 다음 후보는 G05b 원본과 판단 기준일 안내다. 전송 안내·대비·전체 배치는 아직 계획이며 각각 검증한다. [10월 5일 순차 계획](../operations/improvement_plan_2026-10-05.md)은 최초 검토 배경이다.
+현재 순서는 [개선 작업 색인](../operations/improvements/README.md)을 따른다. 최신 수급 NULL 정렬은 구현·로컬 검증을 통과했고 원격 CI 확인이 남았다. G05a는 main에 반영됐으며 G05b는 아래 작업 트리에서 구현·검증을 완료한 커밋 전 상태다. 다음 후보는 G06a 생성·전송 범위 안내, 이후 G06b 상태 텍스트 대비다. 전송 안내·대비·전체 배치는 각각 별도로 검증한다. [10월 5일 순차 계획](../operations/improvement_plan_2026-10-05.md)은 최초 검토 배경이다.
+
+## 원본·판단 기준일과 다음 행동 (2026-10-18)
+
+main `63bba25` 기준 작업 트리에 G05b 코드·회귀6파일을 반영했다. 홈·투자 리포트·관심종목이 [공통 상태 계산](../../src/invest_bot/dashboard/data_status.py)을 사용한다. 원본 가격·수급 관측일, 분석 지표·전략 신호·판단 리포트 날짜, 수집·분석 저장 시각을 구분한다. 선택한 리포트의 판단일을 최신 원본일로 바꾸지 않으며 홈은 종목별 상태를 집계해 다른 종목의 최신 날짜로 지연을 숨기지 않는다.
+
+원본이 최신이고 분석만 이전이면 분석 갱신을 안내한다. 원본 누락과 지연은 각 사유를 표시하고, 원본이 확인 기준일보다 앞서거나 판단이 해당 원본보다 앞서면 기준일 불일치를 안내한다. 다음 행동 버튼은 필요한 화면으로만 이동한다. 리포트 검색·선택·탭 왕복은 선택 식별자를 세션에 보존하고 현재 위젯 값을 우선하며 수집·분석·생성·전송을 실행하지 않는다. DB snapshot의 `latest_records=()`는 빈 상태 자체를 신뢰하고, `None`인 기존 파일 경로와 구분한다.
+
+검증은 실제 설정·운영 데이터를 포함하지 않은 격리 후보에서 수행했다. 기준 코드 기본893 passed / 2 deselected를 확인한 뒤 신규 초기 회귀는6 failed / 1 passed로 차이를 재현했다. [신규25개 회귀](../../tests/test_dashboard_data_status.py)와 기존 G05a·snapshot·대시보드를 포함한 관련220 passed, 최종 후보 기본918 passed / 2 deselected / 32 warnings다. 경고32개는 기준 코드에도 있던 경고다.
+
+- 관련 명령: `.venv/bin/python -B -m pytest tests/test_dashboard_data_status.py tests/test_streamlit_dashboard.py tests/test_watchlist_snapshot_queries.py tests/test_dashboard_snapshot_frame_loader.py tests/test_dashboard_summary_flow.py tests/test_g05a_boundary_qa.py -q --tb=short`.
+- 기본 명령: `.venv/bin/python -B scripts/run_tests.py --suite default -q --tb=short`. 실제 실행은 격리 후보 cwd·정리한 환경 변수에서 원본의 venv Python을 사용했다.
+- 실제 renderer: [가상 fixture](../../tests/g05b_dashboard_fixture.py)를 사용해 홈·리포트·관심종목 각각 분석 지연·원본 누락·판단일 불일치·최신의12사례를 AppTest로 확인했다. 검색·선택·탭 왕복에서 발견한 리포트 선택 초기화도 보완해 재검증했다. 실행·전송·backing storage 우회 호출은0회다.
+- 조회 경계: 실제 임시 SQLite에서 snapshot을 만든 뒤 세 화면의 상태 계산 추가 SELECT0회를 측정했다. 전체 화면 rerun 조회0회나 기존 파일 경로의 추가 파일 읽기0회를 의미하지 않는다.
+- 실제 브라우저: 같은 가상 fixture와 실제 renderer·CSS로 1920×958·390×844를 확인했다. 홈의 판단일10/01·원본10/02, 선택 리포트 날짜 보존, 누락 수급·미래 판단일의 사유가 표시됐다. 좁은 화면의 새 날짜·사유는 줄바꿈됐고 페이지 가로 넘침은 없었다. 임시 앱·브라우저는 검증 후 종료했다.
+- 리뷰·보존: 기존 대시보드 하위 에이전트를 순차 재사용한 읽기 전용 리뷰에서 차단 결함은 없었다. 별도 QA 세션 종합 판정과 구분한다. 원본 실제 설정·백업·관련 없는 추적 파일과 HEAD·Git index를 보존했다. commit·push·운영 재시작은 수행하지 않았다.
+- 문서: 관리 Markdown57개·로컬 참조649개·문서 ID57개·개념 ID12개·관계14개의 누락·중복·잘못된 연결은0개다. Git index에 추가하지 않은 신규 Python3파일도 이번 작업 트리 후보에 포함해 참조를 검사했다. Python AST와 공백 검사도 통과했다.
+
+운영 DB·실제 API·배포·원격 CI는 미검증이다. 평일을 사용하는 기존 기준일 계산과 날짜 컬럼 우선순위·파일 읽기 정책은 유지했으며 휴장일·장중 정책으로 확대하지 않았다. 가상 홈의 두 번째 후보 카드에서 확인된 기존 HTML 노출은 변경 전 함수와 동일하며 G06c에서 재검토한다. 기존 모바일 차트 범례 문제는 G08d에 남긴다. [G05b 상태](../operations/improvements/dashboard.md#g05b)와 [QA02 잔여 범위](../operations/improvements/qa.md#qa02)를 참고한다.
 
 ## 차트 summary 수급 연결 (2026-10-13)
 
