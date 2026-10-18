@@ -17,6 +17,9 @@
 | 화면과 사용자 동작의 설계 기준 | [DESIGN](../DESIGN.md) |
 | 지표·리포트 값의 의미 | [지표 가이드](analysis/indicator_guide.md), [리포트 가이드](analysis/market_report_guide.md) |
 | 구현된 전략과 백테스트 규칙 | [전략·백테스트 현황](tasks/05_strategy_backtest.md) |
+| 명시적 기간의 가격·수급 보충 수집 | [장기 보충 수집과 검증 범위](tasks/02_data_collection.md#장기-보충-수집-2026-10-13) |
+| 전략별 매수 후 보유 비교·슬라이딩 혼합 연구 | [현재 백테스트 workflow](tasks/05_strategy_backtest.md#현재-백테스트-workflow) |
+| 민감 설정·로컬 산출물의 Git 제외 | [Git 관리 경계](tasks/07_operations_docs.md#git-관리-경계-2026-10-17) |
 | DB의 현재 구현과 문서 차이 | [개념 지도: 저장 경계](knowledge/concepts.md#저장-경계와-알려진-문서-차이) |
 | 테스트 실행 방법 | [Python·테스트 가이드](operations/python_runtime_and_test_guide.md) |
 | 초기화 모드와 운영 로그 | [운영 가이드](tasks/07_operations_docs.md) |
@@ -28,6 +31,12 @@
 처음 들어오면 프로젝트 README → 이 문서 → 개념 지도 → 담당 주제의 문서 순서로 읽는다. 작업 질문·재개 시 개선 작업 색인과 담당 역할 문서에서 우선순위·상태·완료 조건을 먼저 읽는다. task 요약의 기존 완료 범위와 관련 코드·테스트를 대조한다.
 
 등록부에서 `proposed`인 문서는 아직 구현되지 않은 내용을 포함한다. `historical` 문서의 미완료 목록은 최신 task를 덮어쓰지 않는다. `review-required` 문서는 알려진 차이를 먼저 읽는다.
+
+## 현재 기준 (2026-10-17)
+
+문서 갱신의 기준 HEAD는 main `efdc607`이다. 최근 기능별 커밋과 검증 범위는 [현재 작업 요약](tasks/00_summary.md#현재-상태-2026-10-17), 다음 기능은 [개선 작업 색인](operations/improvements/README.md)을 따른다. 보충 수집 CLI와 슬라이딩 혼합 연구의 반영을 일반 수집 G08a나 대시보드 조합 재로드 G08c의 완료로 해석하지 않는다.
+
+테스트 수치·운영 데이터·브라우저·배포 확인은 기록된 날짜와 범위에 한정한다. HTML 안내서는 작성 시점의 설명 자료이며 이번 Markdown 갱신으로 다시 생성하지 않았다. commit·push는 [명시적 요청 규칙](../agent.md#커밋과-push)에 따른다.
 
 ## 구조
 

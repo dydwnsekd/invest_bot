@@ -10,26 +10,26 @@
 | D-HOME | [지식 홈](../README.md) | index | active | 통합 · 질문별 탐색 |
 | D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·OKF 이해; 작성 시점의 설명용 요약 |
 | D-CATALOG | [문서 등록부](catalog.md) | index | active | 통합 · 문서 역할과 상태 |
-| D-CONCEPTS | [개념 지도](concepts.md) | concept | active | 통합 · 핵심 개념과 구현 근거 |
+| D-CONCEPTS | [개념 지도](concepts.md) | concept | active | 통합 · 핵심 개념·보충 수집·비교·슬라이딩 연구의 구현/검증 근거 |
 | D-TEMPLATE | [작성 양식](template.md) | policy | active | 통합 · 새 문서 작성 |
 | D-ARCHIVE | [기록 보관 안내](../archive/README.md) | index | active | 통합 · 과거 기록 읽기 |
 | D-DECISION-0001 | [OKF 도입 결정](../decisions/0001-local-okf.md) | decision | active | 통합 · 이번 구조를 선택한 이유 |
 | D-README | [프로젝트 README](../../README.md) | runbook | active | 통합 · 실행·설정 안내; 날짜별 업데이트는 과거 기록 |
-| D-AGENT | [agent 가이드](../../agent.md) | policy | active | 통합 · 작업 규칙 |
+| D-AGENT | [agent 가이드](../../agent.md) | policy | active | 통합 · 순차 작업·명시적 요청 전 commit/push 금지 |
 | D-DESIGN | [DESIGN](../../DESIGN.md) | reference | active | 대시보드 · 의도한 제품 UX |
 
 ## 현재 기능과 작업 상태
 
 | ID | 문서 | 종류 | 상태 | 관리 역할 · 담당 주제 |
 | --- | --- | --- | --- | --- |
-| D-STATUS | [task 요약](../tasks/00_summary.md) | status | active | 통합 · 기능별 완료·대기; 날짜별 과거 결과 구분 |
+| D-STATUS | [task 요약](../tasks/00_summary.md) | status | active | 통합 · 최근 기능별 커밋·완료/대기·날짜별 검증 범위 |
 | D-ENV | [환경](../tasks/01_environment.md) | status | active | 운영 · 환경 작업 |
 | D-DATA | [수집](../tasks/02_data_collection.md) | status | active | 데이터 · 수집 작업·명시적 기간 보충 수집 검증 |
 | D-ANALYSIS | [분석](../tasks/03_analysis.md) | status | active | 퀀트 · 지표 작업 |
 | D-DASHBOARD | [대시보드](../tasks/04_dashboard.md) | status | active | 대시보드 · 현재 UI 기능·G05a 수급 연결 검증; 날짜별 작업은 기록 |
 | D-BACKTEST | [전략·백테스트](../tasks/05_strategy_backtest.md) | status | active | 퀀트 · 구현된 전략과 백테스트 규칙·매수 후 보유 비교·슬라이딩 혼합 연구 |
 | D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | plan | proposed | 거래 · 아직 구현하지 않은 주문 기능 |
-| D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 시작·재시작 사전검증, 설정 타입, 초기화 모드와 로그 |
+| D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 시작·재시작 사전검증, 설정 타입, 초기화·로그·Git 관리 경계 |
 | D-SESSIONS | [개선 작업 추적](../operations/improvement_sessions_2026-09-13.md) | status | active | 통합 · 역할별 단일 작업·순차 실행 |
 | D-IMPROVEMENTS | [개선 작업 색인](../operations/improvements/README.md) | index | active | 통합 · 다음 작업·우선순위·역할별 상태의 진입점 |
 | D-INDICATORS | [지표 가이드](../analysis/indicator_guide.md) | reference | active | 퀀트 · 지표 의미 |
