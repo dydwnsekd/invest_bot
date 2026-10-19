@@ -77,11 +77,10 @@ def render_actions_tab(
         ]
         if selected_items:
             st.caption(
-                f"선택 {len(selected_items)}개 · "
-                f"{', '.join(format_symbol_option(item) for item in selected_items[:3])}"
+                f"실행 대상: {summarize_selected_items(selected_items)} · 총 {len(selected_items)}개"
             )
         else:
-            st.caption("배치 작업을 실행하려면 종목을 하나 이상 선택해 주세요.")
+            st.caption("실행 대상: 선택 없음 · 배치 작업을 실행하려면 종목을 하나 이상 선택해 주세요.")
 
         min_period_date, max_period_date = collection_period_bounds()
         selected_period = st.date_input(
@@ -98,7 +97,23 @@ def render_actions_tab(
             f"수집 일수 {days}일 · 최소 {MIN_REQUIRED_TRADING_DAYS}거래일"
         )
 
+        if settings.discord_webhook_url.strip():
+            st.info(
+                "Discord 전송 설정: 설정됨 · 전체 파이프라인과 리포트 생성은 리포트 저장 후 전송을 시도합니다. "
+                "성공 여부는 실행 결과에서 확인하세요."
+            )
+        else:
+            st.info(
+                "Discord 전송 설정: 미설정 · 전체 파이프라인과 리포트 생성에서 생성한 리포트는 저장하고 "
+                "Discord 전송은 건너뜁니다."
+            )
+
         action_row_top = st.columns(2, gap="small")
+        action_row_top[0].caption("선택 종목의 가격·수급 데이터를 수집·저장합니다. Discord 전송 없음.")
+        action_row_top[1].caption(
+            "수집, 지표 계산, 신호 생성, 리포트 저장 후 Discord 전송 요청. "
+            "수집 성공 종목만 후속 단계를 실행합니다."
+        )
         if action_row_top[0].button("데이터 수집", width="stretch", type="primary"):
             with render_action_progress("데이터 수집", selected_items):
                 run_collect_action(selected_items, int(days))
@@ -107,6 +122,9 @@ def render_actions_tab(
                 run_full_pipeline_action(selected_items, int(days), settings=settings)
 
         action_row_bottom = st.columns(3, gap="small")
+        action_row_bottom[0].caption("저장된 가격으로 지표만 계산·저장합니다. Discord 전송 없음.")
+        action_row_bottom[1].caption("저장된 지표로 골든크로스 신호만 생성·저장합니다. Discord 전송 없음.")
+        action_row_bottom[2].caption("저장된 지표·신호·수급으로 리포트만 생성·저장한 뒤 Discord 전송을 요청합니다.")
         if action_row_bottom[0].button("지표 계산", width="stretch"):
             with render_action_progress("지표 계산", selected_items):
                 run_batch_symbol_action(selected_items, generate_indicators_for_symbol, "지표 계산")

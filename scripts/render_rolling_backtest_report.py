@@ -70,6 +70,7 @@ JS = r"""
     table.tBodies[0].append(...rows);
   };
   document.querySelectorAll('table').forEach(table => {
+    table.addEventListener('report:rows-changed', () => sortTable(table));
     table.querySelectorAll('thead th').forEach((header, column) => {
       header.querySelector('.sort-button')?.addEventListener('click', () => {
         const direction = table.dataset.sortColumn === String(column) && table.dataset.sortDirection === 'ascending' ? 'descending' : 'ascending';
