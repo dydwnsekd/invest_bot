@@ -103,10 +103,10 @@ def state_tone(value: str) -> str:
 def state_text_color(value: str) -> str:
     tone = state_tone(value)
     if tone == "positive":
-        return "#15803d"
+        return "#86efac"
     if tone == "negative":
-        return "#b91c1c"
-    return "#111827"
+        return "#fda4af"
+    return "#e2e8f0"
 
 
 def format_symbol_display(symbol: str, symbol_name: str) -> str:

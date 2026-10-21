@@ -73,6 +73,7 @@ def apply_custom_style() -> None:
         [data-testid="stSidebarCollapseButton"] span,
         [data-testid="stSidebarNavCollapseButton"] span,
         [data-testid="stStatusWidget"] [data-testid="stIconMaterial"],
+        [data-testid="stExpanderIconCheck"],
         [data-testid="stExpanderIconError"] {
             font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
             font-weight: normal !important;
@@ -151,6 +152,13 @@ def apply_custom_style() -> None:
             outline: 2px solid var(--app-accent);
             outline-offset: 2px;
             box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.24);
+        }
+
+        /* Keep primary labels readable without changing the dark sidebar buttons. */
+        [data-testid="stMain"] .stButton > button[kind="primary"]:enabled,
+        [data-testid="stMain"] .stButton > button[kind="primary"]:enabled p,
+        [data-testid="stMain"] .stButton > button[kind="primary"]:enabled span {
+            color: var(--app-bg);
         }
 
         [data-testid="stSidebar"] .stButton > button[kind="primary"] {
@@ -317,7 +325,7 @@ def apply_custom_style() -> None:
             display: block;
             color: var(--app-text-muted);
             font-family: var(--font-label);
-            font-size: 0.74rem;
+            font-size: 0.8rem;
             font-weight: 700;
         }
 
@@ -355,7 +363,7 @@ def apply_custom_style() -> None:
             background: rgba(56, 189, 248, 0.16);
             border: 1px solid rgba(56, 189, 248, 0.26);
             font-family: var(--font-label);
-            font-size: 0.74rem;
+            font-size: 0.8rem;
             font-weight: 800;
         }
 
@@ -403,7 +411,7 @@ def apply_custom_style() -> None:
         .backtest-step-grid span {
             color: var(--app-text-muted);
             font-family: var(--font-label);
-            font-size: 0.74rem;
+            font-size: 0.8rem;
             font-weight: 800;
         }
 
@@ -436,7 +444,7 @@ def apply_custom_style() -> None:
             background: rgba(56, 189, 248, 0.16);
             border: 1px solid rgba(56, 189, 248, 0.26);
             font-family: var(--font-label);
-            font-size: 0.72rem;
+            font-size: 0.8rem;
             font-weight: 800;
         }
 
@@ -636,7 +644,7 @@ def apply_custom_style() -> None:
             border-radius: 999px;
             color: #f8fafc;
             font-family: var(--font-label);
-            font-size: 0.76rem;
+            font-size: 0.8rem;
             font-weight: 800;
             background: rgba(34, 197, 94, 0.16);
             border: 1px solid rgba(34, 197, 94, 0.34);
@@ -664,7 +672,7 @@ def apply_custom_style() -> None:
             margin-top: 0.65rem;
             color: var(--app-text-muted);
             font-family: var(--font-label);
-            font-size: 0.75rem;
+            font-size: 0.8rem;
         }
 
         .watchlist-status-card__dates strong {
@@ -682,7 +690,7 @@ def apply_custom_style() -> None:
             border-top: 1px solid rgba(203, 213, 225, 0.16);
             color: var(--app-text-muted);
             font-family: var(--font-label);
-            font-size: 0.75rem;
+            font-size: 0.8rem;
         }
 
         .watchlist-status-card__times strong {
@@ -760,7 +768,7 @@ def apply_custom_style() -> None:
             border-radius: 999px;
             padding: 0.34rem 0.7rem;
             font-family: var(--font-label);
-            font-size: 0.78rem;
+            font-size: 0.8rem;
             font-weight: 700;
             margin-right: 0.35rem;
             margin-bottom: 0.35rem;
@@ -827,7 +835,7 @@ def apply_custom_style() -> None:
         .sidebar-info-label {
             margin-top: 0.45rem;
             font-family: var(--font-label);
-            font-size: 0.78rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
             letter-spacing: 0.04em;
             color: var(--app-text-muted);
@@ -926,7 +934,7 @@ def apply_custom_style() -> None:
             background: rgba(56, 189, 248, 0.18);
             border: 1px solid rgba(56, 189, 248, 0.38);
             color: var(--app-text);
-            font-size: 0.78rem;
+            font-size: 0.8rem;
             font-weight: 800;
             line-height: 1.35;
             text-align: center;
@@ -950,7 +958,7 @@ def apply_custom_style() -> None:
         .interpretation-signal-cell span {
             display: block;
             color: var(--app-text-muted);
-            font-size: 0.74rem;
+            font-size: 0.8rem;
             line-height: 1.3;
         }
 

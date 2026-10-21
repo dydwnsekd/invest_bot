@@ -2763,10 +2763,10 @@ def test_collection_period_helpers_normalize_calendar_range_to_days() -> None:
     assert collection_days_from_period(period) == 60
     assert collection_days_from_period((date(2025, 7, 31), date(2026, 7, 31))) == 365
 
-def test_state_text_color_uses_green_red_black_contract() -> None:
-    assert _state_text_color("buy") == "#15803d"
-    assert _state_text_color("sell") == "#b91c1c"
-    assert _state_text_color("hold") == "#111827"
+def test_state_text_color_uses_readable_green_rose_slate_contract() -> None:
+    assert _state_text_color("buy") == "#86efac"
+    assert _state_text_color("sell") == "#fda4af"
+    assert _state_text_color("hold") == "#e2e8f0"
 
 
 def test_render_actions_tab_removes_actions_guide_and_keeps_primary_controls_visible(monkeypatch: pytest.MonkeyPatch) -> None:
