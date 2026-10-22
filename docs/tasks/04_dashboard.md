@@ -4,13 +4,36 @@
 
 수집, 분석, 신호, 리포트, 테스트 상태를 브라우저에서 빠르게 확인하고 필요한 작업을 직접 실행할 수 있는 대시보드를 제공한다.
 
-## 다음 개선 계획 (2026-10-19 확인)
+## 다음 개선 계획 (2026-10-22 확인)
 
-현재 순서는 [개선 작업 색인](../operations/improvements/README.md)을 따른다. 최신 수급 NULL 정렬은 구현·로컬 검증을 통과했고 원격 CI 확인이 남았다. G05b까지 main `9867d48`에 반영됐으며 G06a는 아래 작업 트리에서 구현·검증을 완료한 커밋 전 상태다. 다음 후보는 G06b 상태 텍스트 대비다. 전송 안내·대비·전체 배치는 각각 별도로 검증한다. [10월 5일 순차 계획](../operations/improvement_plan_2026-10-05.md)은 최초 검토 배경이다.
+현재 순서는 [개선 작업 색인](../operations/improvements/README.md)을 따른다. G06a까지 main `bd958d5`에 반영됐고 G06b는 아래 작업 트리에서 구현·검증을 마친 커밋 전 상태다. QA02의 별도 독립 종합 판정과 G01a·QA01 원격 CI 확인은 남아 있다. 다음 기능 구현 후보는 G01b다. G06c 배치와 G08d 모바일 차트 범례는 별도 대기다. [10월 5일 순차 계획](../operations/improvement_plan_2026-10-05.md)은 최초 검토 배경이다.
+
+## 상태 텍스트 대비와 라벨 크기 (2026-10-22)
+
+main `bd958d5` + 미커밋 G06b 기준이다. [DESIGN](../../DESIGN.md)의 네이비/슬레이트 체계 안에서 [상태 formatter](../../src/invest_bot/dashboard/streamlit_formatters.py)의 매수·매도·중립 색을 밝게 조정했다. [CSS](../../src/invest_bot/dashboard/streamlit_styles.py)의 보조 라벨11개 선언을0.8rem으로 올리고 본문 기본 버튼에 어두운 글자를 적용했다. `stAppViewContainer`가 사이드바도 포함하는 것을 실제 DOM에서 확인해 새 규칙은 `stMain`으로 좁혔다. 기존 상태 분류와 판단·라우팅·조회·실행 경계는 보존한다.
+
+[가상 fixture](../../tests/g06b_readability_fixture.py)는 실제 리포트 카드·관심종목 상태·해석 renderer와 제품 CSS를 사용한다. 실제 설정·운영 데이터를 포함하지 않고 backing storage 읽기를 금지했다. [신규17개 회귀](../../tests/test_dashboard_readability.py)는 상태3종×배경3종 대비, 라벨 크기, 실제 renderer 상태와 완료 아이콘 보호를 검증한다. 최초 fixture의 전략 행 개수 기대값을 실제 renderer의3개로 보정한 후 유효 변경 전 회귀13 failed / 3 passed로 대비·크기 문제를 재현했다. 추가 발견한 완료 아이콘 회귀도 수정 전1 failed였다. 최종 관련202 passed, 격리 후보 기본970 passed / 2 deselected / 32 warnings다.
+
+- 관련 명령: `.venv/bin/python -B -m pytest tests/test_dashboard_readability.py tests/test_streamlit_dashboard.py tests/test_dashboard_data_status.py tests/test_dashboard_action_scope.py -q --tb=short`.
+- 기본 명령: `.venv/bin/python -B scripts/run_tests.py --suite default -q --tb=short`. 실제 실행은 격리 cwd·정리한 환경 변수에서 원본의 venv Python을 사용했다. 이후 문서 갱신만 후보에 동기화하고 링크·ID를 별도로 검사했다.
+- 실제 브라우저:1920×958·390×844에서 계산된 글자색·배경색·투명도·그라데이션 색 범위를 읽었다. 아래 수치는 색 범위를 합성한 보수적인 대비 하한이며 화면 픽셀 전체의 최솟값을 직접 샘플링한 결과와 구분한다.
+
+| 검증 표본 | 대비 하한 | 글자 크기 |
+| --- | --- | --- |
+| 리포트 전략 매수·매도·중립 | 12.29 / 9.13 / 14.00 | 1rem |
+| 종합 신호 매수·매도·중립 배지 | 7.45 / 8.23 / 7.70 | 0.8rem |
+| 본문 기본 버튼 일반/포커스 상태 | 9.31 / 6.53 | 0.875rem |
+| 사이드바 기본 버튼 | 16.90 | 0.875rem |
+| 관심종목 날짜·시각·상태 라벨 | 최소11.44 | 최소0.8rem |
+| 해석 모아보기 라벨·배지 | 최소11.72 | 최소0.8rem |
+
+키보드 Shift+Tab으로 본문 버튼의 `focus-visible`·2px 청색 outline·2px offset을 확인했고 Tab으로 입력 필드의 청색 테두리를 확인했다. 모바일의 지정 표본은 줄바꿈됐고 페이지 내용과 viewport 너비가390px로 같았다. 완료 상태 `check`가 일반 글자로 표시되는 기존 누락을 발견해 `stExpanderIconCheck`도 기존 Material font/ligature 보호에 포함했다. 수정 후 체크·펼침 아이콘은 Material 글꼴과 `liga`를 사용하고 glyph 폭15px로 표시됐다. 장식용 아이콘의0 크기 숨김 규칙은 라벨 최소 크기와 별도로 보존한다.
+
+기존 대시보드 하위 에이전트의 순차 읽기 전용 리뷰에 차단 결함은 없었다. 메인이 구현·회귀·브라우저·통합을 수행했으며 별도 QA 세션 종합 판정과 구분한다. 임시 앱·탭을 종료하고 원본 실제 설정·백업·관련 없는 추적 파일·HEAD·Git index를 보존했다. commit·push·운영 서비스 조작은 수행하지 않았다. 운영 API/DB·배포·원격 CI와 앱 전체 접근성 인증은 미검증이다. [G06b 상태](../operations/improvements/dashboard.md#g06b), [QA02 남은 범위](../operations/improvements/qa.md#qa02)를 따른다.
 
 ## 생성·전송 범위 안내 (2026-10-19)
 
-main `9867d48` + 미커밋 G06a 기준이다. [데이터 갱신 화면](../../src/invest_bot/dashboard/streamlit_actions.py)은 버튼을 누르기 전에 실행 대상 종목명·코드·총 개수, 정규화된 조회 기간, 버튼별 처리 단계와 Discord 전송 설정 여부를 표시한다. 대상은 처음3개와 나머지 개수로 요약하며 선택 위젯에서 전체 목록을 확인할 수 있다. 선택이 없으면 이를 명시한다.
+main `9867d48` + 당시 미커밋 G06a를 검증했고 이후 코드 `7f99a33`·문서 `bd958d5`로 반영됐다. 아래는 10월19일 증거다. [데이터 갱신 화면](../../src/invest_bot/dashboard/streamlit_actions.py)은 버튼을 누르기 전에 실행 대상 종목명·코드·총 개수, 정규화된 조회 기간, 버튼별 처리 단계와 Discord 전송 설정 여부를 표시한다. 대상은 처음3개와 나머지 개수로 요약하며 선택 위젯에서 전체 목록을 확인할 수 있다. 선택이 없으면 이를 명시한다.
 
 데이터 수집·지표 계산·신호 생성은 해당 단계만 실행하고 Discord로 전송하지 않는다. 전체 파이프라인은 수집 후 성공 종목만 지표·신호·리포트 생성으로 진행한다. 리포트 생성은 저장된 지표·신호·수급을 사용한다. 전체 파이프라인과 리포트 생성은 리포트 저장 후 Discord 전송을 요청한다. 공백을 제거한 기존 `settings.discord_webhook_url`이 비어 있으면 미설정·전송 건너뛰기, 값이 있으면 설정됨·전송 시도를 안내한다. 설정만으로 성공을 보장하지 않고 실행 결과에서 확인하게 한다. 사전 안내에 주소·토큰은 넣지 않는다.
 

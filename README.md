@@ -785,6 +785,7 @@ data/processed/test_reports/
 - [x] 백테스트 전략 adapter/registry 7종
 - [x] 전용 `백테스트` 탭과 in-session 비교 결과 표시
 - [x] Streamlit 대시보드
+- [x] 상태 글자 대비·보조 라벨 크기·본문 버튼 글자와 완료 아이콘 가독성 보완. [검증 범위](docs/tasks/04_dashboard.md#상태-텍스트-대비와-라벨-크기-2026-10-22)
 - [x] 투자 리포트 탭 단일 리포트 본문 표시
 - [x] 투자 리포트 탭 전략별 판단 요약 표시
 - [x] 투자 리포트 탭 상단 해석 모아보기 토글

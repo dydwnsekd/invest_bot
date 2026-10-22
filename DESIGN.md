@@ -2,7 +2,7 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-10-19
+- Last refreshed: 2026-10-22
 - Primary product surfaces:
   - Streamlit 국내주식 운영 대시보드
   - 홈, 데이터 갱신, 투자 리포트, 관심종목, 백테스트, 데이터 보기, 용어 해설, 시스템 검증
@@ -89,7 +89,7 @@
 
 ## Visual language
 - Color: 기존 high-contrast dark navy/slate palette를 유지한다.
-- Typography: 한국어 본문은 Pretendard 계열을 우선하고, 가격·비율·날짜·지표는 tabular 숫자 정렬을 적용해 빠른 비교를 돕는다. 보조 라벨은 데스크톱 기준 최소 0.8rem을 유지한다.
+- Typography: 한국어 본문은 Pretendard 계열을 우선하고, 가격·비율·날짜·지표는 tabular 숫자 정렬을 적용해 빠른 비교를 돕는다. 보조 라벨은 데스크톱과 좁은 화면 모두 최소 0.8rem을 유지한다. 장식용 아이콘의 크기·ligature 숨김은 텍스트 최소 크기 규칙과 구분한다.
 - Spacing/layout rhythm: 1rem 안팎의 카드 간격, 넓은 터치/클릭 영역.
 - Shape/radius/elevation: 정보 카드에는 부드러운 radius, 좌측 메뉴는 텍스트형 내비게이션.
 - Motion: hover/focus 정도의 미세한 전환만 사용.
@@ -137,7 +137,7 @@
 ## Accessibility
 - Target standard: WCAG 2.1 AA 수준의 대비와 키보드 접근성을 지향한다.
 - Keyboard/focus behavior: Streamlit 버튼·탭·입력 위젯에 명확한 `:focus-visible` 윤곽선을 제공하고, 키보드만으로 다음 행동과 리포트 선택을 완료할 수 있어야 한다.
-- Contrast/readability: dark background에서 본문과 muted text 대비를 충분히 유지한다.
+- Contrast/readability: 일반 텍스트와 매수·매도·중립 상태는 실제 합성 배경 기준 대비4.5:1 이상을 유지한다. 상태는 밝은 녹색·장미색·슬레이트 계열로 구분하고 기존 상태 라벨을 함께 표시한다. 밝은 실행 버튼에는 어두운 글자색을 사용한다. 팔레트 상수만으로 검증을 대신하지 않고 실제 renderer의 계산된 색·투명 배경·글자 크기를 확인한다.
 - Screen-reader semantics: 제목 계층과 버튼 라벨은 기능을 설명해야 한다.
 - Reduced motion and sensory considerations: 과도한 애니메이션 없음.
 
