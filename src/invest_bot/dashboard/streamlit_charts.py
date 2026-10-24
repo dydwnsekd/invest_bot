@@ -838,7 +838,8 @@ def add_professional_flow_panel(figure, chart_data: pd.DataFrame, flow_columns: 
             go.Scatter(
                 x=chart_data["date"],
                 y=chart_data[column],
-                mode="lines",
+                mode="lines+markers",
+                connectgaps=False,
                 name=label,
                 line=dict(width=2, color=palette.get(label)),
                 hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:,.0f}<extra></extra>",
