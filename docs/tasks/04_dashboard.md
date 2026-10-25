@@ -4,13 +4,38 @@
 
 수집, 분석, 신호, 리포트, 테스트 상태를 브라우저에서 빠르게 확인하고 필요한 작업을 직접 실행할 수 있는 대시보드를 제공한다.
 
-## 다음 개선 계획 (2026-10-22 확인)
+## 다음 개선 계획 (2026-10-23 확인)
 
-현재 순서는 [개선 작업 색인](../operations/improvements/README.md)을 따른다. G06a까지 main `bd958d5`에 반영됐고 G06b는 아래 작업 트리에서 구현·검증을 마친 커밋 전 상태다. QA02의 별도 독립 종합 판정과 G01a·QA01 원격 CI 확인은 남아 있다. 다음 기능 구현 후보는 G01b다. G06c 배치와 G08d 모바일 차트 범례는 별도 대기다. [10월 5일 순차 계획](../operations/improvement_plan_2026-10-05.md)은 최초 검토 배경이다.
+현재 순서는 [개선 작업 색인](../operations/improvements/README.md)을 따른다. G06b 코드 `dee88af`·문서 `036def2`까지 main에 반영됐다. QA02 지정 범위의 별도 독립 종합 판정을 완료했고 고립 수급 관측점 보완·독립 QA 파일은 커밋 전이다. G01a·QA01 원격 CI 확인은 남아 있다. 다음 기능 구현 후보는 G01b다. G06c 배치와 G08d 모바일 차트 범례는 별도 대기다. [10월 5일 순차 계획](../operations/improvement_plan_2026-10-05.md)은 최초 검토 배경이다.
+
+## 독립 종합 검증과 고립 수급 관측점 (2026-10-23)
+
+main `036def2` + 이번 미커밋 보완 기준이다. 기존 **QA·독립 검증 체계 개선** 세션을 재사용해 [독립 통합 fixture](../../tests/qa02_dashboard_fixture.py)와 [31개 독립 회귀](../../tests/test_qa02_dashboard_integration.py)를 추가했다. 실제 `streamlit_dashboard.main()`·사이드바·홈·리포트·관심종목·실행 renderer·loader·차트 조립을 사용한다. 실제 설정을 제외한 추적 파일 격리본에 가상 종목4개와 실제 임시 SQLite·즐겨찾기를 만들고 계산·수집·전송 경계만 기록용 함수로 대체했다.
+
+기존259개+신규27개가 통과한 뒤 메인의 실제 브라우저가 수급 표시 결함을 발견했다. 띄엄띄엄 관측된 -11·+5·실제0이 Plotly 데이터에는 있지만 `lines`만 사용해 보이는 점이나 선분이 없었다. 독립 QA가 실제 앱의 양수·음수·0 marker 회귀3개 실패와 null gap 회귀1개 통과를 재현했고 최초 실패를 보존했다. [전문 차트](../../src/invest_bot/dashboard/streamlit_charts.py)의 수급 trace만 `lines+markers`, `connectgaps=False`로 보완했다. 원본 날짜·값·source 우선순위·가격 차트·집계·실행 정책은 그대로다.
+
+보완 후 독립31개 전체와 기존259개를 합친 **290 passed**, 메인의 최종 소스 격리 후보 기본 **1001 passed / 2 deselected / 32 warnings**를 새로 확인했다. 독립 QA는 수정된 입력 manifest258개를 시작·종료에 대조했고 메인은 원본·QA·기본 suite 후보의 제품/신규 QA 파일 해시를 대조했다. 이번 변경은 커밋 전이다.
+
+- 독립 관련 명령: `.venv/bin/python -B -m pytest tests/test_dashboard_summary_flow.py tests/test_g05a_boundary_qa.py tests/test_dashboard_snapshot_frame_loader.py tests/test_watchlist_snapshot_queries.py tests/test_dashboard_data_status.py tests/test_dashboard_action_scope.py tests/test_dashboard_readability.py tests/test_streamlit_dashboard.py tests/test_dataset_frame_list_latest_batch.py tests/test_qa02_dashboard_integration.py -q --tb=short`.
+- 기본 명령: `.venv/bin/python -B scripts/run_tests.py --suite default -q --tb=short`. 두 명령 모두 실제 설정 없는 격리 cwd·정리한 환경 변수에서 원본 venv Python을 사용했다. 실제 사용한 명령·전체 로그·JUnit은 임시 QA 증거 디렉터리에 보존했다.
+- 검색·선택·사이드바/탭 왕복의 작업·전송0회, 날짜/누락/불일치 안내, detail 우선·summary 관측값·0/null·일/주/월 차트, 명시적5버튼의 호출 순서·대상·수집 부분/전체 실패·전송 skipped/failed를 검증했다.
+
+| 완료된 script의 조회 | snapshot SELECT | 기존 즐겨찾기 SELECT | 프레임·상태·차트 consumer SELECT | 합계 |
+| --- | ---: | ---: | ---: | ---: |
+| 홈·실행 | 2 | 0 | 0 | 2 |
+| 리포트·관심종목 | 2 | 1 | 0 | 3 |
+
+위 수치는 완료된 script 한 번의 집계다. 메뉴/후보 클릭의 중간 `st.rerun()`은 별도 script attempt로 누적 기록한다. 전체 사용자 클릭이나 snapshot 이후 앱 전체 SELECT0회를 주장하지 않는다. 기존 즐겨찾기 조회와 프레임/상태/차트의 추가0회를 구분한다.
+
+메인은 같은 통합 앱의1920×958·390×844를 실제 브라우저로 확인했다. 보완 전 외국인·기관 trace의 점은0개였고 보완 후 각각2개·1개가 두 크기에서 표시됐다. 실제0도 점으로 보이고 누락일 사이 선분은 없다. 원본10/22·판단10/21, 누락·미래 날짜 사유와 선택 복원을 확인했다. 전략 매수/매도/중립의 합성 배경 대비 하한은12.29/9.13/14.00, 관망 배지는7.70이다. 관심종목 날짜·시각 후손56표본은 최저13.59·0.8rem, 해석 라벨12표본은 최저12.79·0.8rem이다. 기본 버튼 일반/포커스 대비9.31/6.53·사이드바16.90, 키보드2px 청색 윤곽선과 입력의 청색 테두리를 확인했다. 완료 아이콘은 통합 앱 뒤에 native `st.status` 표본만 추가한 임시 wrapper에서 Material font·`liga`·폭15px와 체크/펼침 glyph를 확인했다. 대비는 계산된 DOM 색·투명 배경·그라데이션 범위 합성의 보수적 하한이며 화면 픽셀 전체 최솟값 측정이 아니다.
+
+390px 본문의 가로 폭은390px였고 날짜·실행/전송 안내는 줄바꿈됐다. 캡처는 CUA 도구 관찰에 남겼고 재검증용 fixture·wrapper·제품 해시와 수치는 임시 `browser-observations.json`에 보존했다. 임시 서버·탭은 종료하고 viewport 설정을 복원했다. 기존 홈/연속 해석 카드 HTML 노출은 G06c, 모바일 범례·도구 모음 혼잡은 G08d에 남긴다. 기존 `use_container_width` 경고와 후보 선택의 default/session-state 경고도 관찰했으나 선택 복원·호출 경계는 정상이다. 운영 API/DB·실제 Discord 전달·배포·원격 CI·앱 전체 접근성 인증은 미검증이다. 기존 QA 세션이 일치하는 해시·독립 회귀·메인의 브라우저 관찰 기록을 검토해 QA02 지정 범위를 승인했다. QA가 직접 브라우저를 조작하거나 캡처 이미지를 본 판정과 구분한다. [QA 역할 문서](../operations/improvements/qa.md#qa02)를 따른다.
+
+마지막 정적 검사에서 Python3파일의 AST·컴파일과 `git diff --check`를 통과했다. Markdown57개·로컬 링크702개·문서 ID57개·개념12개/관계14개에 누락·중복·미등록이 없었다. 제품/신규 QA 파일은 독립 검증본·기본 suite 후보와 일치하고 실제 설정·백업·관련 없는 추적 파일·HEAD·Git index는 보존됐다. commit·push는 수행하지 않았다.
 
 ## 상태 텍스트 대비와 라벨 크기 (2026-10-22)
 
-main `bd958d5` + 미커밋 G06b 기준이다. [DESIGN](../../DESIGN.md)의 네이비/슬레이트 체계 안에서 [상태 formatter](../../src/invest_bot/dashboard/streamlit_formatters.py)의 매수·매도·중립 색을 밝게 조정했다. [CSS](../../src/invest_bot/dashboard/streamlit_styles.py)의 보조 라벨11개 선언을0.8rem으로 올리고 본문 기본 버튼에 어두운 글자를 적용했다. `stAppViewContainer`가 사이드바도 포함하는 것을 실제 DOM에서 확인해 새 규칙은 `stMain`으로 좁혔다. 기존 상태 분류와 판단·라우팅·조회·실행 경계는 보존한다.
+main `bd958d5` + 당시 미커밋 G06b를 검증했고 이후 코드 `dee88af`·문서 `036def2`로 반영됐다. 아래는 10월22일 증거다. [DESIGN](../../DESIGN.md)의 네이비/슬레이트 체계 안에서 [상태 formatter](../../src/invest_bot/dashboard/streamlit_formatters.py)의 매수·매도·중립 색을 밝게 조정했다. [CSS](../../src/invest_bot/dashboard/streamlit_styles.py)의 보조 라벨11개 선언을0.8rem으로 올리고 본문 기본 버튼에 어두운 글자를 적용했다. `stAppViewContainer`가 사이드바도 포함하는 것을 실제 DOM에서 확인해 새 규칙은 `stMain`으로 좁혔다. 기존 상태 분류와 판단·라우팅·조회·실행 경계는 보존한다.
 
 [가상 fixture](../../tests/g06b_readability_fixture.py)는 실제 리포트 카드·관심종목 상태·해석 renderer와 제품 CSS를 사용한다. 실제 설정·운영 데이터를 포함하지 않고 backing storage 읽기를 금지했다. [신규17개 회귀](../../tests/test_dashboard_readability.py)는 상태3종×배경3종 대비, 라벨 크기, 실제 renderer 상태와 완료 아이콘 보호를 검증한다. 최초 fixture의 전략 행 개수 기대값을 실제 renderer의3개로 보정한 후 유효 변경 전 회귀13 failed / 3 passed로 대비·크기 문제를 재현했다. 추가 발견한 완료 아이콘 회귀도 수정 전1 failed였다. 최종 관련202 passed, 격리 후보 기본970 passed / 2 deselected / 32 warnings다.
 
