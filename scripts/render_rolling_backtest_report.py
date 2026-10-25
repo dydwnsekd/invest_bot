@@ -245,6 +245,21 @@ def mdd(value: Any) -> str:
     return f"{abs(_f(value)):,.2f}%"
 
 
+def price_revision_notice(meta: Mapping[str, Any]) -> str:
+    count = _i(meta.get("price_revision_count"))
+    if count <= 0:
+        return ""
+    dates = ", ".join(str(value) for value in meta.get("price_revision_dates", []) if value)
+    detail = f" 비교된 날짜: {escape(dates)}." if dates else ""
+    revision_file = str(meta.get("price_revision_file") or "")
+    link = f' <a href="{escape(revision_file, quote=True)}">변경 내역 CSV</a>' if revision_file else ""
+    return (
+        '<div class="callout warning"><strong>가격 원자료 갱신:</strong> '
+        f'중복 날짜 비교에서 {count:,}건의 차이를 확인했습니다. 이전 저장본과 중복 날짜의 종가·거래량이 달라 최신 API 조회값으로 다시 계산했습니다. '
+        f'이전 보고서와의 차이에는 기간 연장과 원자료 재조회 차이가 함께 포함됩니다.{detail}{link}</div>'
+    )
+
+
 def html_table(
     headers: Sequence[str],
     rows: Iterable[Sequence[str]],
@@ -431,7 +446,9 @@ def executive_section(data: Mapping[str, Any], models: Mapping[str, Mapping[str,
             )
     body = '<section class="panel" id="summary"><h2>핵심 결론</h2>'
     body += '<div class="stats">' + "".join(f'<div class="stat"><span>{escape(label)}</span><strong>{escape(value)}</strong></div>' for label, value in stats) + "</div>"
-    body += '<p class="lead">단일 전략과 혼합 전략을 같은 가격·체결·비용 기준으로 비교했습니다. 결과는 하나의 전 구간 숫자가 아니라, 20·60·120·240거래일 슬라이딩 창의 분포와 최근 구간, 시장 국면, 워크포워드 결과를 함께 읽도록 구성했습니다.</p>'
+    length_text = "·".join(str(length) for length in lengths)
+    body += f'<p class="lead">단일 전략과 혼합 전략을 같은 가격·체결·비용 기준으로 비교했습니다. 결과는 하나의 전 구간 숫자가 아니라, {escape(length_text)}거래일 슬라이딩 창의 분포와 최근 구간, 시장 국면, 워크포워드 결과를 함께 읽도록 구성했습니다.</p>'
+    body += price_revision_notice(meta)
     body += '<div class="cards">' + "".join(cards) + "</div>"
     body += '<div class="callout warning"><strong>의사결정 범위:</strong> 이 리포트에서 “우수”는 지정된 표본과 규칙에서 비용 후 결과가 상대적으로 좋았다는 뜻입니다. 후보 모델은 같은 과거 자료를 보고 사후 설계됐으며, 워크포워드도 완전히 손대지 않은 독립 표본은 아닙니다.</div></section>'
     return body
@@ -483,6 +500,7 @@ def full_period_section(data: Mapping[str, Any], models: Mapping[str, Mapping[st
     if not full:
         return ""
     rows, attrs = [], []
+    stock_count = len({str(row.get("symbol")) for row in data.get("stock_results", []) if row.get("symbol")})
     for row in full:
         model = models.get(str(row.get("model_id")), {})
         model_type = str(model.get("type", ""))
@@ -492,7 +510,7 @@ def full_period_section(data: Mapping[str, Any], models: Mapping[str, Mapping[st
             performance(_f(row.get("net_return_pct")) - _f(row.get("bh_net_return_pct")), points=True),
             performance(_f(row.get("net_return_pct")) - _f(row.get("etf_net_return_pct")), points=True),
             mdd(row.get("net_mdd_pct")), str(_i(row.get("trade_count"))), str(_i(row.get("forced_exit_count"))),
-            f'{_f(row.get("mean_exposure_pct")):.1f}%', f'{_i(row.get("profitable_constituents"))}/16',
+            f'{_f(row.get("mean_exposure_pct")):.1f}%', f'{_i(row.get("profitable_constituents"))}/{stock_count}',
         ])
         attrs.append(f' data-type="{escape(model_type)}"')
     by_id = {str(row.get("model_id")): row for row in full}
@@ -616,16 +634,23 @@ def window_detail_section(data: Mapping[str, Any], models: Mapping[str, Mapping[
         table_id="window-detail-table",
         row_attrs=attrs,
     )
-    body += '</div></details><p class="muted">각 행은 해당 창 시작 시점에 16종목을 동일 배분해 새 현금으로 실행한 포트폴리오 결과입니다. 숫자는 portfolio_results.csv와 동일합니다.</p></section>'
+    stock_count = len({str(row.get("symbol")) for row in data.get("stock_results", []) if row.get("symbol")})
+    body += f'</div></details><p class="muted">각 행은 해당 창 시작 시점에 {stock_count}종목을 동일 배분해 새 현금으로 실행한 포트폴리오 결과입니다. 숫자는 portfolio_results.csv와 동일합니다.</p></section>'
     return body
 
 
-def recent_section(data: Mapping[str, Any], models: Mapping[str, Mapping[str, Any]]) -> str:
+def recent_section(
+    data: Mapping[str, Any],
+    models: Mapping[str, Mapping[str, Any]],
+    *,
+    report_date: str | None = None,
+) -> str:
     recent = sorted(
         latest_window_rows(data, "portfolio_results"),
         key=lambda row: (_i(row.get("length")), -_f(row.get("net_return_pct"))),
     )
     rows, attrs = [], []
+    stock_count = len({str(row.get("symbol")) for row in data.get("stock_results", []) if row.get("symbol")})
     for row in recent:
         model = models.get(str(row.get("model_id")), {})
         model_type = str(model.get("type", ""))
@@ -636,7 +661,7 @@ def recent_section(data: Mapping[str, Any], models: Mapping[str, Mapping[str, An
             performance(_f(row.get("net_return_pct")) - _f(row.get("bh_net_return_pct")), points=True),
             performance(_f(row.get("net_return_pct")) - _f(row.get("etf_net_return_pct")), points=True),
             mdd(row.get("net_mdd_pct")), str(_i(row.get("trade_count"))), f'{_f(row.get("mean_exposure_pct")):.1f}%',
-            f'{_i(row.get("profitable_constituents"))}/16', f'{_i(row.get("no_trade_constituents"))}/16',
+            f'{_i(row.get("profitable_constituents"))}/{stock_count}', f'{_i(row.get("no_trade_constituents"))}/{stock_count}',
         ])
         attrs.append(f' data-length="{_i(row.get("length"))}" data-type="{escape(model_type)}" data-regime="{escape(str(row.get("regime", "")))}"')
     lengths = [_i(row.get("length")) for row in recent]
@@ -648,7 +673,7 @@ def recent_section(data: Mapping[str, Any], models: Mapping[str, Mapping[str, An
         body += (
             '<p class="muted"><strong>기간 기준 차이:</strong> 이 리포트의 최근 5일 창은 '
             f'{escape(str(recent5_row.get("start_date", "")))} 종가에서 {escape(str(recent5_row.get("end_date", "")))} 종가까지 {intervals}개 수익률 구간입니다. '
-            f'<a href="weekly-trend-{REPORT_DATE}.html">주간 추세 리포트</a>의 2주 수익률은 2026-10-02 종가에서 시작하므로 두 수치를 직접 같다고 보면 안 됩니다.</p>'
+            f'<a href="weekly-trend-{escape(report_date or REPORT_DATE)}.html">주간 추세 리포트</a>의 2주 수익률은 별도 시작일을 사용하므로 두 수치를 직접 같다고 보면 안 됩니다.</p>'
         )
     body += filter_controls("recent-table", lengths=lengths, regimes=regimes)
     body += html_table(["기간", "날짜", "모델", "유형", "국면", "총수익", "비용 후", "보유 대비", "ETF 대비", "MDD", "거래", "보유", "수익 종목", "무거래 종목"], rows, table_id="recent-table", row_attrs=attrs)
@@ -740,14 +765,14 @@ def walk_forward_section(data: Mapping[str, Any], models: Mapping[str, Mapping[s
     body += f'<p>{_i(wf.get("train_length"))}거래일 훈련 구간에서 비용 후 값으로 모델을 선택하고 바로 다음 {_i(wf.get("test_length"))}거래일에 실행했습니다. 훈련 구간끼리는 겹칠 수 있지만 테스트 {len(blocks)}개 블록, 합계 {test_observations}거래일은 서로 겹치지 않습니다. 각 블록은 새 현금으로 시작해 끝에서 청산한 뒤 종료자산만 복리로 연결했습니다.</p>'
     body += '<p class="muted">선택 정책은 훈련 비용 후 수익률 최대와 훈련 비용 후 수익률−MDD 최대입니다. 점수가 같으면 MDD가 낮은 모델, 그래도 같으면 모델 ID 순으로 고릅니다.</p>'
     best_fixed_rows = fixed_rows[:1]
-    body += '<div class="grid-2"><div><h3>선택 정책 연결 성과</h3>' + html_table(["정책", "비용 후 수익률", "MDD", "매수 후 보유", "ETF"], rows) + '</div><div><h3>고정 모델 사후 최고 참고</h3><p class="muted">17개 고정 모델의 전체 테스트 블록 연결 결과를 사후 비교한 최고값입니다. 선택 정책의 실시간 성과처럼 해석하지 않습니다.</p>' + html_table(["모델", "비용 후 수익률", "MDD"], best_fixed_rows) + "</div></div>"
+    body += '<div class="grid-2"><div><h3>선택 정책 연결 성과</h3>' + html_table(["정책", "비용 후 수익률", "MDD", "매수 후 보유", "ETF"], rows) + f'</div><div><h3>고정 모델 사후 최고 참고</h3><p class="muted">{len(fixed_rows)}개 고정 모델의 전체 테스트 블록 연결 결과를 사후 비교한 최고값입니다. 선택 정책의 실시간 성과처럼 해석하지 않습니다.</p>' + html_table(["모델", "비용 후 수익률", "MDD"], best_fixed_rows) + "</div></div>"
     if selection_counts:
         body += '<h3>훈련 구간에서 선택된 횟수</h3><div class="cards">'
         for policy, counts in selection_counts.items():
             description = ", ".join(f'{model_label(models.get(model_id, {}))} {count}회' for model_id, count in counts.most_common())
             body += f'<div class="card"><h4>{escape(policy_names.get(policy, policy))}</h4><p>{description}</p></div>'
         body += "</div>"
-    body += '<details><summary>17개 고정 모델 연결 결과 전체</summary><div><p class="muted">모든 테스트 블록에 같은 모델을 고정 적용한 사후 비교표입니다.</p>' + html_table(["모델", "비용 후 수익률", "MDD"], fixed_rows) + "</div></details>"
+    body += f'<details><summary>{len(fixed_rows)}개 고정 모델 연결 결과 전체</summary><div><p class="muted">모든 테스트 블록에 같은 모델을 고정 적용한 사후 비교표입니다.</p>' + html_table(["모델", "비용 후 수익률", "MDD"], fixed_rows) + "</div></details>"
     body += '<details><summary>블록별 선택과 테스트 결과</summary><div>' + html_table(["블록", "훈련", "테스트", "정책", "선택 모델", "훈련 수익", "훈련 MDD", "테스트 수익", "테스트 MDD", "보유", "ETF"], selection_rows) + "</div></details>"
     curve = wf.get("curves", {})
     series = {policy_names.get(policy, policy): values for policy, values in (curve.get("policies") or {}).items()}
@@ -781,14 +806,17 @@ def stock_explorer_payload(data: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def stock_explorer_section(data: Mapping[str, Any]) -> str:
-    payload = json.dumps(stock_explorer_payload(data), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    packet = stock_explorer_payload(data)
+    payload = json.dumps(packet, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     # JSON is embedded in a script element: HTML escaping would corrupt JSON,
     # while escaping angle brackets prevents data from terminating the element.
     payload = payload.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
     table = html_table(["종목", "코드", "비용 후 수익률", "MDD", "매수 후 보유", "보유 대비", "ETF", "ETF 대비", "거래 수", "투자 비중", "순승률"], [], table_id="stock-period-table")
     cards = "".join(f'<div class="stat"><span>{label}</span><strong data-explorer-stat>—</strong></div>' for label in ("검색 결과", "수익률 양수", "매수 후 보유 초과", "무거래·현금 대기"))
+    model_count = len(packet["models"])
+    rolling_count = sum(1 for window in packet["windows"] if window.get("kind") == "rolling")
     return f'''<section class="panel" id="stock-explorer"><h2>기간별 종목 한눈에 보기</h2>
-<p>같은 기간과 같은 전략으로 종목들을 비교합니다. 기본 화면은 최신 20거래일·모멘텀 단독이며, 단일·혼합 17개 모델과 모든 66개 슬라이딩 창·전체 기간·최근 5일을 선택할 수 있습니다.</p>
+<p>같은 기간과 같은 전략으로 종목들을 비교합니다. 기본 화면은 최신 20거래일·모멘텀 단독이며, 단일·혼합 {model_count:,}개 모델과 모든 {rolling_count:,}개 슬라이딩 창·전체 기간·최근 구간을 선택할 수 있습니다.</p>
 <div class="filters">
 <label>기간 길이<select id="explorer-family"></select></label>
 <label>평가 기간<select id="explorer-window"></select></label>
@@ -807,7 +835,7 @@ def stock_section(data: Mapping[str, Any], models: Mapping[str, Mapping[str, Any
     aggregates = list(data.get("stock_aggregates", []))
     stock_results = list(data.get("stock_results", []))
     symbols = sorted({(str(row.get("symbol")), str(row.get("symbol_name") or row.get("symbol"))) for row in aggregates or stock_results}, key=lambda item: item[1])
-    body = '<section class="panel" id="stocks"><h2>16개 종목별 상세</h2><p>종목마다 각 창 길이의 비용 후 중앙값이 가장 높은 단일·혼합 모델을 나란히 표시합니다. 사후 최고 모델 표이므로 종목 맞춤 전략의 독립 검증으로 해석하면 안 됩니다.</p>'
+    body = f'<section class="panel" id="stocks"><h2>{len(symbols):,}개 종목별 상세</h2><p>종목마다 각 창 길이의 비용 후 중앙값이 가장 높은 단일·혼합 모델을 나란히 표시합니다. 사후 최고 모델 표이므로 종목 맞춤 전략의 독립 검증으로 해석하면 안 됩니다.</p>'
     body += '<label class="detail-search">상세 종목 검색 <input id="stock-detail-search" type="search" placeholder="종목명 또는 코드"></label><p id="stock-detail-empty" class="empty-state" hidden>일치하는 종목이 없습니다.</p>'
     grouped_agg = group_rows(aggregates, "symbol", "length")
     latest_stock = latest_window_rows(data, "stock_results")
@@ -850,6 +878,7 @@ def methodology_section(data: Mapping[str, Any]) -> str:
     lengths = ", ".join(f"{value}일" for value in meta.get("lengths", []))
     step = _i(meta.get("step"))
     cost = _f(meta.get("cost_rate")) * 100
+    stock_count = len({str(row.get("symbol")) for row in data.get("stock_results", []) if row.get("symbol")})
     verification = data.get("_verification") or data.get("verification") or {}
     missing = verification.get("missing_indicators_after_ready") or {}
     symbol_names = {
@@ -870,7 +899,7 @@ def methodology_section(data: Mapping[str, Any]) -> str:
 <dt>슬라이딩 창</dt><dd>{escape(lengths)} 길이를 {step}거래일 간격으로 이동했습니다. 길이 L의 가격수익률은 첫 종가부터 끝 종가까지 L−1개 가격 간격입니다. 같은 길이의 최신 창은 기준일 {escape(str(meta.get("as_of", "")))}에 끝납니다.</dd>
 <dt>신호와 체결</dt><dd>전체 이력으로 지표를 먼저 계산하되 각 창은 현금 100만원으로 새로 시작합니다. 당일 신호는 다음 거래일 종가에 체결하며, 마지막 날 보유분은 종가로 강제 청산합니다. 공매도는 없고 소수점 주식에 전액 투자할 수 있습니다.</dd>
 <dt>거래비용</dt><dd>매수와 매도 각각 평가금액에 편도 {cost:.2f}%를 곱합니다. 가격 변화가 없는 왕복 거래의 비용 후 손실은 약 {(1-(1-cost/100)**2)*100:.4f}%입니다. 이 비율은 세율 가정이 아니라 수수료·슬리피지 등을 단순화한 통합 비용입니다.</dd>
-<dt>자금 배분 혼합</dt><dd>각 전략 슬리브가 배정 자금 안에서 독립적으로 재투자합니다. 슬리브 간 및 종목 간 중간 재배분은 없습니다. 16종목 포트폴리오는 초기 동일 배분이고 MDD는 종목 평가금액 합산 곡선에서 계산합니다. 자금 배분 모델의 순승률은 슬리브별 청산 거래 건수 기준이며, 자본가중 승률이나 포트폴리오 승률이 아닙니다.</dd>
+<dt>자금 배분 혼합</dt><dd>각 전략 슬리브가 배정 자금 안에서 독립적으로 재투자합니다. 슬리브 간 및 종목 간 중간 재배분은 없습니다. {stock_count}종목 포트폴리오는 초기 동일 배분이고 MDD는 종목 평가금액 합산 곡선에서 계산합니다. 자금 배분 모델의 순승률은 슬리브별 청산 거래 건수 기준이며, 자본가중 승률이나 포트폴리오 승률이 아닙니다.</dd>
 <dt>시장 비교</dt><dd>매수 후 보유와 ETF를 같은 날짜·같은 비용 규칙으로 계산합니다. ETF 창 수익률 ±3%를 기준으로 상승·횡보·하락 국면을 기간 종료 후 설명용으로 분류합니다. 전략을 미리 고르는 예측 정보로 사용하지 않았습니다.</dd>
 </dl>
 <h3>읽을 때 지켜야 할 경계</h3>
@@ -881,12 +910,12 @@ def methodology_section(data: Mapping[str, Any]) -> str:
 <li>최근 5일은 성과 검증보다 규칙의 민감도와 행동을 확인하는 창입니다.</li>
 {missing_note}
 <li>수급 데이터의 과거 공개 시각을 검증하지 못했습니다. 수급 포함 모델은 당시 장 마감 전에 동일 값이 이용 가능했다고 단정할 수 없습니다.</li>
-<li>배당과 현금 이자는 0으로 두었습니다. 현재 16종목 표본에는 생존 편향과 종목 선택 편향이 있습니다.</li>
+<li>배당과 현금 이자는 0으로 두었습니다. 현재 {stock_count}종목 표본에는 생존 편향과 종목 선택 편향이 있습니다.</li>
 <li>후보 전략과 혼합 규칙은 이 과거 자료를 본 뒤 설계됐습니다. 워크포워드는 선택 시점의 미래 구간을 분리하지만 후보 설계까지 포함한 완전한 독립 표본은 아닙니다.</li>
 </ul></section>'''
 
 
-def download_section(data_href: str) -> str:
+def download_section(data_href: str, *, report_date: str = REPORT_DATE) -> str:
     files = [
         ("window_results.csv", "종목별 창 결과"),
         ("portfolio_results.csv", "포트폴리오 창 결과"),
@@ -907,27 +936,34 @@ def download_section(data_href: str) -> str:
     links = "".join(f'<a href="{escape(data_href)}/{escape(filename)}" download>{escape(label)} <span class="muted">({escape(filename)})</span></a>' for filename, label in files)
     return (
         '<section class="panel" id="downloads"><h2>근거 데이터와 재현 자료</h2><p>표와 차트의 근거를 파일 단위로 확인할 수 있습니다. 압축 파일을 공유할 때는 폴더 구조를 유지하면 로컬 브라우저에서도 링크가 작동합니다.</p>'
-        f'<div class="downloads">{links}<a href="rolling-mixed-backtest-{REPORT_DATE}.zip" download>전체 HTML·CSV·JSON ZIP</a></div>'
+        f'<div class="downloads">{links}<a href="rolling-mixed-backtest-{escape(report_date)}.zip" download>전체 HTML·CSV·JSON ZIP</a></div>'
         '<p class="muted">stock_equity_selected.csv.gz에는 전체 기간, 최근 5일, 각 길이의 최신 창에 대한 종목별 평가금액만 담습니다. 전체 창 결과는 window_results.csv와 portfolio_results.csv에서 확인하세요.</p></section>'
     )
 
 
-def render(data: Mapping[str, Any], data_href: str) -> str:
+def render(
+    data: Mapping[str, Any],
+    data_href: str | None = None,
+    *,
+    report_date: str | None = None,
+) -> str:
     models = model_index(data)
     meta = data.get("metadata", {})
+    report_date = str(report_date or meta.get("as_of") or REPORT_DATE)
+    data_href = data_href or f"../rolling-backtests/{report_date}"
     body = executive_section(data, models)
     body += stock_explorer_section(data)
     body += full_period_section(data, models)
     body += single_vs_mix_section(data, models)
     body += aggregate_section(data, models)
     body += window_detail_section(data, models)
-    body += recent_section(data, models)
+    body += recent_section(data, models, report_date=report_date)
     body += regime_section(data, models)
     body += walk_forward_section(data, models)
     body += stock_section(data, models)
     body += model_definition_section(data, models)
     body += methodology_section(data)
-    body += download_section(data_href)
+    body += download_section(data_href, report_date=report_date)
     generated_at = str(meta.get('generated_at', ''))
     try:
         generated_at = datetime.fromisoformat(generated_at).astimezone(ZoneInfo('Asia/Seoul')).strftime('%Y.%m.%d %H:%M KST')
@@ -937,6 +973,7 @@ def render(data: Mapping[str, Any], data_href: str) -> str:
         f'{escape(str(meta.get("eligible_start", "")))}~{escape(str(meta.get("as_of", "")))} · '
         f'{len(models)}개 단일·혼합 모델 · 비용 반영 · 생성 {escape(generated_at)}'
     )
+    stock_count = len({str(row.get("symbol")) for row in data.get("stock_results", []) if row.get("symbol")})
     nav = "".join(
         f'<a href="#{anchor}">{label}</a>'
         for anchor, label in [
@@ -948,7 +985,7 @@ def render(data: Mapping[str, Any], data_href: str) -> str:
     )
     return (
         '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<meta name="description" content="16개 주요 종목의 슬라이딩 윈도우 단일·혼합 전략 백테스트 리포트">'
+        f'<meta name="description" content="{stock_count}개 주요 종목의 슬라이딩 윈도우 단일·혼합 전략 백테스트 리포트">'
         f'<title>슬라이딩 윈도우·다중 전략 검증</title><style>{CSS}</style></head><body><main><nav><a href="index.html">리포트 목록</a>'
         f'{nav}</nav><header class="hero"><span class="eyebrow">Rolling window &amp; multi-strategy validation</span><h1>슬라이딩 윈도우·다중 전략 검증</h1><p>{subtitle}</p></header>'
         f'{body}<footer>출처: 이 프로젝트가 수집한 KIS 수정주가·투자자별 일별 수급 및 지정 ETF 가격, 기존 전략 신호와 백테스트 규칙. 이 문서는 과거 시뮬레이션 분석이며 실제 체결 성과나 미래 수익을 보장하지 않습니다.</footer></main><script>{JS}</script></body></html>'
@@ -958,8 +995,9 @@ def render(data: Mapping[str, Any], data_href: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-dir", type=Path, default=DEFAULT_INPUT)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--data-href", default=f"../rolling-backtests/{REPORT_DATE}")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--data-href")
+    parser.add_argument("--report-date", help="보고서/공유 파일 날짜. 생략하면 metadata.as_of를 사용합니다.")
     args = parser.parse_args()
 
     input_path = args.input_dir / "results.json"
@@ -967,9 +1005,12 @@ def main() -> None:
     verification_path = args.input_dir / "verification.json"
     if verification_path.exists():
         data["_verification"] = json.loads(verification_path.read_text(encoding="utf-8"))
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(render(data, args.data_href), encoding="utf-8")
-    print(args.output.resolve())
+    report_date = str(args.report_date or data.get("metadata", {}).get("as_of") or REPORT_DATE)
+    output = args.output or Path(f"data/reports/rolling-mixed-backtest-{report_date}.html")
+    data_href = args.data_href or f"../rolling-backtests/{report_date}"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(render(data, data_href, report_date=report_date), encoding="utf-8")
+    print(output.resolve())
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ import pytest
 from invest_bot.jobs.rolling_backtest_research import (
     Run, apply_costs, benchmark_curves, build_signal_models, candidate_models,
     capital_mix, merge_investor_history, rolling_windows, run_signal, select_model,
-    signal_mix, walk_blocks,
+    signal_mix, validate_aligned_inputs, walk_blocks,
 )
 from invest_bot.jobs.rolling_backtest_research import main, REPORT_SYMBOLS
 from invest_bot.market.analysis import DailyPriceAnalyzer
@@ -132,18 +132,35 @@ def test_candidates_do_not_double_vote_equivalent_default_rules():
     assert len(unique['components'])==6 and 'disparity'not in unique['components']
 
 
+def test_aligned_input_validation_accepts_fresh_lengths_and_rejects_calendar_drift():
+    dates=pd.bdate_range('2024-01-02',periods=501)
+    indicators=pd.DataFrame({'date':dates,'close':100.,'ma_5':100.,'ma_20':100.,'ma_60':100.,'rsi_14':50.,'momentum_20':0.})
+    indicators.loc[:58,'ma_60']=np.nan
+    flow=pd.DataFrame({'date':dates,'foreign_net_qty':1,'institutional_net_qty':2,'personal_net_qty':-3})
+    raw,start,eligible=validate_aligned_inputs({'a':(indicators,flow),'b':(indicators.copy(),flow.copy())})
+    assert len(raw)==501 and start==dates[59] and len(eligible)==442
+    shifted=indicators.copy();shifted.loc[500,'date']=shifted.loc[500,'date']+pd.Timedelta(days=1)
+    with pytest.raises(ValueError,match='constituent calendars differ'):
+        validate_aligned_inputs({'a':(indicators,flow),'b':(shifted,flow.assign(date=shifted.date))})
+    with pytest.raises(ValueError,match='investor/indicator calendars differ'):
+        validate_aligned_inputs({'a':(indicators,flow.iloc[:-1])})
+    with pytest.raises(ValueError,match='at least 240 required'):
+        validate_aligned_inputs({'a':(indicators.iloc[:250],flow.iloc[:250])})
+
+
 def test_clean_output_preflight_uses_explicit_immutable_benchmark(tmp_path,monkeypatch,capsys):
     weekly=tmp_path/'weekly';history=tmp_path/'history';weekly.mkdir();history.mkdir()
-    dates=pd.bdate_range('2024-10-14',periods=486)
+    dates=pd.bdate_range('2024-10-14',periods=500)
     f=pd.DataFrame({'date':dates,'close':100,'volume':1000,'ma_5':100.,'ma_20':100.,'ma_60':100.,'rsi_14':50.,'momentum_20':0.})
     f.loc[:58,'ma_60']=np.nan
     for symbol in REPORT_SYMBOLS:
         f.to_csv(weekly/f'{symbol}_indicators.csv',index=False)
-        investor(dates[:485].strftime('%Y%m%d'),[1]*485).to_csv(history/f'{symbol}_investor.csv',index=False)
+        investor(dates[:499].strftime('%Y%m%d'),[1]*499).to_csv(history/f'{symbol}_investor.csv',index=False)
         investor(dates[-13:].strftime('%Y%m%d'),[1]*13).to_csv(weekly/f'{symbol}_investor.csv',index=False)
     benchmark=tmp_path/'benchmark.csv';pd.DataFrame({'stck_bsop_date':dates.strftime('%Y%m%d'),'stck_clpr':100}).to_csv(benchmark,index=False)
     out=tmp_path/'new-output'
     monkeypatch.setattr('sys.argv',['run','--weekly-input',str(weekly),'--history-input',str(history),'--benchmark-input',str(benchmark),'--output',str(out),'--validate-inputs-only'])
     main()
-    assert '"eligible_rows": 427'in capsys.readouterr().out
+    output=capsys.readouterr().out
+    assert '"raw_rows": 500'in output and '"eligible_rows": 441'in output
     assert not (out/'069500_prices.csv').exists()

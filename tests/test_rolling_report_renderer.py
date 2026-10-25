@@ -97,3 +97,36 @@ def test_no_trade_win_rate_is_missing_and_invalid_metrics_fail_explicitly(resear
     record["net_return_pct"] = float("nan")
     with pytest.raises(ValueError, match="JSON compliant"):
         renderer.stock_explorer_section(research)
+
+
+def test_render_uses_metadata_date_and_actual_explorer_counts(research):
+    research["metadata"] = {
+        "as_of": "2026-10-23", "eligible_start": "2025-01-08", "eligible_rows": 435,
+        "raw_start": "2024-10-14", "raw_rows": 494, "cost_rate": 0.001,
+        "lengths": [20], "step": 20, "generated_at": "2026-10-24T09:00:00+09:00",
+    }
+    research["portfolio_results"] = [{
+        "window_id":"recent-5","model_id":"momentum","kind":"recent","length":5,
+        "start_date":"2026-10-19","end_date":"2026-10-23","regime":"횡보",
+        "gross_return_pct":0,"net_return_pct":0,"bh_net_return_pct":0,"etf_net_return_pct":0,
+        "net_mdd_pct":0,"trade_count":0,"mean_exposure_pct":0,
+        "profitable_constituents":0,"no_trade_constituents":2,
+    }]
+    html = renderer.render(research)
+    assert "rolling-mixed-backtest-2026-10-23.zip" in html
+    assert "weekly-trend-2026-10-23.html" in html
+    assert "단일·혼합 2개 모델과 모든 2개 슬라이딩 창" in html
+    assert "2026-10-02 종가" not in html
+
+
+def test_price_revision_notice_is_optional_and_source_visible():
+    assert renderer.price_revision_notice({}) == ""
+    html = renderer.price_revision_notice({
+        "price_revision_count": 32,
+        "price_revision_dates": ["2026-10-13"],
+        "price_revision_file": "../weekly-trend/2026-10-24/price_revisions.csv",
+    })
+    assert "중복 날짜 비교에서 32건" in html
+    assert "기간 연장과 원자료 재조회 차이가 함께 포함" in html
+    assert "2026-10-13" in html
+    assert '../weekly-trend/2026-10-24/price_revisions.csv' in html

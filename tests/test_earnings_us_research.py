@@ -4,7 +4,7 @@ import pytest
 
 from invest_bot.jobs.earnings_us_research import (
     align_us_features, earnings_cooldown, event_reactions, factor_statistics,
-    gate_entries, normalize_us, validated_earnings,
+    factor_window_definitions, gate_entries, normalize_us, validated_earnings,
 )
 
 
@@ -144,3 +144,19 @@ def test_conflicting_same_day_earnings_releases_fail_without_last_wins():
     ]}
     with pytest.raises(ValueError,match='Conflicting'):
         validated_earnings({'issuers':[record]}, '2026-10-19')
+
+
+def test_factor_common_history_uses_validated_legacy_eligible_rows():
+    dates=pd.bdate_range('2024-01-02',periods=501)
+    start=str(dates[59].date());end=str(dates[-1].date())
+    legacy={'metadata':{'eligible_start':start,'eligible_rows':442,'as_of':end},'windows':[
+        {'id':'full','kind':'full','end_date':end},
+        {'id':'roll-240','kind':'rolling','end_date':end},
+        {'id':'old','kind':'rolling','end_date':str(dates[-2].date())},
+    ]}
+    windows=factor_window_definitions(legacy,dates)
+    assert windows[0]=={'id':'common-history','length':442,'start_date':start,'end_date':end}
+    assert [row['id'] for row in windows]==['common-history','roll-240']
+    legacy['metadata']['eligible_rows']=441
+    with pytest.raises(ValueError,match='eligible row count'):
+        factor_window_definitions(legacy,dates)

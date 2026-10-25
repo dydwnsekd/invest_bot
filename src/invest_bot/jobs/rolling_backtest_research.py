@@ -32,6 +32,8 @@ SINGLE_RULES = {
     'momentum':'20거래일 가격 변화≥10%이면 매수, ≤−10%이면 매도',
     'investor-flow-custom':'외국인·기관 모두 순매수이고 종가가20일선 위이면 매수; 모두 순매도이고 종가가20일선 아래이면 매도',
 }
+REQUIRED_READY_COLUMNS = ('ma_5', 'ma_20', 'ma_60', 'rsi_14', 'momentum_20')
+MIN_ELIGIBLE_ROWS = 240
 
 
 def candidate_models():
@@ -63,6 +65,46 @@ def merge_investor_history(history, latest):
     result=pd.concat([a,b[~b.date.isin(a.date)]],ignore_index=True).sort_values('date').reset_index(drop=True)
     require_unique_trading_dates(result,source='merged investor history')
     return result
+
+
+def validate_aligned_inputs(inputs, min_eligible_rows=MIN_ELIGIBLE_ROWS):
+    """Validate constituent inputs and derive the shared usable calendar."""
+    if not inputs:
+        raise ValueError('No constituent inputs')
+    raw_dates = None
+    ready = []
+    for symbol, (indicators, investor) in inputs.items():
+        required = {'date', 'close', *REQUIRED_READY_COLUMNS}
+        missing = required - set(indicators)
+        if missing:
+            raise ValueError(f'{symbol}: missing indicator columns {sorted(missing)}')
+        require_unique_trading_dates(indicators, source=f'{symbol} indicators')
+        require_unique_trading_dates(investor, source=f'{symbol} investor')
+        dates = indicators.date.reset_index(drop=True)
+        investor_dates = investor.date.reset_index(drop=True)
+        if dates.isna().any() or not dates.is_monotonic_increasing:
+            raise ValueError(f'{symbol}: invalid indicator calendar')
+        if investor_dates.isna().any() or not investor_dates.is_monotonic_increasing or not dates.equals(investor_dates):
+            raise ValueError(f'{symbol}: investor/indicator calendars differ')
+        if raw_dates is None:
+            raw_dates = dates
+        elif not dates.equals(raw_dates):
+            raise ValueError(f'{symbol}: constituent calendars differ')
+        close = pd.to_numeric(indicators.close, errors='coerce')
+        if not np.isfinite(close).all() or close.le(0).any():
+            raise ValueError(f'{symbol}: invalid close prices')
+        complete = indicators.dropna(subset=list(REQUIRED_READY_COLUMNS))
+        if complete.empty:
+            raise ValueError(f'{symbol}: indicators never become ready')
+        ready.append(complete.iloc[0].date)
+    start = max(ready)
+    eligible_dates = raw_dates[raw_dates.ge(start)].reset_index(drop=True)
+    if len(eligible_dates) < min_eligible_rows:
+        raise ValueError(
+            f'Only {len(eligible_dates)} common-ready observations; '
+            f'at least {min_eligible_rows} required'
+        )
+    return raw_dates, start, eligible_dates
 
 
 def signal_mix(frames, model):
@@ -198,22 +240,18 @@ def main():
     args=parser.parse_args(); out=args.output;out.mkdir(parents=True,exist_ok=True)
     if not 0<=args.cost_rate<1:parser.error('invalid cost rate')
     rate=args.cost_rate;models=candidate_models(); (out/'models.json').write_text(json.dumps(models,ensure_ascii=False,indent=2))
-    inputs={};ready=[];sources=[]
+    inputs={};sources=[]
     for symbol in REPORT_SYMBOLS:
         source=args.weekly_input/f'{symbol}_indicators.csv';f=pd.read_csv(source,parse_dates=['date'])
         history=args.history_input/f'{symbol}_investor.csv';latest=args.weekly_input/f'{symbol}_investor.csv'
         inv=merge_investor_history(pd.read_csv(history),pd.read_csv(latest))
-        require_unique_trading_dates(f,source=str(source))
-        if len(f)!=486 or not f.date.equals(inv.date):raise ValueError(f'{symbol}: expected 486 aligned dates')
-        ready.append(f.dropna(subset=['ma_5','ma_20','ma_60','rsi_14','momentum_20']).iloc[0].date)
         inputs[symbol]=(f,inv)
         for p in [source,history,latest]:sources.append(dict(symbol=symbol,path=str(p),sha256=hashlib.sha256(p.read_bytes()).hexdigest()))
-    start=max(ready);dates=next(iter(inputs.values()))[0].date[lambda d:d>=start].reset_index(drop=True)
-    if len(dates)!=427:raise ValueError('Expected 427 common-ready observations')
+    raw_dates,start,dates=validate_aligned_inputs(inputs)
     etf_path=args.benchmark_input;etf=pd.read_csv(etf_path);etf['date']=pd.to_datetime(etf.stck_bsop_date.astype(str),format='%Y%m%d');etf=etf[etf.date>=start].reset_index(drop=True)
     if not etf.date.equals(dates):raise ValueError('ETF/stock benchmark calendars differ')
     if args.validate_inputs_only:
-        print(json.dumps(dict(stock_sources=len(inputs),raw_rows=486,eligible_rows=len(dates),benchmark_input=str(etf_path),output=str(out)),ensure_ascii=False))
+        print(json.dumps(dict(stock_sources=len(inputs),raw_rows=len(raw_dates),eligible_rows=len(dates),benchmark_input=str(etf_path),output=str(out)),ensure_ascii=False))
         return
     if etf_path.resolve()!=(out/'069500_prices.csv').resolve():
         shutil.copyfile(etf_path,out/'069500_prices.csv')
@@ -289,7 +327,7 @@ def main():
         bpath=np.asarray(tc['buy_hold']['net'])/INITIAL_EQUITY*bh_level;epath=np.asarray(tc['etf']['net'])/INITIAL_EQUITY*etf_level
         wf_bh.extend(bpath.tolist());wf_etf.extend(epath.tolist());bh_level=float(bpath[-1]);etf_level=float(epath[-1]);wfdates.extend(tc['dates']);wfblocks.append(block)
     wf=dict(train_length=120,test_length=20,blocks=wfblocks,policy_summaries=[dict(policy=p,net_return_pct=(policy_levels[p]/INITIAL_EQUITY-1)*100,net_mdd_pct=mdd(policy_paths[p]),bh_net_return_pct=(bh_level/INITIAL_EQUITY-1)*100,etf_net_return_pct=(etf_level/INITIAL_EQUITY-1)*100) for p in policies],fixed_summaries=[dict(model_id=m['id'],net_return_pct=(fixed_levels[m['id']]/INITIAL_EQUITY-1)*100,net_mdd_pct=mdd(fixed_paths[m['id']])) for m in models],curves=dict(dates=wfdates,policies=policy_paths,buy_hold=wf_bh,etf=wf_etf))
-    metadata=dict(as_of=str(dates.iloc[-1].date()),raw_start=str(next(iter(inputs.values()))[0].date.iloc[0].date()),raw_rows=486,eligible_start=str(start.date()),eligible_rows=len(dates),step=20,lengths=[20,60,120,240],cost_rate=rate,generated_at=str(datetime.now(ZoneInfo('Asia/Seoul'))),runner_calls=run_count,stock_model_evaluations=len(stock_rows),rolling_window_count=len(windows)-2)
+    metadata=dict(as_of=str(dates.iloc[-1].date()),raw_start=str(raw_dates.iloc[0].date()),raw_rows=len(raw_dates),eligible_start=str(start.date()),eligible_rows=len(dates),step=20,lengths=[20,60,120,240],cost_rate=rate,generated_at=str(datetime.now(ZoneInfo('Asia/Seoul'))),runner_calls=run_count,stock_model_evaluations=len(stock_rows),rolling_window_count=len(windows)-2)
     payload=dict(metadata=metadata,models=models,windows=windows,portfolio_results=portfolio_rows,stock_results=stock_rows,aggregates=ag,stock_aggregates=sag,regime_aggregates=rag,curves=curves,walk_forward=wf)
     for name,frame in [('window_results',sf),('portfolio_results',pf),('aggregates',pd.DataFrame(ag)),('stock_aggregates',pd.DataFrame(sag)),('regime_aggregates',pd.DataFrame(rag)),('windows',pd.DataFrame(windows)),('walk_forward_selections',pd.DataFrame([{**{k:v for k,v in b.items() if k!='selections'},**s} for b in wfblocks for s in b['selections']]))]:frame.to_csv(out/f'{name}.csv',index=False)
     (out/'results.json').write_text(json.dumps(payload,ensure_ascii=False,default=json_default,allow_nan=False))

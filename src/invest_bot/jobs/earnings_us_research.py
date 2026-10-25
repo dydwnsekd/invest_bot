@@ -196,6 +196,19 @@ def validated_earnings(packet: dict, as_of: str) -> tuple[list[dict], list[dict]
     return issuers, sorted(unique.values(), key=lambda e: (e['date'], e['issuer_symbol']))
 
 
+def factor_window_definitions(legacy: dict, dates) -> list[dict]:
+    """Build factor windows from the rolling result's validated calendar."""
+    metadata = legacy['metadata']
+    eligible_rows = int(metadata['eligible_rows'])
+    actual_eligible_rows = int(pd.Series(pd.to_datetime(dates)).ge(pd.Timestamp(metadata['eligible_start'])).sum())
+    if eligible_rows != actual_eligible_rows:
+        raise ValueError('Legacy eligible row count differs from current price calendar')
+    windows = [dict(id='common-history', length=eligible_rows,
+                    start_date=metadata['eligible_start'], end_date=metadata['as_of'])]
+    windows += [w for w in legacy['windows'] if w['end_date'] == metadata['as_of'] and w['kind'] != 'full']
+    return windows
+
+
 def analyze(args) -> dict:
     out = args.output
     out.mkdir(parents=True, exist_ok=True)
@@ -221,8 +234,7 @@ def analyze(args) -> dict:
     issuers, events = validated_earnings(packet, args.as_of)
     names = {r['symbol']: r['symbol_name'] for r in legacy['stock_results']}
     stats, reactions, conditions = [], [], []
-    window_defs = [dict(id='common-history', length=427, start_date=legacy['metadata']['eligible_start'], end_date=legacy['metadata']['as_of'])]
-    window_defs += [w for w in legacy['windows'] if w['end_date'] == legacy['metadata']['as_of'] and w['kind'] != 'full']
+    window_defs = factor_window_definitions(legacy, dates)
     benchmark_return = benchmark.close.pct_change(fill_method=None) * 100
     for symbol, price in prices.items():
         stock_return = price.close.pct_change(fill_method=None) * 100
