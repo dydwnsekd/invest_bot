@@ -844,3 +844,20 @@ python scripts/render_earnings_us_report.py
 첫 명령의 `--collect-us`는 FRED 공개 CSV만 갱신합니다. 발행사 자료를 확인한 `data/earnings-us/2026-10-19/earnings.json`과 기존 rolling/weekly 입력이 필요하며, 이 파일은 자동 DART/컨센서스 수집기가 아닙니다. 옵션을 생략하면 저장된 미국 CSV로 재현합니다. 결과 HTML은 `data/reports/earnings-us-impact-2026-10-19.html`입니다. 기존 슬라이딩 HTML에도 새 보고서와 종목별 상세 연결을 넣습니다. 수치·단위·검증 범위는 [실적·미국시장 연구](docs/tasks/05_strategy_backtest.md#실적-발표미국-시장-영향-연구-2026-10-19)를 따릅니다.
 
 미국 자료는 뉴욕17:00 확인 가능을 가정해 한국09:00 이전 관측만 연결합니다. 국내 휴장 중 미국 거래는 누적하며, 상관/부분상관과 발표 전후 반응을 설명 통계로 제시합니다. 4개 원전략에 S&P500 누적−1% 조건과 확인된 실적 발표 다음3거래일의 매수신호 보류를 각각/함께 적용해 68개 기간에서 비교합니다. 이미 대기 중인 주문을 취소하는 규칙은 아니며 실적 서프라이즈·가이던스 점수는 계산하지 않습니다. 운영 전략·DB·배포는 변경하지 않습니다.
+
+### 연구 보고서 최신 입력 갱신 (2026-10-24)
+
+10월24일 연구는 국내 가격·수급을10월23일까지 재조회한 `data/weekly-trend/2026-10-24/`를 사용합니다. 과거 입력을 보존하고 494개 원시 거래일·435개 공통 준비 거래일을 검증했습니다. 과거와 중복되는10월13일 가격·거래량33셀의 재조회 차이는 `price_revisions.csv`와 HTML 상단에 표시합니다. 결과 차이에는 기간 연장뿐 아니라 원자료 차이도 포함됩니다. 삼성바이오로직스10월21일 분기 실적을 추가했고, HD현대중공업10월19일 수주 공시는 분기 손익과 분리했습니다.
+
+저장된 CSV로 다시 계산·렌더링하는 명령은 다음과 같습니다. 실적 JSON은 공식 발표 확인이 필요한 수동 자료이며 날짜 인자를 바꾸는 것만으로 갱신되지 않습니다.
+
+```bash
+python scripts/run_rolling_backtest_research.py --weekly-input data/weekly-trend/2026-10-24 --history-input data/history/2026-10-13 --benchmark-input data/weekly-trend/2026-10-24/069500_prices.csv --output data/rolling-backtests/2026-10-24 --validate-inputs-only
+python scripts/run_rolling_backtest_research.py --weekly-input data/weekly-trend/2026-10-24 --history-input data/history/2026-10-13 --benchmark-input data/weekly-trend/2026-10-24/069500_prices.csv --output data/rolling-backtests/2026-10-24
+python scripts/run_earnings_us_research.py --weekly-input data/weekly-trend/2026-10-24 --rolling-input data/rolling-backtests/2026-10-24 --earnings-file data/earnings-us/2026-10-24/earnings.json --us-input data/earnings-us/2026-10-24/us --output data/earnings-us/2026-10-24 --as-of 2026-10-24
+python scripts/render_rolling_backtest_report.py --input-dir data/rolling-backtests/2026-10-24 --report-date 2026-10-24
+python scripts/render_earnings_us_report.py --input data/earnings-us/2026-10-24/analysis.json --report-date 2026-10-24 --link-rolling data/reports/rolling-mixed-backtest-2026-10-24.html
+python scripts/render_weekly_trend_report.py --input-dir data/weekly-trend/2026-10-24 --output data/reports/weekly-trend-2026-10-24.html --report-date 2026-10-24
+```
+
+입력 폴더 이름과 조사일을 맞추려면 `--report-date`를 지정하고, 실제 가격 기준일은 입력 메타데이터로 구분합니다. 생성 HTML3개와 공유 ZIP은 `data/reports/`에 저장하며 Git 제외를 유지합니다. 실행 검증 범위는 [Task05](docs/tasks/05_strategy_backtest.md#연구-보고서-최신-입력-갱신-2026-10-24)를 참고하세요.
