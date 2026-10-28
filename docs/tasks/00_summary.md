@@ -4,6 +4,14 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다. 다음 개선 작업·우선순위·진행 상태는 [개선 작업 색인](../operations/improvements/README.md)과 담당 역할 문서를 먼저 확인합니다.
 
+## 현재 상태 (2026-10-27)
+
+기준 HEAD는 main `1e73d60`이다. QA02 코드 `6607de7`·문서 `09bfcd7`과 연구 보고서 갱신 코드 `3fbbca7`·문서 `1e73d60`이 반영됐다. **G01b 숫자형 snapshot 날짜 정규화**의 구현·독립 QA·최종 후보 검증을 완료했으며 이번 변경은 커밋 전이다. 정수·실수·문자열 YYYYMMDD를 같은 달력 날짜로 읽고 무효값·컬럼 우선순위·원본/JSON을 보존한다. 독립 QA가 발견한 무효 list/ndarray 저장 회귀8개도 scalar guard로 보완했다.
+
+신규 기능49개·독립40개, 관련281 passed와 최종 소스 격리 후보 기본1100 passed / 2 deselected / 36 warnings다. 임시 SQLite·CSV 저장/조회와 snapshot 이후 추가 SELECT0회를 검증했다. 기존 metadata의1970년/NULL 값을 자동 재작성하지 않으며 실제 운영 DB/PG·API·원격 CI·배포는 미검증이다. [정책·실패/보완·명령·경고](02_data_collection.md#snapshot-기준일-날짜-계약-2026-10-27), [데이터 역할 문서](../operations/improvements/data.md#g01b)를 따른다. 다음 기능 후보는 **G07a 스케줄러 실패 후 대기**다.
+
+실제 설정을 제외한 추적 파일 격리본을 사용했다. 원본 데이터 재쓰기·운영 API/DB·서비스 제어·commit·push는 수행하지 않았다. G01a·QA01 원격 CI 및 QA03은 별도 대기다. 아래 날짜별 절은 당시 기록이다.
+
 ## 현재 상태 (2026-10-23)
 
 현재 기준은 main `036def2` + 이번 미커밋 QA02 보완이다. G06b 코드 `dee88af`·문서 `036def2` 반영을 확인했고 기존 QA 세션에서 **QA02 지정 범위의 독립 종합 판정**을 완료했다. 실제 main·네 화면·SQLite를 연결한 독립 회귀31개를 추가했다. 브라우저에서 발견한 고립 수급값 가시성 결함을 독립3개 실패로 재현한 뒤 전문 차트의 점 표시·null gap 유지로 보완했다.

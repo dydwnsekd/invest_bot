@@ -207,6 +207,8 @@
 - 다중 종목 배치 수집
 - 정기 다중 종목 수집 스케줄링 초안
 
+DB snapshot의 새 저장 기준일은 숫자형·문자열 YYYYMMDD를 같은 달력 날짜로 정규화합니다. 컬럼 우선순위·무효값·원본 보존과 기존 데이터 재쓰기 제외 범위는 [snapshot 기준일 계약](docs/tasks/02_data_collection.md#snapshot-기준일-날짜-계약-2026-10-27)을 따릅니다.
+
 ### 분석
 
 - DB snapshot 또는 파일 fallback 기반 일봉 로드 및 컬럼 정규화

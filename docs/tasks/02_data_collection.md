@@ -46,7 +46,23 @@
 
 기본 저장 대상은 DB의 `dataset_frames`이며, 아래 경로는 파일 fallback 또는 기존 CSV 기반 호환 경로다.
 
-`dataset_frames.as_of_date`는 날짜 컬럼의 최대 날짜로 저장한다. KIS 일봉 응답은 최신 거래일이 첫 행으로 올 수 있으므로 프레임 행 순서에 의존하지 않는다.
+## Snapshot 기준일 날짜 계약 (2026-10-27)
+
+`dataset_frames.as_of_date`는 `date → trade_date → stck_bsop_date` 순서에서 첫 유효 컬럼의 최대 달력 날짜로 저장한다. 한 컬럼의 유효 날짜가 없을 때만 다음 컬럼으로 넘어가며, 모두 무효이거나 빈 프레임이면 NULL이다. KIS 응답이 역순이어도 프레임 행 순서에 의존하지 않는다.
+
+[DB frame 저장](../../src/invest_bot/db/frame_storage.py)은 YYYYMMDD 정수·정수값 실수·문자열과 `.0` 문자열을 같은 날짜로 읽는다. `20261002`, `20261002.0`, `"20261002"`, `"20261002.0"`는 모두 `2026-10-02`다. 잘못된 월·일, 비8자리 숫자, 분수 날짜, bool·결측·무한대와 list/dict/ndarray 등 비스칼라는 날짜로 사용하지 않으며 epoch로 추정하지 않는다. 기존 날짜/시각과 ISO 문자열은 그 값의 현지 달력 날짜를 사용하고 UTC 날짜로 옮기지 않는다. 혼합 표현·nullable dtype·반복 index가 있어도 유효 날짜의 최댓값을 보존한다.
+
+이는 새 `save`의 기준일 metadata 추출 계약이다. 원본 DataFrame·JSON payload·행 수·repository 정렬은 유지하며, 과거 저장된 1970년/NULL 기준일을 자동으로 다시 쓰지 않는다. 실거래·휴장일·미래일 판단 정책도 추가하지 않는다. [G01b 현재 상태·검증](../operations/improvements/data.md#g01b), [기능 회귀](../../tests/test_db_frame_storage.py)를 따른다. 별도 정규화 fact 저장과 CSV/리포트 파서의 계약을 한꺼번에 바꾸는 작업이 아니다.
+
+main `1e73d60` + 미커밋 G01b에서 기존 데이터→QA→데이터 보완→QA를 순차 재사용했다. 기능49개를 추가해 수정 전23 failed / 30 passed, 수정 후53 passed와 기존 소비자188 passed를 확인했다. 별도 [독립 QA40개](../../tests/test_g01b_independent_qa.py)는 실제 SQLite save/load·기준일·컬럼 우선순위·CSV 왕복·NULL/동률 정렬·기존 payload 호환·snapshot 이후 frame consumer의 추가 SELECT0회를 검사한다. 최초30 passed / 10 failed 중2개는 기존 JSON dtype 정규화를 QA가 불변 대상으로 오인한 기대값으로, 기준 코드의 실제 roundtrip과 비교하도록 QA 파일만 보정했다. 나머지8개는 기존 코드에서 저장되던 무효 list/ndarray가 새 guard에서 예외를 내는 실제 회귀였다. 최초 합산273 passed / 8 failed를 보존한 뒤 scalar guard2줄을 추가했다.
+
+보완 후 독립40개 전체와 합산281 passed를 QA가 새 실행·manifest262개 대조로 승인했다. 메인은 동일 제품/기능/독립 테스트의 최종 소스 격리 후보에서 기본1100 passed / 2 deselected / 36 warnings,40.85초를 확인했다. 경고36개에는 기존 pandas/Alembic32개와 이번 QA의 기준 코드 비교/기존 JSON decoder 경계 입력4개가 포함되며 숨기지 않았다. 범용 JSON decoder나 다른 날짜 파서의 향후 버전 대응은 이번 변경에서 개편하지 않았다.
+
+- 최초 기능 명령: `.venv/bin/python -B -m pytest tests/test_db_frame_storage.py -q --tb=short`.
+- 보완 후 관련 명령: `.venv/bin/python -B -m pytest tests/test_db_frame_storage.py tests/test_market_report_generator.py tests/test_daily_price_analyzer.py tests/test_csv_storage.py tests/test_db_write_path.py tests/test_dataset_frame_list_latest_batch.py tests/test_watchlist_snapshot_queries.py tests/test_dashboard_snapshot_frame_loader.py tests/test_dashboard_service.py tests/test_streamlit_state.py tests/test_streamlit_dashboard.py tests/test_run_market_report.py tests/test_g01b_independent_qa.py -q --tb=short`.
+- 기본 명령: `.venv/bin/python -B scripts/run_tests.py --suite default -q --tb=short`. 실제 실행은 추적 파일만 복사한 격리 cwd에서 `env -i`·`PYTHONDONTWRITEBYTECODE=1`·`TMPDIR=/private/tmp`와 원본 venv의 절대 Python 경로를 사용했다. 기본 suite는 최종 소스에서1회 실행했다.
+
+단계별 RED/GREEN 로그·JUnit·입력/선택 파일 해시는 임시 G01b 증거 디렉터리에 보존했다. 원본·데이터·QA·기본 후보의 제품/테스트 해시를 대조했으며, 전체 기능 suite 이후에는 문서만 갱신·동기화하고 링크/ID를 별도로 검사했다. 실제 설정·백업·관련 없는 추적 파일·HEAD·Git index는 보존했다. Python3파일 AST/컴파일·`git diff --check`와 Markdown57개·로컬 링크723개·문서 ID57개·개념12개/관계14개 검사를 통과했고 누락·중복·미등록은0개다. 독립 SQLite 검증을 실제 PostgreSQL·운영 데이터·원격 CI 통과로 해석하지 않는다. 기존 저장 metadata의 재쓰기·migration·실제 API/DB·서비스·commit·push는 수행하지 않았다.
 
 ```text
 data/raw/domestic_stock/
