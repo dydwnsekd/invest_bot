@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import re
+from datetime import UTC, date, datetime
+from numbers import Number
 from pathlib import Path
 
 import pandas as pd
@@ -71,15 +73,36 @@ class DbFrameStorage:
         return normalize_symbol(symbol) if symbol else ""
 
     @staticmethod
-    def _resolve_as_of_date(frame: pd.DataFrame):
+    def _resolve_as_of_date(frame: pd.DataFrame) -> date | None:
         if frame.empty:
             return None
         for column in ("date", "trade_date", "stck_bsop_date"):
             if column not in frame.columns:
                 continue
-            parsed = pd.to_datetime(frame[column], errors="coerce")
-            latest = parsed.max()
-            if pd.isna(latest):
-                continue
-            return latest.date()
+            parsed = [_parse_snapshot_date(value) for value in frame[column]]
+            valid_dates = [value for value in parsed if value is not None]
+            if valid_dates:
+                return max(valid_dates)
+        return None
+
+
+def _parse_snapshot_date(value: object) -> date | None:
+    """Read a local calendar day without interpreting numeric values as epochs."""
+    if not pd.api.types.is_scalar(value):
+        return None
+    if value is None or pd.isna(value) or isinstance(value, bool):
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    try:
+        if re.fullmatch(r"[0-9]{8}(?:\.0+)?", text):
+            return datetime.strptime(text.split(".")[0], "%Y%m%d").date()
+        if isinstance(value, Number) or re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", text):
+            return None
+        parsed = pd.to_datetime(text, errors="coerce")
+        return None if pd.isna(parsed) else parsed.date()
+    except (TypeError, ValueError, OverflowError):
         return None
