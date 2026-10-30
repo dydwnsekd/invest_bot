@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import ssl
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
+from urllib.error import HTTPError, URLError
 
+import requests
 import yaml
+from sqlalchemy.exc import OperationalError, TimeoutError as PoolTimeoutError
 
 from invest_bot.config.settings import CONFIG_DIR
 from invest_bot.market.master_sync import sync_stock_master
@@ -127,6 +131,13 @@ class ScheduledCollectionRunner:
     now_fn: Callable[[], datetime] = datetime.now
 
     def run_once(self) -> dict[str, object]:
+        result = self._run_once(retry_transient=False)
+        assert result is not None
+        return result
+
+    def _run_once(self, *, retry_transient: bool) -> dict[str, object] | None:
+        # Only hook/collector errors may become a logged failed attempt (None).
+        # Clock and log failures must still escape, including while logging errors.
         started_at = self.now_fn()
         self._append_log(
             {
@@ -150,6 +161,8 @@ class ScheduledCollectionRunner:
                     "error": str(exc),
                 }
             )
+            if retry_transient and _is_retryable_collection_error(exc):
+                return None
             raise
         finished_at = self.now_fn()
         self._append_log(
@@ -164,30 +177,45 @@ class ScheduledCollectionRunner:
         return result
 
     def run_forever(self, max_runs: int | None = None) -> int:
-        completed_runs = 0
-        if self.schedule.run_on_startup and _should_continue(completed_runs, max_runs):
-            self.run_once()
-            completed_runs += 1
-
-        while _should_continue(completed_runs, max_runs):
-            wait_seconds = self.schedule.interval_minutes * 60
-            next_run_at = self.now_fn() + timedelta(seconds=wait_seconds)
-            self._append_log(
-                {
-                    "event": "collection_waiting",
-                    "next_run_at": next_run_at.isoformat(timespec="seconds"),
-                    "wait_seconds": wait_seconds,
-                }
-            )
-            self.sleep_fn(wait_seconds)
-            self.run_once()
-            completed_runs += 1
-        return completed_runs
+        """Return attempted cycles, including logged transient failures, up to max_runs."""
+        attempted_runs = 0
+        while _should_continue(attempted_runs, max_runs):
+            if attempted_runs or not self.schedule.run_on_startup:
+                wait_seconds = self.schedule.interval_minutes * 60
+                next_run_at = self.now_fn() + timedelta(seconds=wait_seconds)
+                self._append_log(
+                    {
+                        "event": "collection_waiting",
+                        "next_run_at": next_run_at.isoformat(timespec="seconds"),
+                        "wait_seconds": wait_seconds,
+                    }
+                )
+                self.sleep_fn(wait_seconds)
+            self._run_once(retry_transient=True)
+            attempted_runs += 1
+        return attempted_runs
 
     def _append_log(self, payload: dict[str, object]) -> None:
         self.schedule.log_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.schedule.log_path, "a", encoding="utf-8") as file:
             file.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _is_retryable_collection_error(error: Exception) -> bool:
+    """Conservative job-error policy; never classify by message or generic OSError."""
+    if isinstance(error, (HTTPError, requests.HTTPError)):
+        status = (error.code if isinstance(error, HTTPError) else
+                  error.response.status_code if error.response is not None else None)
+        return status in (408, 429) or isinstance(status, int) and 500 <= status < 600
+    if isinstance(error, URLError):
+        return not isinstance(error.reason, (PermissionError, FileNotFoundError, ValueError, TypeError, ssl.SSLError))
+    if isinstance(error, requests.exceptions.SSLError):
+        return False
+    if isinstance(error, OperationalError):
+        return error.connection_invalidated
+    return type(error) is RuntimeError or isinstance(
+        error, (TimeoutError, ConnectionError, requests.Timeout, requests.ConnectionError, PoolTimeoutError)
+    )
 
 
 def _normalize_symbols(raw_symbols: object) -> list[str]:
@@ -265,7 +293,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--config", dest="config_path", help="Optional path to a collection schedule YAML file.")
     parser.add_argument("--validate-config", action="store_true", help="Validate the schedule and exit without collecting.")
     parser.add_argument("--once", action="store_true", help="Run a single collection cycle and exit.")
-    parser.add_argument("--max-runs", type=int, default=None, help="Optional max collection cycles before exit.")
+    parser.add_argument(
+        "--max-runs", type=int, default=None,
+        help="Maximum collection attempts before exit, including transient failures.",
+    )
     return parser.parse_args()
 
 
