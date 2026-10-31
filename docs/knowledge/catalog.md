@@ -29,7 +29,7 @@
 | D-DASHBOARD | [대시보드](../tasks/04_dashboard.md) | status | active | 대시보드 · 현재 UI·G05a 수급·G05b 날짜·G06a 실행 안내·G06b 가독성·QA02 독립 검증과 고립 관측점 보완; 날짜별 증거 구분 |
 | D-BACKTEST | [전략·백테스트](../tasks/05_strategy_backtest.md) | status | active | 퀀트 · 구현된 전략과 백테스트 규칙·매수 후 보유 비교·슬라이딩 혼합 연구 |
 | D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | plan | proposed | 거래 · 아직 구현하지 않은 주문 기능 |
-| D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 시작·재시작 사전검증, 설정 타입, 초기화·로그·Git 관리 경계 |
+| D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 시작·재시작 사전검증, 스케줄러 실패 대기·시도 상한, 설정 타입, 초기화·로그·Git 관리 경계 |
 | D-SESSIONS | [개선 작업 추적](../operations/improvement_sessions_2026-09-13.md) | status | active | 통합 · 역할별 단일 작업·순차 실행 |
 | D-IMPROVEMENTS | [개선 작업 색인](../operations/improvements/README.md) | index | active | 통합 · 다음 작업·우선순위·역할별 상태의 진입점 |
 | D-INDICATORS | [지표 가이드](../analysis/indicator_guide.md) | reference | active | 퀀트 · 지표 의미 |

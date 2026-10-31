@@ -547,6 +547,8 @@ python scripts/run_scheduled_collection.py
 python scripts/run_scheduled_collection.py --max-runs 2
 ```
 
+주기 실행의 일시적인 수집 예외는 기존 `interval_minutes`만큼 기다린 뒤 다음 회차를 실행합니다. `--max-runs`는 실패를 포함한 시도 횟수이며 수집 성공 수가 아닙니다. `--once`는 실패 시 비정상 종료합니다. 오류 구분·종목별 실패·로그 확인과 검증 범위는 [운영 가이드](docs/tasks/07_operations_docs.md#스케줄러-실패-후-대기-2026-10-29)를 참고하세요.
+
 ### 5. 지표 계산
 
 ```powershell

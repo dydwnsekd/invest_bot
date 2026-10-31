@@ -4,6 +4,12 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다. 다음 개선 작업·우선순위·진행 상태는 [개선 작업 색인](../operations/improvements/README.md)과 담당 역할 문서를 먼저 확인합니다.
 
+## 현재 상태 (2026-10-29)
+
+기준 HEAD는 main `893d0e6`이며 G01b 코드 `3de986c`·문서 `893d0e6`까지 반영됐다. **G07a 스케줄러 실패 후 대기**를 기존 운영 → 기존 QA → 메인 순서로 완료했고 커밋 전이다. 기존 `interval_minutes` 대기·단발 실행/영구 오류 구분·실패 포함 시도 상한을 검증했다. 신규 기능154개·독립68개, 관련347 passed와 최종 후보 기본1322 passed / 2 deselected / 36 warnings다. [정책·명령·실패/보완·한계](07_operations_docs.md#스케줄러-실패-후-대기-2026-10-29)를 따르며 다음 구현 후보는 G07b다. [운영 역할 문서](../operations/improvements/operations.md#g07a)를 따른다.
+
+실제 설정을 제외한 추적 파일 격리본을 사용하고 실제 API/DB·수집·서비스 재시작·commit·push는 수행하지 않는다. 외부 supervisor의 재시작 정책 전체와 기동 후 준비 확인 G07b는 별도 범위다. G01a·QA01 원격 CI 및 QA03은 대기를 유지한다. 아래 날짜별 절은 당시 기록이다.
+
 ## 현재 상태 (2026-10-27)
 
 기준 HEAD는 main `1e73d60`이다. QA02 코드 `6607de7`·문서 `09bfcd7`과 연구 보고서 갱신 코드 `3fbbca7`·문서 `1e73d60`이 반영됐다. **G01b 숫자형 snapshot 날짜 정규화**의 구현·독립 QA·최종 후보 검증을 완료했으며 이번 변경은 커밋 전이다. 정수·실수·문자열 YYYYMMDD를 같은 달력 날짜로 읽고 무효값·컬럼 우선순위·원본/JSON을 보존한다. 독립 QA가 발견한 무효 list/ndarray 저장 회귀8개도 scalar guard로 보완했다.

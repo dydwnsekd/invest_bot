@@ -4,6 +4,8 @@
 
 담당 세션은 **QA·독립 검증 체계 개선**이다. 이전 결과는 [9월 보고서](../session_reports/2026-09-13_qa.md), 현재 순서는 [작업 색인](README.md)을 따른다. QA는 기능 구현을 중복 소유하지 않고 검증 공백·환경·CI·독립 완료 판정을 맡는다.
 
+2026-10-29 G07a 독립 검증 완료: 기존 운영 종료 후 새 추적 파일 격리본에서 실제 runner·CLI·JSONL 상태와 오류 경계를 검증했다. 신규68개·합산347 passed로 지정 범위를 승인했고 메인 최종 후보 기본1322 passed / 2 deselected / 36 warnings도 통과했다. 입력263개와 제품/기능 소유 테스트를 보존했다. 실제 설정·API/DB·Docker·서비스·commit·push는 사용하지 않았으며 QA01~03 상태는 유지한다. [정책·검증 기록](../../tasks/07_operations_docs.md#스케줄러-실패-후-대기-2026-10-29). 아래 날짜별 결과는 당시 기록이다.
+
 2026-10-27 현재 G01b의 독립40개·합산281개 검증을 완료했고 메인의 기본1100개도 통과했다. [G01b 정책·단계별 증거](../../tasks/02_data_collection.md#snapshot-기준일-날짜-계약-2026-10-27)를 따르며 QA01 원격 CI·QA03 상태는 바꾸지 않았다. 다음 날짜별 검증은 당시 기록이다.
 
 2026-10-23 QA02 지정 범위는 완료다. 독립290개와 메인의 기본1001개·실제 브라우저 관찰을 연결한 최종 판정은 아래 QA02·실행 기록을 따른다. 다음 날짜별 부분 검증의 미완료 표시는 당시 상태이며 QA01 원격 CI·QA03은 별도 대기다.
@@ -64,6 +66,8 @@ G06b는 2026-10-22 메인이 가상 데이터 실제 renderer의 상태 대비·
 - **검증 경로:** [persistence 회귀](../../../tests/test_backtest_persistence.py), [조합](../../../tests/test_backtest_combination.py), [대시보드 백테스트](../../../tests/test_streamlit_backtest.py). 실제 생성 결과를 사용했는지 명시한다.
 
 ## 실행 기록
+
+2026-10-29 G07a: 기존279개를 새로 실행한 뒤 독립68개를 합쳐347 passed / failure·error·skip0이다. 최초 QA의64 passed / 4 failed / 4 teardown errors는 slots 인스턴스 logger patch 주입 오류로, QA 소유 파일에서 클래스 patch로 보정했고 실패 로그/XML을 보존했다. 제품 보완·기존 테스트 수정·skip/xfail은 없었다. 운영의 일반 wrapped SSL RED/GREEN과 인증서 사유의 기존 통과를 구분했다. 입력263개가 시작·종료에 일치하고 메인에 독립 회귀를 통합한 최종 후보 기본1322개도 통과했다. 실제 운영·DB/통신·외부 Compose 재기동·G07b·원격 CI는 미검증이다. [독립 회귀](../../../tests/test_g07a_independent_qa.py)·[검증 기록](../../tasks/07_operations_docs.md#스케줄러-실패-후-대기-2026-10-29)을 따른다.
 
 2026-10-27 G01b 독립 검증 완료: 기존 데이터 종료 후 새 격리본에서 관련241개를 새로 통과했다. 독립40개 중 무효 list/ndarray가 실제 SQLite save를 중단하는 회귀8개를 발견해 합산273 passed / 8 failed로 보완 요청했다. 최초 QA의 JSON dtype 기대값2개는 기준 코드의 실제 serializer/decoder와 비교하도록 QA 파일만 보정했고 최초30 passed / 10 failed 로그도 보존했다. QA 종료 후 데이터 세션의 비스칼라 guard2줄 보완을 받은 뒤 독립40 passed·합산281 passed를 새로 통과해 G01b 지정 범위를 승인했다. 수정 manifest262개가 시작·종료에 일치했고 제품/기존 테스트는 QA가 수정하지 않았다. 메인 최종 후보 기본1100 passed / 2 deselected / 36 warnings도 통과했다. [새 독립 회귀](../../../tests/test_g01b_independent_qa.py)·[입력 정책·명령·미검증 범위](../../tasks/02_data_collection.md#snapshot-기준일-날짜-계약-2026-10-27)를 따른다. 실제 PostgreSQL·운영 DB/API·기존 metadata 수선·CI·배포는 미검증이며 QA01~03 상태는 유지한다.
 
