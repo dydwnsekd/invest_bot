@@ -8,8 +8,23 @@ if [[ ! -f config/collection_schedule.yaml ]]; then
   exit 1
 fi
 
+if [[ -n "${INVEST_BOT_PYTHON:-}" ]]; then
+  readiness_python=$(command -v -- "$INVEST_BOT_PYTHON") || { printf 'Readiness failed: Python runtime not found.\n' >&2; exit 1; }
+elif [[ -x .venv/bin/python ]]; then
+  readiness_python="$PWD/.venv/bin/python"
+else
+  readiness_python=$(command -v python3) || { printf 'Readiness failed: Python runtime not found.\n' >&2; exit 1; }
+fi
+if readiness_confirmation=$("$readiness_python" -B scripts/service_readiness.py --check); then
+  if [[ "$readiness_confirmation" != "invest-bot-readiness-check-v1" ]]; then
+    printf 'Readiness failed: Python runtime verification failed.\n' >&2
+    exit 1
+  fi
+else
+  exit "$?"
+fi
+
 docker compose config --quiet
 docker compose build
 docker compose run --rm --no-deps scheduler python scripts/run_scheduled_collection.py --validate-config
-docker compose down
-docker compose up -d db migrate scheduler web
+"$readiness_python" -B scripts/service_readiness.py --restart
