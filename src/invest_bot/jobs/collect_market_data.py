@@ -68,6 +68,8 @@ def collect_market_data_for_symbols(
             seen.add(normalized)
 
     results = market_collector.collect_symbols_batch(symbols=unique_symbols, start_date=start_date, end_date=today)
+    analysis_ready_symbols = [r.symbol for r in results if r.status == 'success' and (r.analysis_ready is True or r.analysis_ready is None)]
+    analysis_unready_symbols = [r.symbol for r in results if r.status == 'success' and r.analysis_ready is not True and r.analysis_ready is not None]
     return {
         "app_name": resolved_settings.app_name,
         "market": resolved_settings.market,
@@ -80,6 +82,13 @@ def collect_market_data_for_symbols(
         "failed_symbols": [result.symbol for result in results if result.status == "failed"],
         "success_count": sum(1 for result in results if result.status == "success"),
         "failed_count": sum(1 for result in results if result.status == "failed"),
+        "analysis_ready_symbols": analysis_ready_symbols,
+        "analysis_unready_symbols": analysis_unready_symbols,
+        "analysis_ready_count": len(analysis_ready_symbols),
+        "analysis_unready_count": len(analysis_unready_symbols),
+        "coverage_complete_symbols": [r.symbol for r in results if r.price_coverage.get('status') == 'complete'],
+        "coverage_unknown_symbols": [r.symbol for r in results if r.price_coverage.get('status') == 'unknown'],
+        "coverage_incomplete_symbols": [r.symbol for r in results if r.price_coverage.get('status') == 'incomplete'],
         "results": [asdict(result) for result in results],
     }
 

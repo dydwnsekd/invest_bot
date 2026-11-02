@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from invest_bot.clients.kis_client import KISClient
+from invest_bot.market.price_history import DailyPriceHistoryFetcher
 
 
 @dataclass(slots=True)
@@ -37,8 +38,12 @@ class InvestorDailyRequest:
 class DomesticStockDataCollector:
     """Collect domestic stock datasets needed for strategy research."""
 
-    def __init__(self, client: KISClient) -> None:
+    def __init__(self, client: KISClient, *, price_history: DailyPriceHistoryFetcher | None = None) -> None:
         self.client = client
+        self.price_history = price_history or DailyPriceHistoryFetcher(client)
+
+    def collect_daily_price_history(self, request: DailyPriceRequest) -> tuple[pd.DataFrame, pd.DataFrame]:
+        return self.price_history.collect(request)
 
     def collect_daily_prices(self, request: DailyPriceRequest) -> tuple[pd.DataFrame, pd.DataFrame]:
         payload = self.client.get_json(

@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from invest_bot.config.settings import AppSettings
+from invest_bot.db.frame_storage import _parse_snapshot_date
 from invest_bot.dashboard.report_favorites import ReportFavoritesStore
 from invest_bot.dashboard.service import DashboardDataService
 from invest_bot.dashboard.data_status import (
@@ -40,7 +41,7 @@ from invest_bot.dashboard.streamlit_reports import (
 from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
-from invest_bot.market.collector import MarketDataCollector
+from invest_bot.market.collector import MarketDataCollector, MIN_REQUIRED_DAILY_PRICE_ROWS
 
 
 WATCHLIST_SELECTION_KEY = "watchlist_selected_entry_key"
@@ -318,11 +319,11 @@ def refresh_favorite_symbols_if_needed(
     favorite_symbols: set[str],
     *,
     today: date | None = None,
-    collect_callback: Callable[[str, date, date], bool] | None = None,
+    collect_callback: Callable[[str, date, date], bool | dict[str, object]] | None = None,
     analyze_callback: Callable[[str], dict[str, str | int] | None] = generate_indicators_for_symbol,
     signal_callback: Callable[[str], dict[str, str | int] | None] = generate_golden_cross_signals_for_symbol,
     report_callback: Callable[[str], dict[str, str | int] | None] = generate_market_report_for_symbol,
-) -> dict[str, list[str]]:
+) -> dict[str, object]:
     if not favorite_symbols:
         return {"collected_symbols": [], "pipeline_symbols": []}
 
@@ -337,6 +338,8 @@ def refresh_favorite_symbols_if_needed(
     )
     collected_symbols: list[str] = []
     symbols_needing_pipeline: list[str] = []
+    collection_results: list[dict[str, object]] = []
+    analysis_unready_symbols: list[str] = []
 
     for symbol in sorted(favorite_symbols):
         daily_date = _load_latest_dataset_date(service, "daily_prices", symbol, ("trade_date", "stck_bsop_date", "date"))
@@ -355,13 +358,26 @@ def refresh_favorite_symbols_if_needed(
         latest_input_date = _latest_input_date(daily_date, investor_date)
 
         if collection_window is not None:
-            if collect_symbol_range(symbol, collection_window[0], collection_window[1]):
+            outcome = collect_symbol_range(symbol, collection_window[0], collection_window[1])
+            if isinstance(outcome, dict):
+                collected = outcome.get("collected") is True
+                ready = collected and outcome.get("analysis_ready") is True
+                collection_results.append({**outcome, "symbol": symbol})
+            else:
+                collected = ready = bool(outcome)
+            if collected:
                 collected_symbols.append(symbol)
-                symbols_needing_pipeline.append(symbol)
+                if ready:
+                    symbols_needing_pipeline.append(symbol)
+                else:
+                    analysis_unready_symbols.append(symbol)
             continue
 
         if latest_input_date is not None and (report_date is None or report_date < latest_input_date):
-            symbols_needing_pipeline.append(symbol)
+            if collect_callback is None and not _watchlist_history_ready(_load_latest_dataset_frame(service, "daily_prices", symbol)):
+                analysis_unready_symbols.append(symbol)
+            else:
+                symbols_needing_pipeline.append(symbol)
 
     unique_pipeline_symbols: list[str] = []
     seen: set[str] = set()
@@ -375,10 +391,13 @@ def refresh_favorite_symbols_if_needed(
         signal_callback(symbol)
         report_callback(symbol)
 
-    return {
+    result: dict[str, object] = {
         "collected_symbols": collected_symbols,
         "pipeline_symbols": unique_pipeline_symbols,
     }
+    if collection_results or analysis_unready_symbols:
+        result.update(collection_results=collection_results, analysis_unready_symbols=analysis_unready_symbols)
+    return result
 
 
 def _resolve_collection_window(
@@ -407,7 +426,7 @@ def _collect_watchlist_symbol_range(
     *,
     start_date: date,
     end_date: date,
-) -> bool:
+) -> bool | dict[str, object]:
     settings = service._settings or AppSettings.from_file()
     collector = MarketDataCollector(settings)
 
@@ -415,11 +434,17 @@ def _collect_watchlist_symbol_range(
     if daily_prices.empty:
         return False
 
+    has_coverage = "price_coverage" in daily_prices.attrs
+    coverage = daily_prices.attrs.get("price_coverage")
+    if has_coverage and (not isinstance(coverage, dict) or coverage.get("status") != "complete" or coverage.get("request_complete") is not True):
+        raise ValueError("요청한 일봉 기간의 수집을 확인할 수 없어 저장하지 않았습니다.")
+    analysis_frame = daily_prices
     existing_daily_frame = _load_latest_dataset_frame(service, "daily_prices", symbol)
     collector.save_daily_prices(symbol, start_date, end_date, daily_summary, daily_prices)
 
     if _should_save_merged_daily_snapshot(existing_daily_frame, start_date):
         merged_prices = _merge_daily_price_frames(existing_daily_frame, daily_prices)
+        analysis_frame = merged_prices
         merged_start = _resolve_first_daily_date(merged_prices)
         merged_end = _resolve_last_daily_date(merged_prices)
         merged_summary = _build_daily_price_summary_frame(symbol, merged_start, merged_end, len(merged_prices))
@@ -440,7 +465,19 @@ def _collect_watchlist_symbol_range(
 
     investor_daily, investor_summary = collector.collect_investor_daily(symbol, end_date)
     collector.save_investor_daily(symbol, end_date, investor_daily, investor_summary)
+    if has_coverage:
+        return {"collected": True, "analysis_ready": _watchlist_history_ready(analysis_frame), "price_coverage": dict(coverage)}
     return True
+
+
+def _watchlist_history_ready(frame: pd.DataFrame | None) -> bool:
+    if frame is None or frame.empty:
+        return False
+    column = _resolve_daily_date_column(frame)
+    if column is None:
+        return False
+    dates = {_parse_snapshot_date(value) for value in frame[column]}
+    return len(dates - {None}) >= MIN_REQUIRED_DAILY_PRICE_ROWS
 
 
 def _should_save_merged_daily_snapshot(existing_daily_frame: pd.DataFrame | None, start_date: date) -> bool:
@@ -479,10 +516,11 @@ def _resolve_daily_boundary_date(frame: pd.DataFrame, *, first: bool) -> date:
     date_column = _resolve_daily_date_column(frame)
     if date_column is None or frame.empty:
         raise ValueError("daily_prices frame is missing a date column.")
-    parsed = pd.to_datetime(frame[date_column], errors="coerce").dropna()
-    if parsed.empty:
+    parsed = [_parse_snapshot_date(value) for value in frame[date_column]]
+    valid_dates = [value for value in parsed if value is not None]
+    if not valid_dates:
         raise ValueError("daily_prices frame does not contain parseable dates.")
-    return (parsed.min() if first else parsed.max()).date()
+    return min(valid_dates) if first else max(valid_dates)
 
 
 def _build_daily_price_summary_frame(symbol: str, start_date: date, end_date: date, row_count: int) -> pd.DataFrame:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 import pandas as pd
@@ -18,6 +18,7 @@ from invest_bot.market.domestic_stock import (
 )
 from invest_bot.market.repositories import DatasetStorage, MarketDataWriter
 from invest_bot.market.storage import SavedDataset
+from invest_bot.market.price_history import PriceHistoryError, assess_price_coverage, listing_date_evidence
 
 MIN_REQUIRED_DAILY_PRICE_ROWS = 60
 
@@ -40,6 +41,8 @@ class BatchCollectionResult:
     investor_summary_rows: int
     saved_files: list[str]
     error: str = ""
+    price_coverage: dict[str, object] = field(default_factory=dict)
+    analysis_ready: bool | None = None
 
 
 class MarketDataCollector:
@@ -65,7 +68,7 @@ class MarketDataCollector:
         return {"symbol": request.symbol, "timeframe": request.timeframe, "limit": request.limit, "status": "ready"}
 
     def collect_daily_prices(self, symbol: str, start_date: date, end_date: date) -> tuple[pd.DataFrame, pd.DataFrame]:
-        return self.collector.collect_daily_prices(
+        return self.collector.collect_daily_price_history(
             DailyPriceRequest(symbol=symbol, start_date=start_date, end_date=end_date)
         )
 
@@ -165,6 +168,8 @@ class MarketDataCollector:
         investor_daily_rows = 0
         investor_summary_rows = 0
         saved_files: list[str] = []
+        price_coverage: dict[str, object] = {}
+        analysis_ready = False
 
         def record_saved(result: SavedDataset) -> None:
             saved_files.append(str(result.path))
@@ -173,7 +178,8 @@ class MarketDataCollector:
             daily_summary, daily_prices = self.collect_daily_prices(symbol, start_date, end_date)
             daily_summary_rows = len(daily_summary)
             daily_price_rows = len(daily_prices)
-            if len(daily_prices.index) < MIN_REQUIRED_DAILY_PRICE_ROWS:
+            price_coverage = dict(daily_prices.attrs.get('price_coverage', {}))
+            if not price_coverage and len(daily_prices.index) < MIN_REQUIRED_DAILY_PRICE_ROWS:
                 return BatchCollectionResult(
                     symbol=symbol,
                     status="failed",
@@ -183,6 +189,8 @@ class MarketDataCollector:
                     investor_daily_rows=0,
                     investor_summary_rows=0,
                     saved_files=[],
+                    price_coverage={'status': 'legacy', 'reason': 'coverage_metadata_unavailable'},
+                    analysis_ready=False,
                     error=(
                         "At least "
                         f"{MIN_REQUIRED_DAILY_PRICE_ROWS} daily price rows are required for the current strategy analysis."
@@ -195,6 +203,38 @@ class MarketDataCollector:
                 stock_info = self._fallback_stock_info(symbol, error)
                 stock_info_error = str(error)
             stock_info_rows = len(stock_info)
+            if price_coverage:
+                listing_date, listing_reason = listing_date_evidence(stock_info, symbol)
+                may_explain_listing = (
+                    price_coverage['status'] == 'complete'
+                    and price_coverage.get('request_complete') is True
+                    and not price_coverage.get('trading_days_verified')
+                )
+                if may_explain_listing and listing_date is not None:
+                    refined = assess_price_coverage(daily_prices, start_date, end_date, listing_date=listing_date,
+                                                    request_complete=price_coverage.get('request_complete', False))
+                    refined.update(requests=price_coverage['requests'], window_count=price_coverage['window_count'])
+                    price_coverage = refined
+                elif may_explain_listing and listing_reason not in {'', 'listing_metadata_unavailable'}:
+                    price_coverage['range_reason'] = listing_reason
+                if price_coverage['status'] != 'complete':
+                    return BatchCollectionResult(
+                        symbol=symbol, status='failed', daily_summary_rows=daily_summary_rows,
+                        daily_price_rows=daily_price_rows, stock_info_rows=stock_info_rows,
+                        investor_daily_rows=0, investor_summary_rows=0, saved_files=[],
+                        error=f"Daily price coverage: {price_coverage['reason']}",
+                        price_coverage=price_coverage, analysis_ready=False,
+                    )
+            else:
+                price_coverage = {'status': 'legacy', 'reason': 'coverage_metadata_unavailable'}
+            analysis_ready = daily_price_rows >= MIN_REQUIRED_DAILY_PRICE_ROWS
+            if daily_prices.empty:
+                return BatchCollectionResult(
+                    symbol=symbol, status='success', daily_summary_rows=daily_summary_rows,
+                    daily_price_rows=0, stock_info_rows=stock_info_rows, investor_daily_rows=0,
+                    investor_summary_rows=0, saved_files=[], error=stock_info_error,
+                    price_coverage=price_coverage, analysis_ready=False,
+                )
             investor_daily, investor_summary = self.collect_investor_daily(symbol, end_date)
             investor_daily_rows = len(investor_daily)
             investor_summary_rows = len(investor_summary)
@@ -219,8 +259,13 @@ class MarketDataCollector:
                 investor_summary_rows=investor_summary_rows,
                 saved_files=saved_files,
                 error=stock_info_error,
+                price_coverage=price_coverage,
+                analysis_ready=analysis_ready,
             )
         except Exception as error:  # noqa: BLE001
+            if isinstance(error, PriceHistoryError):
+                price_coverage = error.coverage
+                daily_price_rows = int(price_coverage.get('rows', 0))
             return BatchCollectionResult(
                 symbol=symbol,
                 status="failed",
@@ -231,6 +276,8 @@ class MarketDataCollector:
                 investor_summary_rows=investor_summary_rows,
                 saved_files=saved_files,
                 error=str(error),
+                price_coverage=price_coverage,
+                analysis_ready=False,
             )
 
     def collect_symbols_batch(self, symbols: list[str], start_date: date, end_date: date) -> list[BatchCollectionResult]:

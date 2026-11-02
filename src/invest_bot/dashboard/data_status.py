@@ -10,6 +10,7 @@ import pandas as pd
 
 from invest_bot.dashboard.service import DashboardDataService
 from invest_bot.db.contracts import DatasetFrameRecord
+from invest_bot.db.frame_storage import _parse_snapshot_date
 from invest_bot.db.repositories import frame_from_json, frame_to_json, normalize_symbol
 
 
@@ -153,11 +154,10 @@ def latest_frame_date(frame: pd.DataFrame | None, date_columns: Sequence[str]) -
     for column in date_columns:
         if column not in frame.columns:
             continue
-        parsed = pd.to_datetime(frame[column], errors="coerce")
-        parsed = parsed.dropna()
-        if parsed.empty:
-            continue
-        return parsed.max().date()
+        parsed = [_parse_snapshot_date(value) for value in frame[column]]
+        valid_dates = [value for value in parsed if value is not None]
+        if valid_dates:
+            return max(valid_dates)
     return None
 
 

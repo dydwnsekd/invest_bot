@@ -58,6 +58,8 @@ from invest_bot.dashboard.streamlit_collection_period import (
 from invest_bot.dashboard.streamlit_actions import (
     require_selected_items,
     successful_symbols_from_collection_result,
+    analysis_ready_symbols_from_collection_result,
+    collection_coverage_summary,
     summarize_selected_items,
 )
 from invest_bot.dashboard.streamlit_formatters import format_frame_for_display, format_number, format_symbol_option
@@ -574,11 +576,22 @@ def _run_prepare_action(selected_items: list[ResolvedSymbol], lookback_days: int
             symbols=[item.symbol for item in resolved_items],
             days=lookback_days,
         )
-        successful_symbols = successful_symbols_from_collection_result(collect_result)
+        successful_symbols = analysis_ready_symbols_from_collection_result(collect_result)
+        collected_symbols = successful_symbols_from_collection_result(collect_result)
+        unready_count = len(set(collected_symbols) - set(successful_symbols))
         failed_count = int(collect_result.get("failed_count", 0))
+        coverage_summary = collection_coverage_summary(collect_result)
+        coverage_suffix = " · " + coverage_summary if coverage_summary else ""
         if not successful_symbols:
+            if collected_symbols:
+                set_action_message(
+                    f"백테스트 준비 중단: 수집 {len(collected_symbols)}개 완료 · 분석 자료 부족/미준비 {unready_count}개. 지표와 신호를 생성하지 않았습니다.{coverage_suffix}",
+                    "warning",
+                )
+                st.rerun()
+                return
             set_action_message(
-                f"백테스트 준비 실패: {summarize_selected_items(resolved_items)} · 수집 성공 0개, 실패 {failed_count}개",
+                f"백테스트 준비 실패: {summarize_selected_items(resolved_items)} · 수집 성공 0개, 실패 {failed_count}개{coverage_suffix}",
                 "error",
             )
             st.rerun()
@@ -590,9 +603,11 @@ def _run_prepare_action(selected_items: list[ResolvedSymbol], lookback_days: int
 
         st.session_state[BACKTEST_BLOCKED_REASONS_KEY] = ()
         suffix = "" if failed_count == 0 else f" · 수집 실패 {failed_count}개"
+        if unready_count:
+            suffix += f" · 분석 자료 부족/미준비 {unready_count}개"
         set_action_message(
-            f"백테스트 준비 완료: {summarize_selected_items(resolved_items)} · {len(successful_symbols)}개 준비 완료{suffix}",
-            "success" if failed_count == 0 else "warning",
+            f"백테스트 준비 완료: {summarize_selected_items(resolved_items)} · {len(successful_symbols)}개 준비 완료{suffix}{coverage_suffix}",
+            "success" if failed_count == 0 and unready_count == 0 else "warning",
         )
     except Exception as error:  # noqa: BLE001
         set_action_message(f"백테스트 준비 중 오류가 발생했습니다: {error}", "error")

@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from math import isfinite
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -19,10 +18,7 @@ from invest_bot.db.write_path import SqlAlchemyMarketDataWriter
 from invest_bot.jobs.analyze_daily_prices import generate_indicators_for_symbol
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.jobs.run_market_report import generate_market_report_for_symbol
-
-
-class HistoryCollectionError(ValueError):
-    pass
+from invest_bot.market.price_history import HistoryCollectionError, normalize_history_frame
 
 
 @dataclass
@@ -114,27 +110,7 @@ class HistoryFetcher:
         if not chunks:
             raise HistoryCollectionError('No observations in requested window')
         merged = pd.concat(chunks, ignore_index=True)
-        core = ['stck_clpr', 'stck_oprc', 'stck_hgpr', 'stck_lwpr', 'acml_vol'] if kind == 'price' else ['frgn_ntby_qty', 'orgn_ntby_qty', 'prsn_ntby_qty']
-        numeric = {}
-        for col in core:
-            if col not in merged or pd.to_numeric(merged[col], errors='coerce').isna().any():
-                raise HistoryCollectionError(f'Missing or invalid values: {col}')
-            numeric[col] = pd.to_numeric(merged[col])
-            if not numeric[col].map(isfinite).all():
-                raise HistoryCollectionError(f'Nonfinite value: {col}')
-        if kind == 'price':
-            if (numeric['stck_clpr'] <= 0).any() or any((numeric[col] < 0).any() for col in core):
-                raise HistoryCollectionError('Nonpositive close or negative price/volume')
-            active = numeric['acml_vol'] > 0
-            high = numeric['stck_hgpr']; low = numeric['stck_lwpr']
-            if any(((values <= 0) & active).any() for key,values in numeric.items() if key != 'acml_vol'):
-                raise HistoryCollectionError('Invalid active-trading price')
-            if any(((values > high) & active).any() or ((values < low) & active).any() for key,values in numeric.items() if key != 'acml_vol'):
-                raise HistoryCollectionError('Invalid OHLC relationship')
-        for _, group in merged[merged.duplicated('stck_bsop_date', keep=False)].groupby('stck_bsop_date'):
-            if any(pd.to_numeric(group[c]).nunique(dropna=False) != 1 for c in core):
-                raise HistoryCollectionError('Conflicting duplicate observations')
-        merged = merged.drop_duplicates('stck_bsop_date').sort_values('stck_bsop_date').reset_index(drop=True)
+        merged = normalize_history_frame(merged, kind)
         return HistoryResult(merged, first_summary, page_number, termination)
 
 

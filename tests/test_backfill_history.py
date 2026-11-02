@@ -172,3 +172,30 @@ def test_zero_ohl_with_zero_volume_can_represent_a_trading_halt():
     value=row('20260109'); value.update(stck_oprc='0',stck_hgpr='0',stck_lwpr='0',acml_vol='0')
     result=HistoryFetcher(Client([[value]]), interval=0).collect('price', '005930', date(2026, 1, 9), date(2026, 1, 9))
     assert len(result.frame)==1
+
+
+def test_backfill_retry_and_pacing_contract_is_preserved(monkeypatch):
+    now = [0.0]
+    sleeps = []
+
+    def sleep(delay):
+        sleeps.append(delay)
+        now[0] += delay
+
+    monkeypatch.setattr('invest_bot.jobs.backfill_history.time.monotonic', lambda: now[0])
+    monkeypatch.setattr('invest_bot.jobs.backfill_history.time.sleep', sleep)
+
+    class ErrorThenSuccess:
+        calls = 0
+
+        def get_json(self, path, tr_id, params):
+            self.calls += 1
+            if self.calls < 3:
+                return {'rt_cd': '1', 'msg_cd': 'TEST_ERROR'}
+            return {'rt_cd': '0', 'output1': {}, 'output2': [row('20260109')]}
+
+    client = ErrorThenSuccess()
+    result = HistoryFetcher(client).collect('price', '005930', date(2026, 1, 9), date(2026, 1, 9))
+    assert client.calls == 3
+    assert sleeps == [1, pytest.approx(0.1), 2]
+    assert result.pages == 1 and result.termination == 'start_reached'

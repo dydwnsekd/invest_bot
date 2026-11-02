@@ -172,6 +172,7 @@ class ScheduledCollectionRunner:
                 "success_count": result.get("success_count", 0),
                 "failed_count": result.get("failed_count", 0),
                 "symbols": result.get("symbols", []),
+                **_collection_result_metadata(result),
             }
         )
         return result
@@ -199,6 +200,37 @@ class ScheduledCollectionRunner:
         self.schedule.log_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.schedule.log_path, "a", encoding="utf-8") as file:
             file.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _collection_result_metadata(result: dict[str, object]) -> dict[str, object]:
+    if "analysis_ready_symbols" not in result:
+        return {}
+    rows = result.get("results", [])
+    allowed = (
+        "status", "reason", "requested_start", "requested_end", "effective_start",
+        "observed_start", "observed_end", "rows", "requests", "termination", "window_count",
+        "listing_date", "expected_sessions", "request_complete", "trading_days_verified", "range_reason",
+    )
+    records = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get("symbol"), str):
+            continue
+        coverage = row.get("price_coverage", {})
+        if not isinstance(coverage, dict):
+            coverage = {}
+        coverage = {key: value for key, value in coverage.items() if key in allowed and type(value) in (str, int, bool, type(None))}
+        ready = row.get("analysis_ready")
+        saved = row.get("saved_files")
+        status = row.get("status")
+        records.append({"symbol": row["symbol"], "price_coverage": coverage,
+                        "status": status if status in ("success", "failed") else "unknown",
+                        "saved_count": len(saved) if isinstance(saved, list) else 0,
+                        "analysis_ready": ready if type(ready) is bool else None})
+    def symbol_list(key):
+        value = result.get(key)
+        return [symbol for symbol in value if isinstance(symbol, str)] if isinstance(value, list) else []
+    return {"collection_results": records, "analysis_ready_symbols": symbol_list("analysis_ready_symbols"),
+            "analysis_unready_symbols": symbol_list("analysis_unready_symbols")}
 
 
 def _is_retryable_collection_error(error: Exception) -> bool:

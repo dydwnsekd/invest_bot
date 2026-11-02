@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import contextmanager, nullcontext
+from datetime import date
 
 import streamlit as st
 
@@ -195,17 +196,26 @@ def run_collect_action(selected_items: list[ResolvedSymbol], days: int) -> None:
         label_summary = summarize_selected_items(resolved_items)
         success_count = int(result.get("success_count", 0))
         failed_count = int(result.get("failed_count", 0))
+        coverage_summary = collection_coverage_summary(result)
         if success_count == 0 and failed_count > 0:
-            set_action_message(
-                f"데이터 수집 실패: {label_summary} · 성공 0개, 실패 {failed_count}개. 최신 데이터가 저장되지 않았습니다.",
-                "error",
+            rows = result.get("results", [])
+            partially_saved = isinstance(rows, list) and any(
+                isinstance(row, dict) and bool(row.get("saved_files")) for row in rows
             )
+            storage_message = "일부 자료가 저장되었으므로 저장 상태를 확인해 주세요." if partially_saved else "최신 데이터가 저장되지 않았습니다."
+            message = f"데이터 수집 실패: {label_summary} · 성공 0개, 실패 {failed_count}개. {storage_message}"
+            if coverage_summary:
+                message += " · " + coverage_summary
+            set_action_message(message, "error")
             st.rerun()
             return
-        set_action_message(
-            f"데이터 수집 완료: {label_summary} · {success_count}개 성공, {failed_count}개 실패",
-            "success" if failed_count == 0 else "warning",
-        )
+        unready_count = len(set(successful_symbols_from_collection_result(result)) - set(analysis_ready_symbols_from_collection_result(result)))
+        message = f"데이터 수집 완료: {label_summary} · {success_count}개 성공, {failed_count}개 실패"
+        if unready_count:
+            message += f" · 분석 자료 부족/미준비 {unready_count}개"
+        if coverage_summary:
+            message += " · " + coverage_summary
+        set_action_message(message, "success" if failed_count == 0 and unready_count == 0 else "warning")
     except Exception as error:  # noqa: BLE001
         set_action_message(f"데이터 수집 중 오류가 발생했습니다: {error}", "error")
     st.rerun()
@@ -244,13 +254,25 @@ def run_full_pipeline_action(selected_items: list[ResolvedSymbol], days: int, *,
         resolved_items = require_selected_items(selected_items)
         collect_result = collect_market_data_for_symbols(symbols=[item.symbol for item in resolved_items], days=days)
         report_results: list[dict[str, object]] = []
-        successful_symbols = successful_symbols_from_collection_result(collect_result)
+        successful_symbols = analysis_ready_symbols_from_collection_result(collect_result)
+        collected_symbols = successful_symbols_from_collection_result(collect_result)
+        unready_count = len(set(collected_symbols) - set(successful_symbols))
         failed_count = int(collect_result.get("failed_count", 0))
+        coverage_summary = collection_coverage_summary(collect_result)
+        coverage_suffix = " · " + coverage_summary if coverage_summary else ""
         if not successful_symbols:
+            if collected_symbols:
+                set_action_message(
+                    f"전체 파이프라인 중단: 수집 {len(collected_symbols)}개 완료 · 분석 자료 부족/미준비 {unready_count}개. "
+                    f"기본 분석에는 최소 {MIN_REQUIRED_TRADING_DAYS}개 일봉이 필요하며 리포트를 생성하지 않았습니다.{coverage_suffix}",
+                    "warning",
+                )
+                st.rerun()
+                return
             set_action_message(
                 (
                     f"전체 파이프라인 실패: {summarize_selected_items(resolved_items)} · "
-                    f"데이터 수집 성공 0개, 실패 {failed_count}개. 리포트를 갱신하지 않았습니다."
+                    f"데이터 수집 성공 0개, 실패 {failed_count}개. 리포트를 갱신하지 않았습니다.{coverage_suffix}"
                 ),
                 "error",
             )
@@ -267,12 +289,16 @@ def run_full_pipeline_action(selected_items: list[ResolvedSymbol], days: int, *,
                 selected_items=resolved_items,
                 action_name="전체 파이프라인",
             )
-            set_action_message(message, message_type)
+            if unready_count:
+                message += f" · 분석 자료 부족/미준비 {unready_count}개"
+            set_action_message(message + coverage_suffix, message_type)
         else:
             failed_suffix = "" if failed_count == 0 else f" · 수집 실패 {failed_count}개"
+            if unready_count:
+                failed_suffix += f" · 분석 자료 부족/미준비 {unready_count}개"
             set_action_message(
-                f"전체 파이프라인 완료: {summarize_selected_items(resolved_items)} · {len(report_results)}개 리포트 생성{failed_suffix}",
-                "success" if failed_count == 0 else "warning",
+                f"전체 파이프라인 완료: {summarize_selected_items(resolved_items)} · {len(report_results)}개 리포트 생성{failed_suffix}{coverage_suffix}",
+                "success" if failed_count == 0 and unready_count == 0 else "warning",
             )
     except Exception as error:  # noqa: BLE001
         set_action_message(f"전체 파이프라인 실행 중 오류가 발생했습니다: {error}", "error")
@@ -296,6 +322,64 @@ def successful_symbols_from_collection_result(result: dict[str, object]) -> list
     if isinstance(successful_symbols, list):
         return [str(symbol) for symbol in successful_symbols]
     return []
+
+
+def analysis_ready_symbols_from_collection_result(result: dict[str, object]) -> list[str]:
+    successful = successful_symbols_from_collection_result(result)
+    if "analysis_ready_symbols" not in result:
+        return successful
+    ready = result["analysis_ready_symbols"]
+    if not isinstance(ready, list) or any(not isinstance(symbol, str) for symbol in ready):
+        return []
+    allowed = {symbol.strip() for symbol in ready}
+    return list(dict.fromkeys(symbol for symbol in successful if symbol in allowed))
+
+
+def collection_coverage_summary(result: dict[str, object]) -> str:
+    rows = result.get("results")
+    if not isinstance(rows, list):
+        return ""
+    summaries = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        coverage = row.get("price_coverage")
+        if not isinstance(coverage, dict) or coverage.get("status") == "legacy" or not coverage:
+            continue
+        def shown_date(key):
+            value = coverage.get(key)
+            if isinstance(value, str):
+                try:
+                    return date.fromisoformat(value).isoformat()
+                except ValueError:
+                    pass
+            return "없음"
+        def shown_count(key):
+            value = coverage.get(key)
+            return str(value) if type(value) is int and value >= 0 else "미확인"
+        status_code = coverage.get("status")
+        status = {"complete": "구간 요청 완료", "incomplete": "구간 미충족", "unknown": "범위 확인 필요"}.get(status_code if isinstance(status_code, str) else "", "범위 확인 필요")
+        range_reason = coverage.get("range_reason")
+        why = {
+            "verified_listing_date": "상장일 확인",
+            "observed_boundaries": "관측 경계 확인",
+            "calendar_observations_match": "거래일 검증 완료",
+            "calendar_no_sessions": "거래일 없음 확인",
+        }.get(range_reason if isinstance(range_reason, str) else "", "경계/단축 사유 미확인")
+        summary = (
+            f"[{row.get('symbol', '')}] 요청 {shown_date('requested_start')}~{shown_date('requested_end')} · "
+            f"관측 {shown_date('observed_start')}~{shown_date('observed_end')} · "
+            f"{shown_count('rows')}행/{shown_count('requests')}회 조회 · {status} · {why}"
+        )
+        if coverage.get("trading_days_verified") is not True:
+            summary += " · 전체 거래일 검증 미실시"
+        if row.get("analysis_ready") is False:
+            summary += " · 분석 미준비"
+        summaries.append(summary)
+    if not summaries:
+        return ""
+    suffix = f" · 외 {len(summaries) - 3}개 종목의 범위는 수집 결과에 기록" if len(summaries) > 3 else ""
+    return " | ".join(summaries[:3]) + suffix
 
 
 def set_action_message(message: str, message_type: str) -> None:

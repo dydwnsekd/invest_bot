@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
+import pytest
 
 from invest_bot.config.settings import AppSettings
 from invest_bot.db.engine import build_engine, build_session_factory
@@ -45,6 +46,20 @@ def test_collect_daily_prices_maps_reference_endpoint():
     assert client.calls[0]["params"]["FID_INPUT_ISCD"] == "005930"
     assert not summary.empty
     assert not prices.empty
+
+
+@pytest.mark.parametrize('period', ['D', 'W', 'M', 'Y'])
+def test_existing_single_page_api_keeps_custom_market_period_and_adjustment(period):
+    client = StubClient({'output1': {}, 'output2': [{'stck_bsop_date': '20260102'}]})
+    summary, prices = DomesticStockDataCollector(client).collect_daily_prices(DailyPriceRequest(
+        symbol='005930', start_date=date(2026, 1, 1), end_date=date(2026, 1, 2),
+        market_code='NX', period_code=period, adjusted_price=False,
+    ))
+    assert len(client.calls) == 1 and len(prices) == 1
+    params = client.calls[0]['params']
+    assert params['FID_COND_MRKT_DIV_CODE'] == 'NX'
+    assert params['FID_PERIOD_DIV_CODE'] == period
+    assert params['FID_ORG_ADJ_PRC'] == '1'
 
 
 def test_collect_stock_info_maps_reference_endpoint():
