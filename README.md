@@ -391,7 +391,9 @@ pip install -r requirements.txt -r requirements-dev.txt
 ./stop.sh
 ```
 
-`start.sh`와 `restart.sh`는 Compose 설정 확인 → 이미지 빌드 → scheduler 컨테이너의 스케줄 설정 검사 순으로 진행합니다. 모두 통과하면 `db`, `migrate`, `scheduler`, `web`을 시작합니다. `restart.sh`는 검사 통과 후 기존 서비스를 내립니다. 설정·빌드·검사 실패 시 비정상 종료하며 서비스 중단·시작 명령으로 넘어가지 않습니다. `start.sh`도 매번 빌드를 확인하므로 첫 실행이나 변경 후 실행에는 시간이 필요할 수 있습니다. `stop.sh`는 컨테이너를 보존하고 전체 서비스를 정지합니다. 설정 타입과 검사의 범위는 [운영 가이드](docs/tasks/07_operations_docs.md#시작재시작-사전검증-2026-10-10)를 참고하세요.
+`start.sh`와 `restart.sh`는 호스트 Python·준비 확인 옵션 검사 → Compose 설정 확인 → 이미지 빌드 → scheduler의 스케줄 설정 검사 순으로 진행합니다. 서비스 전환은 [준비 확인 실행기](scripts/service_readiness.py)가 맡으며, start는 시작하고 restart는 기존 서비스를 내린 뒤 시작합니다. DB health·migration 완료·web 내부 HTTP health·scheduler 안정 관찰을 통과해야 성공합니다. 설정·빌드·검사 실패는 서비스 전환 전에 중단합니다.
+
+호스트에 POSIX Python3.10 이상이 필요합니다. `INVEST_BOT_PYTHON`, 프로젝트 `.venv/bin/python`, PATH의 `python3` 순서로 선택하며 새 패키지는 필요하지 않습니다. 기본 전환·준비 확인 한도는180초, scheduler 안정 관찰은10초입니다. 빌드·사전검증 시간은 이 한도에서 제외됩니다. 실패 후 자동 컨테이너 정리·롤백은 하지 않습니다. 공개 web 포트는 `INVEST_BOT_DASHBOARD_PORT`를 따르고 컨테이너 내부는8000으로 유지합니다. 내부 health와 실제 호스트 접속·전체 앱/데이터 준비는 별도 확인입니다. `stop.sh`는 기존대로 컨테이너를 보존하고 전체 서비스를 정지합니다. [실행 정책·설정·검증 범위](docs/tasks/07_operations_docs.md#시작-후-준비-확인-2026-10-31)를 참고하세요.
 
 Compose 명령을 직접 실행하는 경우 아래 순서를 사용할 수 있습니다. 사전검증을 포함하려면 위 스크립트를 사용합니다.
 

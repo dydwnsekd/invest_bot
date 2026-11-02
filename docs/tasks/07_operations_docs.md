@@ -18,13 +18,70 @@
 - [x] 저장소 전용 OKF 지식 구조 및 task 문서 갱신 규칙 정의 ([OKF 규약](../../OKF.md))
 - [x] 민감 설정·인증 캐시·로컬 DB·백업·이미지·연구 산출물의 Git 제외 규칙 (`efdc607`)
 - [x] 스케줄러 일시 실패 후 기존 간격 대기·시도 상한 ([G07a](../operations/improvements/operations.md#g07a))
+- [x] 시작 후 유한 준비 확인·내부 HTTP·안정 관찰·포트 정합성 ([G07b](../operations/improvements/operations.md#g07b))
 
 ## 남은 항목
 
 - [ ] 수집/분석/대시보드 운영 가이드
 - [x] 공유 runtime 로그 확인 가이드
 - [ ] 릴리즈/배포 방식 정리
-- [ ] 시작 후 실제 준비 확인 ([G07b](../operations/improvements/operations.md#g07b))
+
+## 시작 후 준비 확인 (2026-10-31)
+
+[G07b](../operations/improvements/operations.md#g07b)를 지정 모의 범위에서 완료했다. 기준은 main `74137bd` + 미커밋 후보이며 신규 기능111개·독립160개, 관련341 passed와 최종 후보 기본1593 passed / 2 deselected / 36 warnings다. G07a는 코드 `00c5a9f`·문서 `74137bd`로 반영됐고 아래10월29일 절의 커밋 전 표시는 당시 기록이다. 기존 운영 → 기존 QA → 메인 순서로 기존 세션을 재사용해 구현·독립 검증·원본 통합을 완료했다.
+
+완료 기준은 시작 단계의 유한 deadline, migration 정상 완료, 실제 web health HTTP 응답과 scheduler의 관찰 구간 안정성이다. 시작 명령 자체·상태 조회·HTTP probe가 멈추는 경우도 제한 시간에 포함한다. web 서버 health와 전체 앱/데이터 준비, scheduler process 안정성과 수집 성공의 범위를 구분한다. 실패 시 단계와 비정상 종료를 제공하며 자동 서비스 정리나 추가 수집을 하지 않는다.
+
+실제 설정·운영 데이터 없이 fake Docker/PATH·합성 상태/HTTP·제어된 시계로 지연 성공·초기화 실패·반복 종료·시간 초과를 검증한다. 실제 API/토큰·DB·Docker/서비스·commit·push는 실행하지 않는다. 아래는 최종 실행 정책과 검증 증거이며 실제 운영 smoke와 구분한다.
+
+### 준비 판정과 시간 범위
+
+| 대상 | 통과 기준 | 판정 범위 |
+| --- | --- | --- |
+| DB | `running` + 기존 healthcheck의 `healthy` | DB process/health |
+| migrate | `exited` + 종료코드0 | 초기화 명령 완료 |
+| web | 같은 Docker context의 web 컨테이너에서 Streamlit health HTTP200 + `ok` | 내부 서버/runtime, 앱 script·데이터·호스트 publish/외부 접근은 별도 |
+| scheduler | 양의 관찰 구간·최소2회 관측에서 `running`, ID·StartedAt·재시작 횟수 유지 | process 안정성, 장시간 수집/간격 대기는 허용하며 API/수집 성공은 별도 |
+
+Compose web은 컨테이너 내부 포트와 publish target을8000으로 일치시키고, 공개 포트만 `${INVEST_BOT_DASHBOARD_PORT:-8000}`를 따른다. 로컬 launcher는 기존 `INVEST_BOT_DASHBOARD_PORT` 해석을 유지한다. 이 설정 일치는 정적/모의 검증 대상이며 호스트 방화벽·프록시·실제 공개 포트 연결은 별도 운영 검증이다.
+
+새 검사는 호스트의 POSIX Python3.10 이상에서 표준 라이브러리만 사용한다. `INVEST_BOT_PYTHON` 지정 → 실행 가능한 프로젝트 `.venv/bin/python` → PATH의 `python3` 순서로 선택하고 Docker 작업·서비스 중단 전에 실행 환경과 옵션을 검사한다. Docker만 설치한 실행 환경은 호스트 Python도 준비해야 한다. 잘못된 실행 파일이나 옵션은 기존 서비스를 내리기 전에 중단한다.
+
+기존 Compose 설정 확인·이미지 빌드·스케줄 설정 검사는 새 deadline 밖이다. 그 뒤 start는 up 직전, restart는 down 직전부터 하나의 단조 시계 deadline을 시작한다. down/up·컨테이너 상태 조회·HTTP·관찰 대기는 남은 시간을 공유한다. down/up은 남은 전체 시간, 상태/HTTP 명령은 아래 개별 상한도 적용한다. helper가 명령을 중단할 때 CLI 자식 프로세스 그룹만 종료하고 최대0.4초의 유한 정리 시간을 허용한다. daemon이 이미 받은 작업의 취소나 컨테이너/볼륨 정리는 보증하지 않는다.
+
+| 호스트 환경변수 | 기본 초 | 용도 |
+| --- | --- | --- |
+| `INVEST_BOT_START_TIMEOUT_SECONDS` | 180 | 서비스 전환·준비 확인 전체 budget |
+| `INVEST_BOT_START_POLL_SECONDS` | 1 | 다음 관측까지 간격 |
+| `INVEST_BOT_START_STABLE_SECONDS` | 10 | scheduler 안정 관찰 구간 |
+| `INVEST_BOT_START_COMMAND_TIMEOUT_SECONDS` | 5 | 개별 상태 조회·HTTP 명령 상한 |
+
+값은 ASCII 양의 정수/소수(최대86400초)이며 부호·공백·지수·비유한 값은 거부한다. `poll ≤ stable < timeout`, `command cap ≤ timeout`이어야 하며 관찰 생략 옵션은 없다. 이 값과 실행 Python은 호스트에 export한 환경변수다. Compose의 `.env` 파일을 호스트 shell 설정으로 자동 읽지 않는다. 위 기본값과 범위를 독립 QA에서 검증했다. 호스트 Python3.10 이상은 새 기동 조건이며 실제 검증 인터프리터는3.13.13이었다.
+
+### 구현과 검증 기록
+
+구현은 [시작](../../start.sh)·[재시작](../../restart.sh)·[준비 확인 helper](../../scripts/service_readiness.py)·[Compose](../../docker-compose.yml)에 있다. [기능 회귀](../../tests/test_service_readiness.py)·[스크립트 회귀](../../tests/test_operations_scripts.py)·[독립 QA](../../tests/test_g07b_independent_qa.py)를 연결했다. stop·스케줄러/G07a·실제 설정·앱 entry는 변경하지 않았다.
+
+- **각 후보의 RED:** 원본 준비 확인 누락6 failed / 20 passed, 초기 helper의 up 진단 누락3 failed, runtime true/echo·미생성 migration/DB 경계5 failed를 별도로 재현했다. 포트 보완 전에는3 failed / 2 passed였다. 서로 다른 후보/단계 결과를 원본 실패 수로 합산하지 않는다.
+- **운영 GREEN:** 소유6파일을 보완해 관련181 passed(39.77초)다. 기존264입력 중4개만 변경하고 helper/회귀2개를 추가했으며260개는 동일하다. 새 기능 회귀는111개다. Compose는 web 내부 포트 한 줄만 보완하고 공개 포트·로컬 launcher 계약을 유지했다.
+- **독립 QA:** 새 격리본에서 기존181개를 새로 통과하고 독립154개도 최초 통과했다. native command hang6개를 더한 최종 독립160개·합산341 passed / failure·error·skip0(64.57초)이다. 실제 shell/helper/전달된 HTTP probe·정확한 명령 벡터·fake clock과 native 가상 프로세스를 연결했다. 제품 보완/테스트 skip 없이 기존266입력의 시작·종료 hash와 mode를 유지했다.
+- **메인 최종 후보:** QA 승인 소스와 독립 회귀를 담은 새 격리본에서 기본1593 passed / 2 deselected / 36 warnings, 종료0(89.78초)다. XML에서도1593 cases·failure/error/skip0, 독립160개 포함을 확인했다. 경고를 숨기지 않았고 별도 suite 대상2개 제외는 PostgreSQL 실행 증거가 아니다. 전체 기본 suite 이후에는 문서만 갱신한다.
+- **최종 정적/지식 검사:** Python4파일 AST/compile·Bash3파일 구문·공백 검사를 통과했다. 관리 Markdown57개·로컬 링크754개·문서 ID57개·개념12개/관계14개에서 누락·중복·잘못된 참조는0개다. 관련 없는 추적 파일 변경0개이며 실제 설정4개·백업·HEAD·Git index를 보존했다. 별도 lint/typecheck 도구는 설정돼 있지 않아 결과를 주장하지 않는다.
+- **격리:** 실제 설정/운영 데이터 없는 추적 파일 복사본에서 원본 가상환경 Python3.13.13을 절대경로로 사용했다. `env -i`의 최소 PATH/TMPDIR·bytecode 비활성화·기본 네트워크 차단을 유지하고 실행마다 별도 cache/basetemp를 지정했다. 실제 interval sleep 대신 가상 시계를 사용했다. 명령 hang은 짧은 가상 native subprocess로 검증했다.
+
+아래는 관련 검증의 정확한 대상과 기본 suite 선택이다. cwd는 위 격리본이며 생성 보고서는 격리본의 `data/processed/test_reports/`에만 기록한다.
+
+```sh
+python -B -m pytest tests/test_service_readiness.py tests/test_operations_scripts.py \
+  tests/test_schedule_preflight_boundaries.py tests/test_schedule_validation_cli.py \
+  tests/test_dashboard_server.py tests/test_db_migration_artifacts.py \
+  tests/test_g07b_independent_qa.py -q --tb=short
+python -B scripts/run_tests.py --suite default -q --tb=short
+```
+
+Docker의 [ps](https://docs.docker.com/reference/cli/docker/compose/ps/)·[inspect](https://docs.docker.com/reference/cli/docker/inspect/)·[exec](https://docs.docker.com/reference/cli/docker/container/exec/)와 [Compose environment 우선순위](https://docs.docker.com/compose/how-tos/environment-variables/envvars-precedence/)를 공식 문서로 확인했다. 설치된 Streamlit1.58.0의 health route/runtime에서200/503 의미를 확인했다. Compose up의 `--timeout`은 shutdown용이므로 시작 전체 한도는 helper의 별도 단조 시계로 관리한다.
+
+실제 Docker/version/context·이미지/mount·DB/PG·KIS/API/토큰·host/외부 접속·앱 데이터·배포·원격 CI와 실제 Python3.10 인터프리터는 미검증이다. 모의 환경 우선순위·Python3.10 문법/최소버전 검사와 실제 Docker/구버전 실행을 구분한다. native cleanup0.4초는 분기별 구조 검사이며 OS 스케줄링 상한이나 이미 daemon이 받은 작업 취소를 보증하지 않는다. 실패 후 자동 rollback/down/delete는 없다. 실제 설정4개·백업·HEAD·Git index를 보존하며 commit·push는 수행하지 않았다. 다음 구현 후보는 G08a 일반 수집의 요청 기간 확보다.
 
 ## 스케줄러 실패 후 대기 (2026-10-29)
 

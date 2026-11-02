@@ -4,6 +4,8 @@
 
 담당 세션은 **QA·독립 검증 체계 개선**이다. 이전 결과는 [9월 보고서](../session_reports/2026-09-13_qa.md), 현재 순서는 [작업 색인](README.md)을 따른다. QA는 기능 구현을 중복 소유하지 않고 검증 공백·환경·CI·독립 완료 판정을 맡는다.
 
+2026-10-31 G07b 독립 검증 완료: 기존 운영 종료 후 새 추적 파일 격리본에서 실제 shell/helper·전역 deadline·HTTP·안정 관찰·공개/내부 포트를 검증했다. 독립160개·합산341 passed로 지정 모의 범위를 승인했고 메인 최종 후보 기본1593 passed / 2 deselected / 36 warnings도 통과했다. 기존266입력과 운영 소유6파일을 보존하며 QA 회귀만 추가했다. 실제 Docker·DB/API·host 접속·서비스·commit·push는 사용하지 않았으며 QA01~03 상태는 유지한다. [현재 정책·증거](../../tasks/07_operations_docs.md#시작-후-준비-확인-2026-10-31). 아래 날짜별 결과는 당시 기록이다.
+
 2026-10-29 G07a 독립 검증 완료: 기존 운영 종료 후 새 추적 파일 격리본에서 실제 runner·CLI·JSONL 상태와 오류 경계를 검증했다. 신규68개·합산347 passed로 지정 범위를 승인했고 메인 최종 후보 기본1322 passed / 2 deselected / 36 warnings도 통과했다. 입력263개와 제품/기능 소유 테스트를 보존했다. 실제 설정·API/DB·Docker·서비스·commit·push는 사용하지 않았으며 QA01~03 상태는 유지한다. [정책·검증 기록](../../tasks/07_operations_docs.md#스케줄러-실패-후-대기-2026-10-29). 아래 날짜별 결과는 당시 기록이다.
 
 2026-10-27 현재 G01b의 독립40개·합산281개 검증을 완료했고 메인의 기본1100개도 통과했다. [G01b 정책·단계별 증거](../../tasks/02_data_collection.md#snapshot-기준일-날짜-계약-2026-10-27)를 따르며 QA01 원격 CI·QA03 상태는 바꾸지 않았다. 다음 날짜별 검증은 당시 기록이다.
@@ -66,6 +68,8 @@ G06b는 2026-10-22 메인이 가상 데이터 실제 renderer의 상태 대비·
 - **검증 경로:** [persistence 회귀](../../../tests/test_backtest_persistence.py), [조합](../../../tests/test_backtest_combination.py), [대시보드 백테스트](../../../tests/test_streamlit_backtest.py). 실제 생성 결과를 사용했는지 명시한다.
 
 ## 실행 기록
+
+2026-10-31 G07b: 기존181개를 새로 통과하고 독립154개가 최초 실행에서 통과했다. native ps/inspect/exec hang 등6개 경계를 더한 독립160개·합산341 passed / failure·error·skip0(64.57초)로 최종 승인했다. 실제 전달된 HTTP_PROBE를 fake Docker/HTTP에 연결하고 shell 종료 코드·단일 budget·유한 cleanup·최소 안정 관찰·runtime 확인 응답·포트 우선순위를 검증했다. pytest 실패·제품 보완은 없었고 입력266개와 소유 밖 파일을 보존했다. 메인 최종 후보의 기본1593개도 통과했다. [독립 회귀](../../../tests/test_g07b_independent_qa.py)·[명령·한계](../../tasks/07_operations_docs.md#시작-후-준비-확인-2026-10-31)를 따른다. 실제 Docker/host 접근·운영 DB/API·CI·배포와 실제 Python3.10 실행은 미검증이며 QA01~03 상태는 유지한다.
 
 2026-10-29 G07a: 기존279개를 새로 실행한 뒤 독립68개를 합쳐347 passed / failure·error·skip0이다. 최초 QA의64 passed / 4 failed / 4 teardown errors는 slots 인스턴스 logger patch 주입 오류로, QA 소유 파일에서 클래스 patch로 보정했고 실패 로그/XML을 보존했다. 제품 보완·기존 테스트 수정·skip/xfail은 없었다. 운영의 일반 wrapped SSL RED/GREEN과 인증서 사유의 기존 통과를 구분했다. 입력263개가 시작·종료에 일치하고 메인에 독립 회귀를 통합한 최종 후보 기본1322개도 통과했다. 실제 운영·DB/통신·외부 Compose 재기동·G07b·원격 CI는 미검증이다. [독립 회귀](../../../tests/test_g07a_independent_qa.py)·[검증 기록](../../tasks/07_operations_docs.md#스케줄러-실패-후-대기-2026-10-29)을 따른다.
 
