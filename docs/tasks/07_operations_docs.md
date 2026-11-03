@@ -26,6 +26,12 @@
 - [x] 공유 runtime 로그 확인 가이드
 - [ ] 릴리즈/배포 방식 정리
 
+## 일봉 범위와 분석 준비 로그 (2026-11-02)
+
+G08a의 일반 collector를 공유하며, 새 결과의 `collection_finished`에 `collection_results`와 `analysis_ready_symbols`·`analysis_unready_symbols`를 추가한다. 종목별 기록은 `symbol`·처리 `status`·`saved_count`·primitive `price_coverage`·`analysis_ready`만 남긴다. 원본 응답·오류 문자열·저장 경로는 새 필드에 복사하지 않는다. 실제 조회 범위/부분 관측과 실제 저장량은 별개이며 종목 상태/저장 수를 함께 읽는다.
+
+새 준비 필드가 없는 legacy 결과는 이전 finished 형태를 유지한다. API/종목 실패가 dict로 반환되면 기존 cycle 완료 흐름을 따르고 G07a의 retry/once/max_runs·로그/시계 오류 전파는 바꾸지 않는다. `load_schedule_status`는 기존 최근 실패/후속 성공과 완료 실행 수를 유지하며 추가 기록은 recent entries로 읽는다. [필드·판정 계약](02_data_collection.md#일반-일봉-요청-범위-2026-11-02)·[소비자 회귀](../../tests/test_collection_coverage_consumers.py)를 따른다. 독립 QA·메인 기본 검증을 완료했고 코드는 `c1b7810`에 반영됐다. 관련 문서는 검토 작업본이다. 실제 스케줄 실행·서비스·API 검증은 별도 범위다.
+
 ## 시작 후 준비 확인 (2026-10-31)
 
 [G07b](../operations/improvements/operations.md#g07b)를 지정 모의 범위에서 완료했다. 기준은 main `74137bd` + 미커밋 후보이며 신규 기능111개·독립160개, 관련341 passed와 최종 후보 기본1593 passed / 2 deselected / 36 warnings다. G07a는 코드 `00c5a9f`·문서 `74137bd`로 반영됐고 아래10월29일 절의 커밋 전 표시는 당시 기록이다. 기존 운영 → 기존 QA → 메인 순서로 기존 세션을 재사용해 구현·독립 검증·원본 통합을 완료했다.

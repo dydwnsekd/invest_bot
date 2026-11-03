@@ -1,6 +1,6 @@
 # 개념과 구현 근거
 
-최초 기준은 2026-09-17, 제품 커밋 `569cd97`이며 최신 대조는 2026-10-27 main `1e73d60` + 미커밋 G01b 보완 기준이다. 저장 신호·날짜·차트 수급 계약과 이후 보충 수집·비교·슬라이딩 연구는 각 연결 문서의 기능별 커밋과 검증 범위를 따른다. 이 페이지는 확인한 핵심 개념의 지도이며 모든 소스 코드를 설명하는 명세는 아니다. 세부 사용자 설명은 해당 주제의 가이드에 둔다.
+최초 기준은 2026-09-17, 제품 커밋 `569cd97`이며 최신 대조는 2026-11-03 main `c1b7810` + 현재 문서 작업본(독립 QA·기본 검증을 완료한 G08a 코드 반영) 기준이다. 저장 신호·날짜·차트 수급 계약과 이후 보충 수집·비교·슬라이딩 연구는 각 연결 문서의 기능별 커밋과 검증 범위를 따른다. 이 페이지는 확인한 핵심 개념의 지도이며 모든 소스 코드를 설명하는 명세는 아니다. 세부 사용자 설명은 해당 주제의 가이드에 둔다.
 
 ## 개념 사전
 
@@ -8,6 +8,8 @@
 | --- | --- | --- | --- |
 | K-SYMBOL | 종목코드·종목명·시장 구분. 마스터 메타데이터와 수집 중 placeholder를 구분한다. | [저장소](../../src/invest_bot/db/repositories.py), [마스터 동기화](../../src/invest_bot/market/master_sync.py) | [메타데이터·수급 저장 테스트](../../tests/test_db_write_path.py) |
 | K-COLLECTION | 가격·기본정보·수급을 수집하고 snapshot과 선택적 정규화 저장을 수행한다. 실패 결과에도 저장 완료 목록이 남을 수 있다. | [수집기](../../src/invest_bot/market/collector.py), [정규화 저장](../../src/invest_bot/db/write_path.py) | [수집·부분 실패 테스트](../../tests/test_domestic_stock_collector.py) |
+| K-COLLECTION-COVERAGE | 요청 API 구간 처리·실제 관측일/행수/횟수·거래일 증거·범위 불확실성을 분리한 수집 결과. 구간 완료가 모든 거래일 존재나 데이터 저장 성공을 뜻하지 않는다. [현재 계약](../tasks/02_data_collection.md#일반-일봉-요청-범위-2026-11-02). | [일봉 기간 수집](../../src/invest_bot/market/price_history.py), [결과 집계](../../src/invest_bot/jobs/collect_market_data.py) | [범위 회귀](../../tests/test_collection_coverage.py), [소비자 회귀](../../tests/test_collection_coverage_consumers.py) |
+| K-ANALYSIS-READY | 수집 성공과 현재 분석 실행 조건을 충족한 종목의 후속 실행 허용 여부. 새 일반 경로는 구간 완료·유효 일봉60개 이상, 관심종목 갱신은 누적 이력으로 판정한다. 짧은 정상 자료의 저장을 막지 않고 명시적 미준비의 자동 분석·리포트를 차단한다. legacy 호환은 별도 계약이다. | [수집 결과](../../src/invest_bot/market/collector.py), [분석 선택](../../src/invest_bot/dashboard/streamlit_actions.py), [누적 관심종목](../../src/invest_bot/dashboard/streamlit_watchlist.py) | [자료 준비 회귀](../../tests/test_collection_coverage_consumers.py), [기본 수집 회귀](../../tests/test_collection_coverage.py) |
 | K-SNAPSHOT | `dataset_frames`에 dataset/파일명 단위로 저장하는 raw·가공 DataFrame. CSV 파일 저장 구현과 구분한다. 새 저장의 기준일 추출은 [표현·컬럼 우선순위 계약](../tasks/02_data_collection.md#snapshot-기준일-날짜-계약-2026-10-27)을 따르며 과거 metadata를 자동 재작성하지 않는다. | [DB frame 저장](../../src/invest_bot/db/frame_storage.py) | [frame 저장 테스트](../../tests/test_db_frame_storage.py), [독립 기준일·저장 QA](../../tests/test_g01b_independent_qa.py) |
 | K-ASOF | 요청일·실제 관측일·공통 리포트 기준일은 서로 다를 수 있다. 리포트는 공통 기준일 이하의 입력을 선택한다. 조회는 원본·분석·판단 날짜와 저장 시각을 구분하고 선택 리포트의 날짜를 보존한다. | [리포트 생성기](../../src/invest_bot/jobs/generate_market_report.py), [리포트 job](../../src/invest_bot/jobs/run_market_report.py), [화면 상태 계산](../../src/invest_bot/dashboard/data_status.py) | [기준일 테스트](../../tests/test_market_report_generator.py), [job 테스트](../../tests/test_run_market_report.py), [화면 날짜 회귀](../../tests/test_dashboard_data_status.py) |
 | K-STRATEGY | 데이터 준비 조건에 맞춰 신호를 생성하는 전략. 구현된 전략 목록과 후보 아이디어를 구분한다. 현재 지표와 함께 사용하는 기본 골든크로스 저장 신호는 [날짜·가격 정합성 계약](../tasks/05_strategy_backtest.md#저장-신호의-날짜가격-정합성-2026-10-12)을 따른다. | [전략 레지스트리](../../src/invest_bot/backtest/strategy_registry.py), [adapter](../../src/invest_bot/backtest/adapters.py) | [레지스트리 테스트](../../tests/test_backtest_registry.py), [저장 신호 계약](../../tests/test_backtest_saved_signals.py) |
@@ -25,6 +27,10 @@
 | --- | --- | --- | --- |
 | K-COLLECTION | produces | K-SNAPSHOT | 수집 결과를 snapshot으로 저장 |
 | K-COLLECTION | consumes | K-SYMBOL | 종목을 식별하고 기존 메타데이터 보존 |
+| K-COLLECTION | produces | K-COLLECTION-COVERAGE | 요청 구간·관측 범위·증거를 결과로 남김 |
+| K-COLLECTION | produces | K-ANALYSIS-READY | 저장 결과와 현재 분석 조건을 함께 판정 |
+| K-DASHBOARD | consumes | K-COLLECTION-COVERAGE | 수집·준비 메시지에 날짜/횟수·불확실성을 표시 |
+| K-DASHBOARD | consumes | K-ANALYSIS-READY | 명시적 준비 종목만 자동 분석·리포트로 연결 |
 | K-ASOF | consumes | K-SNAPSHOT | 지표·신호·수급의 실제 관측일 선택 |
 | K-EQUITY | consumes | K-STRATEGY | 전략 신호를 체결·평가금액으로 해석 |
 | K-DASHBOARD | consumes | K-ASOF | 리포트 기준일과 해석을 표시 |

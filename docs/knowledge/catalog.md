@@ -8,12 +8,13 @@
 | --- | --- | --- | --- | --- |
 | D-OKF | [OKF](../../OKF.md) | policy | active | 통합 · 지식 관리 규약 |
 | D-HOME | [지식 홈](../README.md) | index | active | 통합 · 질문별 탐색 |
-| D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·OKF 이해; 작성 시점의 설명용 요약 |
+| D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·설치/화면 사용법·최근 개선·설정/로그·OKF 검색; 2026-11-03 코드 c1b7810과 문서 작업본 기준 |
 | D-CATALOG | [문서 등록부](catalog.md) | index | active | 통합 · 문서 역할과 상태 |
-| D-CONCEPTS | [개념 지도](concepts.md) | concept | active | 통합 · 핵심 개념·보충 수집·비교·슬라이딩 연구의 구현/검증 근거 |
+| D-CONCEPTS | [개념 지도](concepts.md) | concept | active | 통합 · 수집 범위·분석 준비·핵심 개념·보충 수집·비교·슬라이딩 연구의 구현/검증 근거 |
 | D-TEMPLATE | [작성 양식](template.md) | policy | active | 통합 · 새 문서 작성 |
 | D-ARCHIVE | [기록 보관 안내](../archive/README.md) | index | active | 통합 · 과거 기록 읽기 |
 | D-DECISION-0001 | [OKF 도입 결정](../decisions/0001-local-okf.md) | decision | active | 통합 · 이번 구조를 선택한 이유 |
+| D-DECISION-0002 | [일봉 범위·분석 준비 결정](../decisions/0002-collection-coverage-and-analysis.md) | decision | active | 데이터·통합 · API 구간 완료·거래일 증거·분석 준비 분리 이유 |
 | D-README | [프로젝트 README](../../README.md) | runbook | active | 통합 · 실행·설정 안내; 날짜별 업데이트는 과거 기록 |
 | D-AGENT | [agent 가이드](../../agent.md) | policy | active | 통합 · 순차 작업·명시적 요청 전 commit/push 금지 |
 | D-DESIGN | [DESIGN](../../DESIGN.md) | reference | active | 대시보드 · 의도한 제품 UX |
@@ -24,7 +25,7 @@
 | --- | --- | --- | --- | --- |
 | D-STATUS | [task 요약](../tasks/00_summary.md) | status | active | 통합 · 최근 기능별 커밋·완료/대기·날짜별 검증 범위 |
 | D-ENV | [환경](../tasks/01_environment.md) | status | active | 운영 · 환경 작업 |
-| D-DATA | [수집](../tasks/02_data_collection.md) | status | active | 데이터 · 수집 작업·snapshot 날짜 표현/원본 보존 계약·명시적 기간 보충 수집 검증 |
+| D-DATA | [수집](../tasks/02_data_collection.md) | status | active | 데이터 · 일반 일봉 범위/분석 준비·snapshot 날짜 표현/원본 보존 계약·명시적 기간 보충 수집 검증 |
 | D-ANALYSIS | [분석](../tasks/03_analysis.md) | status | active | 퀀트 · 지표 작업 |
 | D-DASHBOARD | [대시보드](../tasks/04_dashboard.md) | status | active | 대시보드 · 현재 UI·G05a 수급·G05b 날짜·G06a 실행 안내·G06b 가독성·QA02 독립 검증과 고립 관측점 보완; 날짜별 증거 구분 |
 | D-BACKTEST | [전략·백테스트](../tasks/05_strategy_backtest.md) | status | active | 퀀트 · 구현된 전략과 백테스트 규칙·매수 후 보유 비교·슬라이딩 혼합 연구 |
