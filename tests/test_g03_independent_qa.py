@@ -208,6 +208,7 @@ def test_dashboard_preparation_table_and_render_show_duplicate_block(monkeypatch
     column = SimpleNamespace(metric=lambda *_args: None)
     fake = SimpleNamespace(
         markdown=lambda *_args, **_kwargs: None,
+        caption=lambda *_args, **_kwargs: None,
         columns=lambda *_args, **_kwargs: [column] * 3,
         dataframe=lambda frame, **_kwargs: rendered.append(frame.copy()),
         warning=warnings.append,

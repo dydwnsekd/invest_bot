@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from html import escape
 from pathlib import Path
 
@@ -38,6 +38,13 @@ from invest_bot.backtest.adapters import GOLDEN_CROSS_SIGNALS
 from invest_bot.backtest.persistence import BacktestInputSources, build_context, enrich_summary, enrich_trades
 from invest_bot.backtest.strategy_registry import DAILY_PRICES_INDICATORS, INVESTOR_DAILY
 from invest_bot.dashboard.service import DashboardDataService
+from invest_bot.dashboard.backtest_input_ranges import (
+    format_input_range,
+    format_preparation_selection,
+    preparation_selection,
+    signal_input_range,
+    unavailable_input_range,
+)
 from invest_bot.dashboard.streamlit_backtest_history import (
     BACKTEST_HISTORY_NONE_OPTION,
     BACKTEST_HISTORY_SELECTION_KEY,
@@ -195,9 +202,15 @@ def render_backtest_tab(
             selected_strategy_ids=selected_strategy_ids,
             loaded_inputs=loaded_inputs,
             strategy_labels=strategy_labels,
+            strategy_parameters=parameter_settings,
+            combination_settings=combination_settings,
+            preparation_period=collection_period,
         )
 
-        _render_backtest_selection_summary(selected_items, selected_strategy_ids, strategy_labels, int(lookback_days))
+        _render_backtest_selection_summary(
+            selected_items, selected_strategy_ids, strategy_labels, int(lookback_days),
+            preparation_period=collection_period,
+        )
         _render_readiness_panel(readiness_payload)
         for error in parameter_errors:
             st.warning(f"실험 설정 확인 필요: {error}")
@@ -214,6 +227,7 @@ def render_backtest_tab(
                 loaded_inputs=loaded_inputs,
                 strategy_parameters=parameter_settings,
                 combination_settings=combination_settings,
+                preparation_period=collection_period,
             )
 
     history_results = _render_backtest_history_panel(service)
@@ -251,6 +265,8 @@ def _render_backtest_selection_summary(
     selected_strategy_ids: list[str],
     strategy_labels: dict[str, str],
     lookback_days: int,
+    *,
+    preparation_period: tuple[date, date] | None = None,
 ) -> None:
     symbols = ", ".join(item.symbol_name or item.symbol for item in selected_items) or "선택 없음"
     strategies = ", ".join(strategy_labels.get(strategy_id, strategy_id) for strategy_id in selected_strategy_ids) or "선택 없음"
@@ -259,7 +275,7 @@ def _render_backtest_selection_summary(
         <div class="selection-summary-card">
           <div><span>선택 종목</span><strong>{escape(symbols)}</strong></div>
           <div><span>선택 전략</span><strong>{escape(strategies)}</strong></div>
-          <div><span>준비 조회 기간</span><strong>최근 {lookback_days}일 기준</strong></div>
+          <div><span>준비용 선택 범위</span><strong>{escape(format_preparation_selection(preparation_selection(preparation_period, lookback_days=lookback_days)))}</strong></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -500,13 +516,22 @@ def _build_readiness_payload(
     selected_strategy_ids: list[str],
     loaded_inputs: dict[str, LoadedBacktestInputs],
     strategy_labels: dict[str, str],
+    strategy_parameters: dict[str, dict[str, float]] | None = None,
+    combination_settings: BacktestCombinationSettings | None = None,
+    preparation_period: tuple[date, date] | None = None,
 ) -> dict[str, object]:
     rows: list[dict[str, object]] = []
+    range_rows: list[dict[str, object]] = []
+    selected_preparation = preparation_selection(
+        preparation_period,
+        lookback_days=collection_days_from_period(preparation_period) if preparation_period is not None else None,
+    )
     blocked_reasons: list[str] = []
     ready_count = 0
     total_count = 0
 
     for item in selected_items:
+        signal_frames: dict[str, pd.DataFrame] = {}
         readiness = check_backtest_readiness(selected_strategy_ids, loaded_inputs[item.symbol].readiness_datasets())
         for strategy_result in readiness.strategy_results:
             total_count += 1
@@ -527,6 +552,35 @@ def _build_readiness_payload(
                     "blocking_reasons": " / ".join(strategy_result.blocking_reasons) if strategy_result.blocking_reasons else "-",
                 }
             )
+            input_range = unavailable_input_range("준비 차단으로 최종 입력을 계산하지 않았습니다.")
+            if strategy_result.ready:
+                try:
+                    if strategy_parameters is not None and strategy_result.strategy_id not in strategy_parameters:
+                        raise ValueError("invalid selected parameters")
+                    parameters = resolve_backtest_parameters(
+                        strategy_result.strategy_id, (strategy_parameters or {}).get(strategy_result.strategy_id),
+                    )
+                    output = DEFAULT_BACKTEST_ADAPTER_REGISTRY.build_signal_rows(
+                        strategy_result.strategy_id, loaded_inputs[item.symbol].adapter_datasets(), parameters=parameters,
+                    )
+                    signal_frames[strategy_result.strategy_id] = output.signal_rows
+                    input_range = signal_input_range(output.signal_rows)
+                except Exception:  # Display-only preview must not change the existing execution gate.
+                    input_range = unavailable_input_range("전략 설정 또는 신호 입력을 확인해 주세요. 실행 전 범위 계산에 실패했습니다.")
+            range_rows.append({**rows[-1], **input_range, **selected_preparation})
+
+        if combination_settings is not None:
+            combined_range = unavailable_input_range("선택 전략의 입력을 모두 확인할 수 없어 조합 범위를 계산하지 않았습니다.")
+            if set(signal_frames) == set(selected_strategy_ids):
+                try:
+                    combined_range = signal_input_range(combine_strategy_signal_rows(signal_frames, combination_settings))
+                except Exception:
+                    combined_range = unavailable_input_range("공통 거래일 또는 조합 입력을 확인해 주세요.")
+            range_rows.append({
+                "symbol": item.symbol, "symbol_name": item.symbol_name,
+                "strategy_id": combination_settings.strategy_id, "strategy_name": combination_settings.strategy_name,
+                **combined_range, **selected_preparation,
+            })
 
     return {
         "rows": pd.DataFrame(rows),
@@ -534,6 +588,7 @@ def _build_readiness_payload(
         "ready_count": ready_count,
         "total_count": total_count,
         "can_run": total_count > 0 and ready_count == total_count,
+        "input_ranges": pd.DataFrame(range_rows),
     }
 
 
@@ -567,6 +622,43 @@ def _render_readiness_panel(payload: dict[str, object]) -> None:
     blocked_reasons = payload["blocked_reasons"]
     if blocked_reasons:
         st.warning("실행 차단 사유\n- " + "\n- ".join(str(reason) for reason in blocked_reasons))
+    ranges = payload.get("input_ranges")
+    if isinstance(ranges, pd.DataFrame) and not ranges.empty:
+        _render_input_range_panel(ranges, preview=True)
+
+
+def _render_input_range_panel(ranges: pd.DataFrame, *, preview: bool = False) -> None:
+    st.markdown("#### 실제 입력 범위" + (" · 현재 메모리 입력 예상" if preview else " · 실행 당시 기록"))
+    st.caption(
+        "전략 신호 생성·조합 후 실제 백테스트 입력의 유효 고유 일봉 기준입니다. 지표 결측으로 관망한 가격 일봉도 포함합니다. "
+        "준비용 선택은 입력 기간 필터나 수집 실행 증거가 아니며, 아래 평가곡선의 평가 기간과 구분합니다."
+    )
+    if preview:
+        st.caption("범위 계산은 실행·수집·저장을 하지 않습니다. 기존 준비 요건 검사와 구분하며, 범위 확인 불가는 실제 실행 시 차단될 수 있습니다.")
+    display_rows = [
+        {
+            "종목": row.get("symbol_name") or row.get("symbol"),
+            "전략": row.get("strategy_name") or row.get("strategy_id"),
+            "실제 입력 범위": format_input_range(row),
+            "준비용 선택 범위": format_preparation_selection(row),
+        }
+        for _, row in ranges.iterrows()
+    ]
+    # Separate, unindented blocks keep every value readable without table scrolling.
+    for row in display_rows:
+        st.markdown(
+            '<div class="summary-box" data-backtest-input-range="true" '
+            'style="min-width:0;max-width:100%;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;margin-bottom:0.65rem;">'
+            f'<p><strong>종목:</strong> {escape(str(row["종목"]))}<br>'
+            f'<strong>전략:</strong> {escape(str(row["전략"]))}</p>'
+            f'<p><strong>실제 입력 범위:</strong><br>{escape(row["실제 입력 범위"])}</p>'
+            f'<p><strong>준비용 선택 범위:</strong><br>{escape(row["준비용 선택 범위"])}</p>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    st.dataframe(pd.DataFrame(display_rows), width="stretch", hide_index=True)
+    if any("기록 없음" in str(value) for row in display_rows for value in row.values()):
+        st.caption("기록 없음은 실행 당시 범위가 저장되지 않았다는 뜻입니다. 현재 선택·원본 전체·거래 날짜·평가곡선으로 추정하지 않습니다.")
 
 
 def _run_prepare_action(selected_items: list[ResolvedSymbol], lookback_days: int) -> None:
@@ -621,6 +713,7 @@ def _run_backtest_action(
     loaded_inputs: dict[str, LoadedBacktestInputs],
     strategy_parameters: dict[str, dict[str, float]],
     combination_settings: BacktestCombinationSettings | None,
+    preparation_period: tuple[date, date] | None = None,
 ) -> None:
     try:
         resolved_items = require_selected_items(selected_items)
@@ -658,6 +751,7 @@ def _run_backtest_action(
             loaded_inputs,
             strategy_parameters=resolved_parameters,
             combination_settings=combination_settings,
+            **({"preparation_period": preparation_period} if preparation_period is not None else {}),
         )
         st.session_state[BACKTEST_RESULTS_KEY] = result_bundle
         set_action_message(
@@ -678,11 +772,16 @@ def _execute_backtests(
     *,
     strategy_parameters: dict[str, dict[str, float]] | None = None,
     combination_settings: BacktestCombinationSettings | None = None,
+    preparation_period: tuple[date, date] | None = None,
 ) -> dict[str, object]:
     summaries: list[pd.DataFrame] = []
     trades: list[pd.DataFrame] = []
     daily_equity_curves: list[pd.DataFrame] = []
     batch_now = datetime.now(UTC)
+    selected_preparation = preparation_selection(
+        preparation_period,
+        lookback_days=collection_days_from_period(preparation_period) if preparation_period is not None else None,
+    )
 
     for item in selected_items:
         inputs = loaded_inputs[item.symbol]
@@ -694,6 +793,7 @@ def _execute_backtests(
                 inputs.adapter_datasets(),
                 parameters=parameters,
             )
+            input_range = signal_input_range(adapter_output.signal_rows)
             raw_result = DEFAULT_BACKTEST_RUNNER.run(item.symbol, adapter_output.signal_rows)
             signal_frames[strategy_id] = adapter_output.signal_rows
             context = build_context(
@@ -705,6 +805,8 @@ def _execute_backtests(
                 now=batch_now,
             )
             summary = enrich_summary(raw_result.summary, context)
+            for key, value in {**input_range, **selected_preparation}.items():
+                summary[key] = value
             summary["symbol_name"] = item.symbol_name
             parameter_status = "기본 전략 설정" if is_default_backtest_parameters(strategy_id, parameters) else "실험 설정"
             parameter_summary = f"{parameter_status}: {format_backtest_parameters(strategy_id, parameters)}"
@@ -727,6 +829,7 @@ def _execute_backtests(
 
         if combination_settings is not None:
             combined_rows = combine_strategy_signal_rows(signal_frames, combination_settings)
+            combined_range = signal_input_range(combined_rows)
             combined_result = DEFAULT_BACKTEST_RUNNER.run(item.symbol, combined_rows)
             combination_metadata = {
                 "mode": combination_settings.mode,
@@ -749,6 +852,8 @@ def _execute_backtests(
                 now=batch_now,
             )
             combination_summary = enrich_summary(combined_result.summary, combination_context)
+            for key, value in {**combined_range, **selected_preparation}.items():
+                combination_summary[key] = value
             combination_summary["symbol_name"] = item.symbol_name
             combination_summary["strategy_parameter_summary"] = "조합 전략: 개별 전략 설정은 위 비교 결과에서 확인"
             combination_summary["combination_summary"] = combination_settings.summary()
@@ -986,6 +1091,7 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
         st.info("표시할 백테스트 결과가 아직 없습니다.")
         return
 
+    _render_input_range_panel(summary_frame)
     st.markdown("#### 전략 비교표")
     st.dataframe(format_frame_for_display(comparison_frame, service), width="stretch", hide_index=True)
 
