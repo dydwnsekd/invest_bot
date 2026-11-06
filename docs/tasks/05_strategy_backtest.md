@@ -26,6 +26,39 @@
 - [x] 전략별 가격 매수 후 보유 비교와 CSV·HTML 리포트
 - [x] 슬라이딩 창·신호 혼합·독립 자금배분·시간순 선택 연구와 HTML 검색·정렬
 
+## 백테스트 입력 범위 (2026-11-05)
+
+[G08b](../operations/improvements/dashboard.md#g08b)의 구현·UI 보완·독립 QA·메인 기본 검증을 완료했으며 커밋 전이다. 준비용 선택 기간·조회 옵션과 실제 runner에 전달한 최종 신호행의 범위를 구분한다. 준비 선택은 입력 기간 필터나 실제 수집/API 요청 이력이 아니다. 결과의 기존 평가곡선 기간과 체결 날짜 역시 입력 범위와 다르다.
+
+준비 범위는 이미 로드한 메모리 frame에 현재 유효 매개변수의 실제 adapter를 적용하고, 조합은 combine 후 계산한다. 실행은 실제로 전달한 같은 종류의 signal_rows에서 범위를 고정한다. 날짜/종가가 유효한 고유 일봉의 min/max·개수를 표시하며 지표 결측으로 관망한 가격 일봉도 포함한다. 무효 날짜/종가 제외 행수와 기존 source_rows(전체 행수)는 별개이고, 중복 날짜를 임의 제거하거나 엔진 입력을 새로 필터하지 않는다.
+
+| 추가 summary 필드 | 의미 |
+| --- | --- |
+| `input_range_status`, `input_range_reason` | known/empty/unavailable와 확인 불가의 사유. 필드가 없는 과거 기록은 기록 없음 |
+| `input_start_date`, `input_end_date` | 실행 당시 최종 입력의 유효한 local 거래일 최소/최대 ISO 날짜, 없으면 None |
+| `input_row_count`, `input_excluded_rows` | 유효 고유 일봉 수와 날짜/종가 무효 제외 행수; 확인 불가는 None |
+| `prepare_selection_start_date`, `prepare_selection_end_date` | 실행 당시 준비용 선택 기간. 실제 수집 시작/종료의 인증이 아님 |
+| `prepare_lookback_days` | 기존 collection_days_from_period로 산출한 조회 옵션. 실제 호출 횟수나 실행 필터가 아님 |
+
+새 값은 문자열·정수·None인 additive metadata이며 이후 UI 선택으로 덮어쓰지 않는다. metadata가 없거나 불완전한 과거 이력을 현재 파일·체결·평가곡선으로 인증하지 않는다. 구형/미기록은 기록 없음, 차단·실패·중복·유효 일봉0은 사유와 확인 불가를 표시한다.
+
+대시보드 실행 함수에 summary 자동 저장을 추가하지 않았다. 새 summary를 기존 저장 소비자가 보존하면 CSV/DB 저장도 이 필드를 보존하지만, 변경하지 않은 CLI/jobs 출력에 자동으로 새 필드가 생기지는 않는다. 기존 이력·G08c 조합 artifact 영구저장과 구분한다. [표시용 계산](../../src/invest_bot/dashboard/backtest_input_ranges.py)·[UI 연결](../../src/invest_bot/dashboard/streamlit_backtest.py)·[기능 회귀](../../tests/test_g08b_input_ranges.py)를 따른다. [독립 QA 회귀](../../tests/test_g08b_independent_qa.py)와 아래 검증 범위를 따른다.
+
+### G08b 검증과 남은 범위
+
+- 기능 소유자의33개와 독립20개를 포함한 첫 독립 승인 관련286 passed / 기존15 warnings, 2.11초다. 임시 SQLite 실제4원본의 기존 조회는8SELECT이며, 로드 이후 범위 미리보기의 추가 SQL·쓰기·runner 실행은0회다. 전체 화면 조회가0회라는 뜻은 아니다.
+- 단일·조합·다종목의 실제 adapter/runner 입력을 대조했다. 조합의 실제 공통 기간, 지표 결측 관망 일봉, 무효/중복/빈 자료, 로컬 시간대, 기존 readiness·기본 매개변수·옛 callback 호환과 stale 결과 제거를 확인했다. 기존 CSV/SQLite 소비자에 명시 저장한 summary의9필드가 실제 history 재조회·표시까지 보존됐다. 자동 저장이나 G08c artifact 구현 증거가 아니다.
+- 처음 모바일390×844에서 표의 일봉 수·준비 조건이 잘렸다(MAIN-G08b-UI-01). 같은 소유자의6개 RED 후 모든 단일·조합에 줄바꿈 안내를 추가하고266개를 통과했다. 메인 실제1920×958·390×844 재검사에서 준비/결과6개 안내를 확인했다. 모바일 안내의 clientWidth/scrollWidth는328/328px·358/358px였고, 현재 선택을2024년으로 바꿔도 결과의2025년 선택·실제3일봉과 runner3회는 유지됐다. 구형 기록 없음도 확인하고 임시 서버·탭·viewport를 정리했다. 선택 비교표 자체는 좁은 화면에서 가로 스크롤을 유지한다.
+- QA는 메인의 준비/조합 캡처2장을 직접 검토했으며 직접 브라우저를 실행한 판정과 구분한다. 초기15pass/1fail(필수 인자 누락), 284pass/1fail(지원되는 빈 매개변수 오판), 285pass/1fail(assertion 배치)은 QA 작성 오류였다. 제품 수정·실패 제외 없이 QA만 바로잡고 조합 공통 시작일을 강화한 최종286GREEN을 보존했다.
+- 첫 전체 기본 검증은 기존 G03 모의 화면에 caption이 없어1 failed /1871 passed /2 deselected /36 warnings, 92.01초였다. QA가 해당1개 RED를 재현하고 기존 fake에 caption no-op 한 줄만 추가했다. 기존 차단 assertions·기능 소유3파일·독립20개는 유지했다. G03 전체63개를 포함한 새 관련349 passed / 기존21 warnings로 호환성을 확인한 뒤 전체를 다시 실행했다. 최초 실패와 보완은 별도 로그/XML로 보존했다.
+- 메인 최종275입력 소스 격리본 기본 **1872 passed / 2 deselected / 36 warnings, 92.20초**다. 기능·독립·관련·기본 수치는 포함 관계여서 합산하지 않는다. 경고는 기존 pandas 날짜 추론/혼합 시간대 경고이며 숨기지 않았다.
+
+관련 명령은 `.venv/bin/python -B -m pytest tests/test_g03_independent_qa.py tests/test_g08b_independent_qa.py tests/test_g08b_input_ranges.py tests/test_streamlit_backtest.py tests/test_backtest_adapters_runner.py tests/test_backtest_dates.py tests/test_backtest_combination.py tests/test_backtest_parameters.py tests/test_backtest_saved_signals.py tests/test_dashboard_snapshot_frame_loader.py tests/test_watchlist_snapshot_queries.py tests/test_collection_coverage_consumers.py -q --tb=short`다. 메인 기본 명령은 `.venv/bin/python -B scripts/run_tests.py --suite default -q --tb=short`다. 실제 실행은 추적 파일 격리 cwd·정리한 환경·별도 cache/basetemp에서 원본 venv의 Python만 사용했다. 증거는 임시 작업 폴더의 `QA-confirmed-final.xml`, `QA-G03-followup.green.xml`, `QA-G03-followup.report.md`, `QA-report.md`, `QA-output-manifest.json`, `MAIN-default.xml`, `MAIN-browser-final.md`와 캡처/기하 JSON에 남겼다.
+
+최종 정적 검사는 변경 Python5파일의 AST·메모리 컴파일과 공백 검사를 통과했다. Markdown58개·로컬 링크810개·등록부 ID58개·개념14개/관계18개에 누락·중복·미등록이 없었다. HTML은12페이지·문서58개·로컬 링크/앵커102개·기존7앵커·외부 자원0개와 구조를 확인했고, Node 모의 DOM의 페이지/이력·검색·복사·전체 인쇄/복원19항목을 통과했다. 이 HTML의 실제 브라우저 배치는 기존 로컬 파일 접근 정책으로 미확인이다. 백테스트 가상 앱의 실제 브라우저 검증과 구분한다.
+
+실제 KIS/API·토큰 발급·운영 DB/PG·원격 CI·배포·대용량/다전략 CPU 지연은 미검증이다. 준비 미리보기는 adapter 계산을 추가로 수행하므로 별도 대규모 성능 측정이 필요하다. 기존 G06c 준비/결과 카드의 두 번째 이후 HTML 노출과 G08d 차트 배치는 남는다. 실제 설정·백업·Git index/HEAD·관련 없는 파일은 보존하고 stage/commit/push는 하지 않았다.
+
 ## 현재 백테스트 workflow
 
 ### 2026-10-13 슬라이딩 창·혼합 연구
