@@ -4,7 +4,7 @@
 
 수집 및 분석 데이터를 바탕으로 전략 신호를 만들고, 그 신호를 과거 데이터로 검증할 수 있는 구조를 만든다.
 
-2026-10-17 확인 기준으로 비교 리포트는 `8cadb87`, 슬라이딩 창·혼합 전략 연구와 HTML 탐색은 `310a8bb`로 main에 반영됐다. 두 연구 경로의 가정·검증은 아래 workflow에서 구분한다. 대시보드 조합 설정의 artifact 저장·재로드 [G08c](../operations/improvements/quant.md#g08c)는 별도 대기다.
+2026-10-17 확인 기준으로 비교 리포트는 `8cadb87`, 슬라이딩 창·혼합 전략 연구와 HTML 탐색은 `310a8bb`로 main에 반영됐다. 두 연구 경로의 가정·검증은 아래 workflow에서 구분한다. 대시보드 조합 설정의 artifact 저장·재로드 [G08c](../operations/improvements/quant.md#g08c)는 별도 작업이며 최신 상태는 아래11월8일 절을 따른다.
 
 ## 완료된 항목
 
@@ -26,9 +26,50 @@
 - [x] 전략별 가격 매수 후 보유 비교와 CSV·HTML 리포트
 - [x] 슬라이딩 창·신호 혼합·독립 자금배분·시간순 선택 연구와 HTML 검색·정렬
 
+## 조합 설정 저장·재로드 (2026-11-08)
+
+[G08c](../operations/improvements/quant.md#g08c)의 퀀트 구현·메인 UI·실제 가상 화면·[독립 QA03](../operations/improvements/qa.md#qa03)·최종 검증을 순차 완료했으며 커밋 전이다. 실행 당시 설정을 이력에서 다시 확인하는 기능이며 현재 입력 양식의 자동 복원/재실행은 하지 않는다.
+
+### 조합 metadata와 호환 계약
+
+기존 `combination_settings_json`의 mode/weights/component_strategy_ids를 유지하고 다음 v1 기록을 추가한다. 단일 전략의 flat `strategy_parameters_json`과 기존 run ID·파일명·수식은 유지한다.
+
+| 필드 | 기록하는 내용 |
+| --- | --- |
+| `metadata_version` | 구성 기록 계약 버전1 |
+| `components.<strategy_id>.strategy_parameters` | 실제 adapter에 전달한 완전한 유효 매개변수. 예: RSI 매수40·매도60 |
+| `components.<strategy_id>.input_sources` | indicator/signal/investor/price 각각의 dataset·filename 쌍. 미사용/이름 미기록은 두 값 모두 None |
+| `components.<strategy_id>.uses_saved_signal` | 기본5/20 골든크로스에서 실제 사용한 저장 신호 출처 여부 |
+
+구성별 context는 실제 adapter/runner 실행 직후 같은 종목·실행 그룹에서 고정한다. RSI 등의 실제 가격은 지표 frame의 close이므로 사용하지 않은 raw 가격·수급 파일을 구성 출처로 표시하지 않는다. 조합 자체의 signal 출처는 구성 골든크로스 신호와 구분한다. 이후 위젯 변경·최신 파일 조회로 출처나 설정을 덮어쓰지 않는다.
+
+[metadata API](../../src/invest_bot/backtest/persistence.py)의 reader는 recorded/legacy/malformed/unsupported를 구분한다. 옛 무버전 기록은 구성 설정·출처 기록 없음으로 표시하고 현재 기본값·원본으로 보완하지 않는다. 잘못된 형식과 미지원 버전도 명시하며 새 기록처럼 저장하지 않는다. 기록 읽기는 현재 매개변수 기본값/범위를 다시 적용하지 않는다.
+
+### 명시 저장과 이력 재조회
+
+백테스트 실행 후 **이번 실행 결과 저장 → 실행 결과 저장**을 눌렀을 때만 [저장 함수](../../src/invest_bot/backtest/artifacts.py)가 기존 CSV/DB 저장소의 backtest_summaries/backtest_trades에 run별 요약·거래를 저장한다. 단일/조합·다종목 배치를 함께 보존하며 G08b의9개 입력/준비 범위 필드도 유지한다. 거래0건은 summary의0건과 header-only 거래 파일로 남기며 가짜 거래를 만들지 않는다. 조회·선택·실행·import만으로 저장하지 않는다.
+
+전체 배치의 ID/JSON/거래 수/요약·거래 설정 일치와 모든 목적 파일 충돌을 쓰기 전에 확인한다. 같은 파일이 있으면 덮어쓰지 않으며 저장 실패를 성공으로 표시하지 않는다. 도중 I/O 실패는 확인된 저장 개수와 일부 결과가 남을 수 있음을 안내한다. 기존 storage에 배치 transaction/exclusive-create가 없으므로 전체 원자성·동시 외부 writer와의 경쟁 방지·자동 rollback/재시도는 보장하지 않는다. 일부 저장 후 재시도는 기존 파일 거절에 걸릴 수 있다.
+
+새 DashboardDataService의 이력 조회에서 설정·출처·거래·최종자산·MDD를 확인한다. CSV 백테스트 이력은 symbol을 문자열로 읽어005930의 앞자리0을 보존하고, 대표 출처는 저장 신호/가격이 없으면 기록된 지표 파일로 표시한다. 새 DB 스키마·equity dataset·원본 영구 snapshot은 추가하지 않는다. 조합 일별 평가곡선은 현재 세션에만 있고 저장된 구성 신호만으로 새 곡선을 추정하지 않는다. 과거 summary의 자산/MDD와 저장 거래는 기존 저장 표현대로 읽는다.
+
+SQLite 수치 성과는 기존 table JSON codec의 double_precision=10 표현으로 저장한다. 새 경로는 기존 codec 직접 왕복과 exact 일치하며 원본 float의 bit 일치나1e-12 정확도를 보장하는 것은 아니다. 독립 표본6개 요약·3필드18비교에서 최종 정규화 자산의 최대 절대/상대 오차는3.333345e-11/3.636376e-11, 총수익률은3.333689e-11%p/4.000427e-12, MDD는0이었다. 최종자산0.9166666666666666은 기존 codec과 새 service에서 모두0.9166666667000001로 읽혔다. 이 표본에서 기존 codec 외 추가 손실은 없었으며 임의의 큰 금액에 대한 보편적 오차 한계가 아니다. ID·JSON·설정·날짜·출처/범위는 exact, CSV 성과 비교는1e-12 tolerance를 유지했다. codec 자체는 수정하지 않았다.
+
+### 구현 검증과 남은 범위
+
+퀀트 baseline14개 → 신규 핵심12RED → 확장19GREEN·관련371 passed/32warnings다. 메인 신규 화면11RED 후 CSV 종목코드 손실과 기존3-key JSON 기대값을 보완했다. 숫자1ULP의 CSV roundtrip을 정확 일치로 보던 신규 테스트는 세 성과값만1e-12 tolerance로 고쳤다. 실제 브라우저에서 발견한 이력의 지표 출처 누락도1개RED 후 보완했다. 최종 메인 관련412 passed /33warnings다. 실패/보완은 별도 XML/log로 보존했고 제품 수식·기존 차단 assertions를 바꾸거나 실패를 제외하지 않았다.
+
+메인 AppTest는0예외로 자동 저장0·실행만으로 쓰기0·명시 저장6파일·새 세션 이력을 확인했다. 실제 CUA1280×720·390×844에서 실행 후 runner3/save0/files0, 명시 저장 후3/6/6과 이력 선택의 추가 실행/저장0을 관찰했다. 출처 표시 보완 후 서버/페이지를 새로 열어 현재 RSI30/70과 과거 이력40/60의 구분·종목005930·출처를 확인했다. 모바일 설정·출처 caption3개의 clientWidth/scrollWidth349/349px와 저장 버튼347/347px, rect15..364px를 확인했다. 임시 서버/탭은 종료하고 viewport를 복원했다. 알려진 G06c 기존 카드 HTML과 G08d 차트 범례는 별도 대기다.
+
+[기능 계약 회귀](../../tests/test_g08c_persistence.py)·[화면 연결 회귀](../../tests/test_g08c_dashboard.py)와 [독립 QA 회귀](../../tests/test_g08c_independent_qa.py)를 따른다. QA03 첫412GREEN 뒤 독립3pass/2fail은 구형 []/null·조합 요약 누락에서 전체 renderer가 중단되는 하나의 제품 결함(QA03-01)이었다. 제품 수정 없이 RED를 보존한 QA가 종료한 뒤, 메인이 기존 metadata reader를 규칙 표시에도 재사용했다. unchanged 독립5개+기존412개가417GREEN이며 최종 모바일에서 정상·손상 이력 표시/실행0/저장0을 확인하고 같은 QA를 재개했다. QA 재개 시 run_id를 인덱스로 옮기면서 비교 열을 없앤 두 실패는 QA 작성 오류였고, 기존 SQLite codec의10자리 정밀도에 원본 float1e-12 일치를 요구했던 한 실패도 직접 codec 기준과 수치 audit으로 바로잡았다. 실패/진단 기록을 보존하고 ID/JSON/설정/날짜 exact 비교와 CSV1e-12 기준은 유지했다. 최종 독립19개·관련431개 승인과279입력 후보 기본 **1921 passed / 2 deselected / 47 warnings, 91.49초**를 통과했다. 각 수치는 포함 관계여서 합산하지 않는다. pandas 날짜/혼합 시간대·빈 frame concat 경고는 숨기지 않았고 신규 synthetic 사례의 경고를 기존 경고로 부르지 않는다.
+
+실행은 추적 파일 격리 cwd·정리한 환경과 원본 venv Python을 사용했다. 관련 명령은 `.venv/bin/python -B -m pytest tests/test_g08c_independent_qa.py tests/test_g08c_dashboard.py tests/test_streamlit_backtest.py tests/test_dashboard_service.py tests/test_g08c_persistence.py tests/test_backtest_persistence.py tests/test_backtest_combination.py tests/test_backtest_parameters.py tests/test_backtest_adapters_runner.py tests/test_backtest_generator.py tests/test_backtest_dates.py tests/test_backtest_saved_signals.py tests/test_g03_independent_qa.py tests/test_g04_independent_qa.py tests/test_g08b_input_ranges.py tests/test_g08b_independent_qa.py -q --tb=short`다. 기본 명령은 `.venv/bin/python -B scripts/run_tests.py --suite default -q --tb=short`다. 임시 작업 폴더에 QUANT-report/manifest, MAIN-ui-red/green/XML, INITIAL-QA03-report/manifest와 RED, QA03-final-report/manifest, MAIN-browser-report/캡처·기하 JSON, MAIN-default.xml, verification-final.json을 보존한다. 형식 검사는 별도로 기록하며 실제 브라우저 검증은 백테스트 가상 앱에 한정한다. HTML 안내서의 실제 브라우저 배치는 이전 로컬 파일 접근 정책으로 미확인이다. 실제 API/KIS/토큰·운영 DB/PG·전송·배포·원격 CI·대용량 성능은 실행/검증하지 않는다. commit/push는 하지 않는다.
+
+최종 정적 검사는 Python9파일의 AST·메모리 컴파일과 공백 검사를 통과했다. Markdown58개·로컬 링크828개·등록부 ID58개·개념14개/관계18개에 누락·중복이 없었다. HTML은12페이지·문서58개·로컬 링크/앵커104개·고유ID43개·기존7앵커·외부 자원0개와 구조를 확인했고 Node 모의 DOM19항목을 통과했다. 기능/독립/최종 기본 검증의 소스 해시·모드는 일치하고279입력 최종 후보와 원본이 일치한다. 실제 설정·백업·Git index/HEAD·관련 없는 파일을 보존했으며 stage/commit/push는 하지 않았다. 별도 lint/typecheck 결과나 HTML 실제 브라우저 배치의 통과를 주장하지 않는다.
+
 ## 백테스트 입력 범위 (2026-11-05)
 
-[G08b](../operations/improvements/dashboard.md#g08b)의 구현·UI 보완·독립 QA·메인 기본 검증을 완료했으며 커밋 전이다. 준비용 선택 기간·조회 옵션과 실제 runner에 전달한 최종 신호행의 범위를 구분한다. 준비 선택은 입력 기간 필터나 실제 수집/API 요청 이력이 아니다. 결과의 기존 평가곡선 기간과 체결 날짜 역시 입력 범위와 다르다.
+[G08b](../operations/improvements/dashboard.md#g08b)의 구현·UI 보완·독립 QA·메인 기본 검증을 완료했고 코드 `6dccdca`·문서 `7c6dfe5`로 main에 반영됐다. 다음 내용은11월5일 계약/검증이다. 준비용 선택 기간·조회 옵션과 실제 runner에 전달한 최종 신호행의 범위를 구분한다. 준비 선택은 입력 기간 필터나 실제 수집/API 요청 이력이 아니다. 결과의 기존 평가곡선 기간과 체결 날짜 역시 입력 범위와 다르다.
 
 준비 범위는 이미 로드한 메모리 frame에 현재 유효 매개변수의 실제 adapter를 적용하고, 조합은 combine 후 계산한다. 실행은 실제로 전달한 같은 종류의 signal_rows에서 범위를 고정한다. 날짜/종가가 유효한 고유 일봉의 min/max·개수를 표시하며 지표 결측으로 관망한 가격 일봉도 포함한다. 무효 날짜/종가 제외 행수와 기존 source_rows(전체 행수)는 별개이고, 중복 날짜를 임의 제거하거나 엔진 입력을 새로 필터하지 않는다.
 
@@ -69,7 +110,7 @@
 - [x] 훈련120행/테스트20행의15블록 시간순 선택 실험, 고정 모델과 블록별 동일 조건 비교.
 - [x] HTML의66창×17모델1,122행 상세표·길이/모델 필터·분포·국면·종목 상세·CSV 근거 생성.
 
-[연구 잡](../../src/invest_bot/jobs/rolling_backtest_research.py)·[HTML 생성기](../../scripts/render_rolling_backtest_report.py)는 로컬 CSV를 입력으로 사용합니다. 중복 수급12일의 핵심 수량을 대조하고 새10/13 관측일을 추가했습니다. 신호는 전체 과거 이력에서 계산한 뒤 창을 잘라 현금으로 실행하며, AND/OR/투표와 독립 자금배분을 구분합니다. 거래비용·슬리브·선택 정책·상세 검증은 [증거](#슬라이딩-연구-검증-범위)를 따릅니다. 운영 DB·일반 엔진·대시보드 조합 persistence는 변경하지 않았으며 G08c는 별도 대기입니다.
+[연구 잡](../../src/invest_bot/jobs/rolling_backtest_research.py)·[HTML 생성기](../../scripts/render_rolling_backtest_report.py)는 로컬 CSV를 입력으로 사용합니다. 중복 수급12일의 핵심 수량을 대조하고 새10/13 관측일을 추가했습니다. 신호는 전체 과거 이력에서 계산한 뒤 창을 잘라 현금으로 실행하며, AND/OR/투표와 독립 자금배분을 구분합니다. 거래비용·슬리브·선택 정책·상세 검증은 [증거](#슬라이딩-연구-검증-범위)를 따릅니다. 당시 연구는 운영 DB·일반 엔진·대시보드 조합 persistence를 변경하지 않았습니다. 당시 별도 대기였던 G08c의 최신 상태는 위11월8일 절을 따릅니다.
 
 ### 슬라이딩 연구 검증 범위
 
@@ -88,7 +129,7 @@
 
 전용 [실행 잡](../../src/invest_bot/jobs/backtest_comparison.py)·[HTML 생성기](../../scripts/render_backtest_comparison.py)는 현재 저장된 특정 history 파일을 사용합니다. 일반 대시보드 백테스트 엔진이나 배포 이미지는 변경하지 않았습니다. 비교 배치는 `backtest_comparison_<UTC timestamp>`이고, run ID와 파일명에는 평가기간을 추가해 두 기간을 구분합니다. 가격 출처는 실제 사용한 `daily_prices_indicators`이며 수급은 `investor_daily_summary`입니다.
 
-기본 설정에서 평균회귀·이격도는 동일 결과입니다. 비용·배당·현금 이자0, 소수점 주식·전액 매수, 다음 종가 체결 및 종료일 청산 가정입니다. 삼성바이오로직스의 준비 이후 RSI4일 결측은 기존 관망 처리를 유지했습니다. 수급 공개시각·당시 정정 전 값, 별도 구간 성능·거래비용·현재 표본의 선택 편향은 미검증입니다. [검증 범위](#비교-리포트-검증-범위)를 따르며 G08c 조합 설정 작업은 대기 상태를 유지합니다.
+기본 설정에서 평균회귀·이격도는 동일 결과입니다. 비용·배당·현금 이자0, 소수점 주식·전액 매수, 다음 종가 체결 및 종료일 청산 가정입니다. 삼성바이오로직스의 준비 이후 RSI4일 결측은 기존 관망 처리를 유지했습니다. 수급 공개시각·당시 정정 전 값, 별도 구간 성능·거래비용·현재 표본의 선택 편향은 미검증입니다. [검증 범위](#비교-리포트-검증-범위)를 따르며 당시 G08c 조합 설정은 대기였으며 최신 상태는 위11월8일 절을 따릅니다.
 
 ### 비교 리포트 검증 범위
 
@@ -187,6 +228,7 @@
 - [x] 전략 조합 구조(AND / OR / 가중치)와 개별·조합 결과 비교
 - [x] 일별 mark-to-market equity curve
 - [x] 백테스트 artifact history / reload
+- [x] 조합 구성 설정·출처 기록과 명시 저장·새 세션 이력 재조회 (G08c·QA03)
 - [x] 전략별 제한된 실험 설정 UX와 기본값 복원
 - [x] 포트폴리오 / multi-symbol aggregation
 
