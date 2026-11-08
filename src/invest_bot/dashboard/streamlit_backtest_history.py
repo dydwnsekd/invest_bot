@@ -151,7 +151,10 @@ def load_backtest_history_entries(
             strategy_id = history_text(row, "strategy_id")
             strategy_name = history_text(row, "strategy_name") or strategy_id or "전략 정보 없음"
             symbol_name = history_text(row, "symbol_name") or str(getattr(preview, "symbol_name", "")).strip()
-            source_label = history_text(row, "signal_source_filename") or history_text(row, "price_source_filename")
+            source_label = (
+                history_text(row, "signal_source_filename") or history_text(row, "price_source_filename")
+                or history_text(row, "indicator_source_filename")
+            )
             run_at = parse_history_run_timestamp(run_id) or getattr(preview, "created_at", None)
             entries.append(
                 {

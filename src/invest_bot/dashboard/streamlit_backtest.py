@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from html import escape
 from pathlib import Path
@@ -35,7 +35,11 @@ from invest_bot.backtest import (
     resolve_backtest_combination_settings,
 )
 from invest_bot.backtest.adapters import GOLDEN_CROSS_SIGNALS
-from invest_bot.backtest.persistence import BacktestInputSources, build_context, enrich_summary, enrich_trades
+from invest_bot.backtest.artifacts import BacktestArtifactSaveError, save_backtest_batch
+from invest_bot.backtest.persistence import (
+    BacktestInputSources, BacktestPersistenceContext, build_combination_metadata,
+    build_context, enrich_summary, enrich_trades, read_combination_metadata,
+)
 from invest_bot.backtest.strategy_registry import DAILY_PRICES_INDICATORS, INVESTOR_DAILY
 from invest_bot.dashboard.service import DashboardDataService
 from invest_bot.dashboard.backtest_input_ranges import (
@@ -78,11 +82,13 @@ from invest_bot.jobs.collect_market_data import (
 )
 from invest_bot.jobs.run_golden_cross_signals import generate_golden_cross_signals_for_symbol
 from invest_bot.market.symbol_lookup import ResolvedSymbol, SymbolEntry, SymbolLookup
+from invest_bot.market.storage import CsvStorage
 
 
 BACKTEST_SELECTED_SYMBOLS_KEY = "backtest_selected_symbols"
 BACKTEST_SELECTED_STRATEGIES_KEY = "backtest_selected_strategies"
 BACKTEST_RESULTS_KEY = "backtest_results"
+BACKTEST_SAVE_RESULTS_KEY = "backtest_save_results"
 BACKTEST_BLOCKED_REASONS_KEY = "backtest_blocked_reasons"
 BACKTEST_COLLECTION_PERIOD_KEY = "backtest_prepare_collection_period"
 BACKTEST_PARAMETERS_KEY = "backtest_strategy_parameters"
@@ -240,6 +246,43 @@ def render_backtest_tab(
         if isinstance(history_results, dict):
             st.markdown("#### 이번 세션 실행 결과")
         _render_results_panel(service, stored_results)
+        _render_save_results_panel(service, stored_results)
+
+
+def _render_save_results_panel(service: DashboardDataService, results: dict[str, object]) -> None:
+    summary = results.get("summary_frame")
+    trades = results.get("trade_frame")
+    if not isinstance(summary, pd.DataFrame) or summary.empty or not isinstance(trades, pd.DataFrame):
+        return
+    st.markdown("#### 이번 실행 결과 저장")
+    symbols = ", ".join(summary["symbol"].astype(str).unique()) if "symbol" in summary else "기록 없음"
+    st.caption(
+        f"실행 당시 결과 {len(summary)}개 · 종목 {symbols}. 단일·조합의 요약과 거래 로그, 설정·입력 출처를 함께 저장합니다. "
+        "현재 위젯 선택은 저장된 결과를 바꾸지 않으며, 조회·실행만으로 자동 저장하지 않습니다."
+    )
+    if results.get("saved_artifacts"):
+        st.success("이 실행 결과는 저장됐습니다. 위의 저장된 실행 이력에서 다시 확인할 수 있습니다.")
+        return
+    if not st.button("실행 결과 저장", key=BACKTEST_SAVE_RESULTS_KEY, width="stretch"):
+        return
+    try:
+        storage = service.get_dataset_storage()
+        if storage is None:
+            storage = CsvStorage(service.processed_root)
+        saved = save_backtest_batch(storage, summary, trades)
+    except BacktestArtifactSaveError as error:
+        st.error(
+            f"저장에 실패했습니다. 확인된 저장 파일 {len(error.saved)}개이며 일부 결과가 남아 있을 수 있습니다. "
+            "저장 이력을 확인해 주세요. 기존 파일은 자동으로 덮어쓰지 않습니다."
+        )
+    except FileExistsError:
+        st.error("같은 실행 결과의 저장 파일이 이미 있어 덮어쓰지 않았습니다. 저장된 실행 이력을 확인해 주세요.")
+    except Exception:  # optional storage failures must not appear successful
+        st.error("결과를 저장하지 못했습니다. 결과의 기록 형식과 저장소 상태를 확인해 주세요.")
+    else:
+        results["saved_artifacts"] = tuple(str(item.path) for item in saved)
+        st.success("실행 결과를 저장했습니다. 저장된 실행 이력에서 다시 확인할 수 있습니다.")
+        st.rerun()
 
 
 def _render_backtest_flow_cards() -> None:
@@ -786,6 +829,7 @@ def _execute_backtests(
     for item in selected_items:
         inputs = loaded_inputs[item.symbol]
         signal_frames: dict[str, pd.DataFrame] = {}
+        component_contexts: dict[str, BacktestPersistenceContext] = {}
         for strategy_id in selected_strategy_ids:
             parameters = resolve_backtest_parameters(strategy_id, (strategy_parameters or {}).get(strategy_id))
             adapter_output = DEFAULT_BACKTEST_ADAPTER_REGISTRY.build_signal_rows(
@@ -804,6 +848,7 @@ def _execute_backtests(
                 strategy_parameters=parameters,
                 now=batch_now,
             )
+            component_contexts[strategy_id] = replace(context, input_sources=_component_input_sources(context))
             summary = enrich_summary(raw_result.summary, context)
             for key, value in {**input_range, **selected_preparation}.items():
                 summary[key] = value
@@ -831,22 +876,18 @@ def _execute_backtests(
             combined_rows = combine_strategy_signal_rows(signal_frames, combination_settings)
             combined_range = signal_input_range(combined_rows)
             combined_result = DEFAULT_BACKTEST_RUNNER.run(item.symbol, combined_rows)
-            combination_metadata = {
-                "mode": combination_settings.mode,
-                "weights": dict(combination_settings.weights),
-                "component_strategy_ids": list(signal_frames),
-            }
+            combination_metadata = build_combination_metadata(combination_settings, component_contexts)
             combination_context = build_context(
                 symbol=item.symbol,
                 strategy_id=combination_settings.strategy_id,
                 strategy_name=combination_settings.strategy_name,
                 input_sources=BacktestInputSources(
-                    indicator_source_dataset=DAILY_PRICES_INDICATORS,
+                    indicator_source_dataset=DAILY_PRICES_INDICATORS if inputs.indicator.filename else None,
                     indicator_source_filename=inputs.indicator.filename,
-                    investor_source_dataset=INVESTOR_DAILY,
-                    investor_source_filename=inputs.investor.filename,
-                    price_source_dataset="daily_prices",
-                    price_source_filename=inputs.price.filename,
+                    signal_source_dataset=None, signal_source_filename=None,
+                    investor_source_dataset=INVESTOR_DAILY if "investor-flow-custom" in signal_frames and inputs.investor.filename else None,
+                    investor_source_filename=inputs.investor.filename if "investor-flow-custom" in signal_frames else None,
+                    price_source_dataset=None, price_source_filename=None,
                 ),
                 combination_settings=combination_metadata,
                 now=batch_now,
@@ -855,11 +896,12 @@ def _execute_backtests(
             for key, value in {**combined_range, **selected_preparation}.items():
                 combination_summary[key] = value
             combination_summary["symbol_name"] = item.symbol_name
-            combination_summary["strategy_parameter_summary"] = "조합 전략: 개별 전략 설정은 위 비교 결과에서 확인"
+            parameter_summary = _strategy_parameter_summary_from_row(combination_summary.iloc[0])
+            combination_summary["strategy_parameter_summary"] = parameter_summary
             combination_summary["combination_summary"] = combination_settings.summary()
             combination_trades = enrich_trades(combined_result.trades, combination_context)
             combination_trades["symbol_name"] = item.symbol_name
-            combination_trades["strategy_parameter_summary"] = "조합 전략"
+            combination_trades["strategy_parameter_summary"] = parameter_summary
             combination_trades["combination_summary"] = combination_settings.summary()
             combination_equity = build_daily_mark_to_market_equity_curve(combined_rows, combined_result.trades)
             combination_equity["symbol"] = item.symbol
@@ -899,6 +941,23 @@ def _execute_backtests(
         "combination_settings": combination_settings.as_json() if combination_settings is not None else None,
         "generated_at": batch_now.isoformat(),
     }
+
+
+def _component_input_sources(context: BacktestPersistenceContext) -> BacktestInputSources:
+    """Record named adapter inputs, omitting loaded but unused datasets."""
+    source = context.input_sources
+    indicator = source.indicator_source_filename
+    signal = source.signal_source_filename
+    investor = source.investor_source_filename if context.strategy_id == "investor-flow-custom" else None
+    return BacktestInputSources(
+        indicator_source_dataset=source.indicator_source_dataset if indicator else None,
+        indicator_source_filename=indicator,
+        signal_source_dataset=source.signal_source_dataset if signal else None,
+        signal_source_filename=signal,
+        investor_source_dataset=source.investor_source_dataset if investor else None,
+        investor_source_filename=investor,
+        price_source_dataset=None, price_source_filename=None,
+    )
 
 
 def _build_input_sources_for_strategy(
@@ -1009,6 +1068,18 @@ def build_backtest_result_interpretation(row: pd.Series) -> str:
 
 
 def _strategy_parameter_summary_from_row(row: pd.Series) -> str:
+    if _history_text(row, "strategy_id").startswith("combination-"):
+        recorded = read_combination_metadata(row.get("combination_settings_json"))
+        if recorded.status != "recorded" or recorded.metadata is None:
+            return recorded.message
+        parts = []
+        names = {spec.strategy_id: spec.strategy_name for spec in list_backtest_strategy_specs()}
+        for strategy_id in recorded.metadata["component_strategy_ids"]:
+            values = recorded.metadata["components"][strategy_id]["strategy_parameters"]
+            labels = {item.key: item.label for item in list_backtest_parameter_definitions(strategy_id)} if strategy_id in names else {}
+            text = ", ".join(f"{labels.get(key, key)} {value:g}" for key, value in values.items())
+            parts.append(f"{names.get(strategy_id, strategy_id)}: {text or '매개변수 없음'}")
+        return " · ".join(parts)
     explicit_summary = _history_text(row, "strategy_parameter_summary")
     if explicit_summary:
         return explicit_summary
@@ -1026,14 +1097,17 @@ def _strategy_parameter_summary_from_row(row: pd.Series) -> str:
 
 
 def _combination_summary_from_row(row: pd.Series) -> str:
+    raw_settings = _history_text(row, "combination_settings_json")
+    recorded = read_combination_metadata(raw_settings)
+    if recorded.status in {"malformed", "unsupported"}:
+        return recorded.message
     explicit_summary = _history_text(row, "combination_summary")
     if explicit_summary:
         return explicit_summary
-    raw_settings = _history_text(row, "combination_settings_json")
     if not raw_settings:
         return ""
     try:
-        settings = json.loads(raw_settings)
+        settings = recorded.metadata if recorded.status == "recorded" else json.loads(raw_settings)
         mode = settings.get("mode")
         weights = settings.get("weights")
         if mode not in COMBINATION_MODE_LABELS or not isinstance(weights, dict):
@@ -1044,6 +1118,28 @@ def _combination_summary_from_row(row: pd.Series) -> str:
         ).summary()
     except (TypeError, ValueError, json.JSONDecodeError):
         return "저장 당시 조합 규칙을 해석할 수 없음"
+
+
+def _render_combination_metadata_panel(summary_frame: pd.DataFrame) -> None:
+    combinations = [row for _, row in summary_frame.iterrows() if _history_text(row, "strategy_id").startswith("combination-")]
+    if not combinations:
+        return
+    st.markdown("#### 조합 실행 설정·출처")
+    names = {spec.strategy_id: spec.strategy_name for spec in list_backtest_strategy_specs()}
+    source_labels = {"indicator": "지표 원본", "signal": "저장 신호", "investor": "수급 원본", "price": "가격 원본"}
+    for row in combinations:
+        st.caption(f"{_history_text(row, 'symbol')} · {_strategy_parameter_summary_from_row(row)}")
+        recorded = read_combination_metadata(row.get("combination_settings_json"))
+        if recorded.status != "recorded" or recorded.metadata is None:
+            continue
+        for strategy_id in recorded.metadata["component_strategy_ids"]:
+            component = recorded.metadata["components"][strategy_id]
+            files = " · ".join(
+                f"{source_labels[kind]}: {source['filename']}"
+                for kind, source in component["input_sources"].items() if source["filename"] is not None
+            )
+            signal = "저장 신호 사용" if component["uses_saved_signal"] else "전략 계산 신호"
+            st.caption(f"{names.get(strategy_id, strategy_id)} · {signal} · {files or '파일 출처 기록 없음'}")
 
 
 def _render_results_panel(service: DashboardDataService, result_bundle: dict[str, object]) -> None:
@@ -1092,6 +1188,7 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
         return
 
     _render_input_range_panel(summary_frame)
+    _render_combination_metadata_panel(summary_frame)
     st.markdown("#### 전략 비교표")
     st.dataframe(format_frame_for_display(comparison_frame, service), width="stretch", hide_index=True)
 

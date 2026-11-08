@@ -289,7 +289,8 @@ class DashboardDataService:
         storage = self.get_dataset_storage()
         if storage is None:
             try:
-                return pd.read_csv(preview.path)
+                dtype = {"symbol": str} if preview.name in {"backtest_summaries", "backtest_trades"} else None
+                return pd.read_csv(preview.path, dtype=dtype)
             except pd.errors.EmptyDataError:
                 return pd.DataFrame()
         try:

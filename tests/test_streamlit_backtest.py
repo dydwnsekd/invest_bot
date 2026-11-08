@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -275,7 +277,25 @@ def test_render_backtest_tab_runs_and_renders_result_sections(monkeypatch: pytes
     assert set(result_bundle["summary_frame"]["strategy_id"]) == {"golden-cross", "rsi", "combination-and"}
     assert result_bundle["combination_settings"] == '{"mode": "and", "weights": {"golden-cross": 1.0, "rsi": 1.0}}'
     combined_summary = result_bundle["summary_frame"].query("strategy_id == 'combination-and'").iloc[0]
-    assert combined_summary["combination_settings_json"] == '{"component_strategy_ids": ["golden-cross", "rsi"], "mode": "and", "weights": {"golden-cross": 1.0, "rsi": 1.0}}'
+    expected_components = {}
+    for strategy_id, parameters in [
+        ("golden-cross", {"short_window": 5.0, "long_window": 20.0}),
+        ("rsi", {"buy_threshold": 30.0, "sell_threshold": 70.0}),
+    ]:
+        expected_components[strategy_id] = {
+            "strategy_parameters": parameters,
+            "input_sources": {
+                "indicator": {"dataset": "daily_prices_indicators", "filename": "005930_indicators.csv"},
+                "signal": {"dataset": "golden_cross_signals", "filename": "005930_signals.csv"} if strategy_id == "golden-cross" else {"dataset": None, "filename": None},
+                "investor": {"dataset": None, "filename": None},
+                "price": {"dataset": None, "filename": None},
+            },
+            "uses_saved_signal": strategy_id == "golden-cross",
+        }
+    assert json.loads(combined_summary["combination_settings_json"]) == {
+        "metadata_version": 1, "component_strategy_ids": ["golden-cross", "rsi"],
+        "mode": "and", "weights": {"golden-cross": 1.0, "rsi": 1.0}, "components": expected_components,
+    }
     assert not result_bundle["comparison_frame"].empty
     assert not result_bundle["trade_frame"].empty
     assert not result_bundle["chart_frame"].empty
