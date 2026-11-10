@@ -59,12 +59,6 @@ def render_watchlist_tab(
     load_professional_frame_for_symbol: Callable[[str], pd.DataFrame | None] | None = None,
     favorites_store: ReportFavoritesStore | None = None,
 ) -> None:
-    st.markdown('<h3 class="section-title">관심종목</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">저장해 둔 관심종목만 모아서 최신 리포트와 차트를 빠르게 다시 확인할 수 있습니다.</div>',
-        unsafe_allow_html=True,
-    )
-
     favorites_store = favorites_store or ReportFavoritesStore()
     favorite_symbols = favorites_store.load_symbols()
     if not favorite_symbols:
@@ -97,52 +91,54 @@ def render_watchlist_tab(
 
     if entries:
         resolve_report_selection_from_state(entries, WATCHLIST_SELECTION_KEY)
+    # Reserve the controls above the full board, but create their widgets only
+    # after board buttons can clear the query and request a detail selection.
+    detail_controls = st.container(border=True) if entries else None
     render_watchlist_overview(overview_entries, selection_key=WATCHLIST_SELECTION_KEY)
 
     if not entries:
         st.info("저장된 관심종목과 연결되는 최신 시장 리포트가 아직 없습니다.")
         return
 
-    with st.container(border=True):
+    with detail_controls:
         st.markdown('<h3 class="section-title">상세 리포트 선택</h3>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="section-copy">카드를 누르거나 검색과 정렬을 사용해 아래에서 한 종목을 자세히 확인합니다.</div>',
+            '<div class="section-copy">검색·정렬은 이 선택 목록에만 적용됩니다. ‘등록한 관심종목 전체’는 모든 등록 종목을 표시합니다.</div>',
             unsafe_allow_html=True,
         )
+        query = st.text_input(
+            "관심종목 검색",
+            placeholder="종목코드 또는 종목명으로 찾기",
+            key="watchlist_query",
+        ).strip().lower()
+        visible_entries = query_report_entries(entries, query)
 
-    query = st.text_input(
-        "관심종목 검색",
-        placeholder="종목코드 또는 종목명으로 찾기",
-        key="watchlist_query",
-    ).strip().lower()
-    visible_entries = query_report_entries(entries, query)
-
-    sort_option = st.selectbox(
-        "정렬",
-        options=["즐겨찾기 우선", "최신순", "종목명순", "매수 관점 우선"],
-        index=["즐겨찾기 우선", "최신순", "종목명순", "매수 관점 우선"].index(
-            str(st.session_state.get(WATCHLIST_SORT_OPTION_KEY, "즐겨찾기 우선"))
+        sort_option = st.selectbox(
+            "정렬",
+            options=["즐겨찾기 우선", "최신순", "종목명순", "매수 관점 우선"],
+            index=["즐겨찾기 우선", "최신순", "종목명순", "매수 관점 우선"].index(
+                str(st.session_state.get(WATCHLIST_SORT_OPTION_KEY, "즐겨찾기 우선"))
+            )
+            if str(st.session_state.get(WATCHLIST_SORT_OPTION_KEY, "즐겨찾기 우선"))
+            in {"즐겨찾기 우선", "최신순", "종목명순", "매수 관점 우선"}
+            else 0,
+            key=WATCHLIST_SORT_OPTION_KEY,
         )
-        if str(st.session_state.get(WATCHLIST_SORT_OPTION_KEY, "즐겨찾기 우선"))
-        in {"즐겨찾기 우선", "최신순", "종목명순", "매수 관점 우선"}
-        else 0,
-        key=WATCHLIST_SORT_OPTION_KEY,
-    )
-    visible_entries = sort_report_entries(visible_entries, sort_option)
+        visible_entries = sort_report_entries(visible_entries, sort_option)
 
-    if not visible_entries:
-        st.warning("현재 검색 조건에 맞는 관심종목 리포트가 없습니다.")
-        return
+        if not visible_entries:
+            st.warning("현재 검색 조건에 맞는 관심종목 리포트가 없습니다.")
+            return
 
-    selected_entry_key = resolve_report_selection_from_state(visible_entries, WATCHLIST_SELECTION_KEY)
-    selected_key = st.selectbox(
-        "관심종목 선택",
-        options=[str(entry["entry_key"]) for entry in visible_entries],
-        index=selected_entry_key_index(visible_entries, selected_entry_key),
-        format_func=lambda entry_key: format_report_selection_option(visible_entries, entry_key),
-        key=WATCHLIST_SELECTION_KEY,
-    )
-    selected_entry = get_report_entry_by_key(visible_entries, selected_key)
+        selected_entry_key = resolve_report_selection_from_state(visible_entries, WATCHLIST_SELECTION_KEY)
+        selected_key = st.selectbox(
+            "관심종목 선택",
+            options=[str(entry["entry_key"]) for entry in visible_entries],
+            index=selected_entry_key_index(visible_entries, selected_entry_key),
+            format_func=lambda entry_key: format_report_selection_option(visible_entries, entry_key),
+            key=WATCHLIST_SELECTION_KEY,
+        )
+        selected_entry = get_report_entry_by_key(visible_entries, selected_key)
 
     st.caption(f"저장된 관심종목 {len(visible_entries)}건 중 선택한 1건만 본문에 표시합니다.")
     render_scroll_anchor_if_requested(WATCHLIST_SELECTION_KEY)

@@ -379,7 +379,7 @@ def render_watch_targets(report_rows, signal_rows, *, service: DashboardDataServ
                 </div>
                 """
             )
-        st.markdown(f'<div class="watch-target-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="watch-target-grid">{"".join(" ".join(card.splitlines()).strip() for card in cards)}</div>', unsafe_allow_html=True)
         if st.button("투자 리포트에서 후보 자세히 보기", key="overview_open_reports", width="stretch"):
             navigate_to_tab("투자 리포트")
 

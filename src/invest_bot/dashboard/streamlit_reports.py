@@ -45,12 +45,6 @@ def render_reports_tab(
     load_professional_frame_for_symbol: Callable[[str], pd.DataFrame | None] | None = None,
     favorites_store: ReportFavoritesStore | None = None,
 ) -> None:
-    st.markdown('<h3 class="section-title">투자 리포트</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">보고 싶은 종목을 선택해 최종 의견, 전략별 판단, 차트, 상세 데이터를 집중해서 읽습니다.</div>',
-        unsafe_allow_html=True,
-    )
-
     report_previews = [preview for preview in snapshot.processed_previews if preview.name == "market_reports"]
     if not report_previews:
         st.info("표시할 시장 리포트가 아직 없습니다. 전체 파이프라인이나 리포트 생성을 먼저 실행해 주세요.")
@@ -71,13 +65,6 @@ def render_reports_tab(
         read_preview_frame=read_preview_frame,
         favorite_symbols=favorite_symbols,
     )
-
-    show_overview = st.toggle("해석 모아보기 열기", value=False, key="report_interpretation_overview_open")
-    if show_overview:
-        st.caption("현재 리포트 검색 조건에 맞는 종목들의 최종 의견과 전략별 판단을 한 번에 비교합니다.")
-        from invest_bot.dashboard.streamlit_interpretations import render_interpretations_panel
-
-        render_interpretations_panel(report_entries, service, show_reason_expander=False)
 
     filter_columns = st.columns(2)
     favorites_only = filter_columns[0].toggle(
@@ -107,31 +94,40 @@ def render_reports_tab(
         sort_option,
     )
 
+    show_overview = st.toggle("해석 모아보기 열기", value=False, key="report_interpretation_overview_open")
     if not visible_entries:
         st.warning("현재 검색 조건에 맞는 리포트가 없습니다.")
+    else:
+        render_report_candidate_cards(
+            visible_entries[:4],
+            service=service,
+            total_count=len(visible_entries),
+            selection_key=REPORT_SELECTION_KEY,
+            key_prefix="report_candidate",
+        )
+
+        selected_entry_key = resolve_report_selection_from_state(visible_entries, REPORT_SELECTION_KEY)
+        selected_key = st.selectbox(
+            "리포트 선택",
+            options=[str(entry["entry_key"]) for entry in visible_entries],
+            index=selected_entry_key_index(visible_entries, selected_entry_key),
+            format_func=lambda entry_key: format_report_selection_option(visible_entries, entry_key),
+            key=REPORT_SELECTION_KEY,
+        )
+        selected_entry = get_report_entry_by_key(visible_entries, selected_key)
+
+        st.caption(
+            f"현재 조건에서 {len(visible_entries)}개의 리포트 중 선택한 1건만 본문에 표시합니다."
+        )
+    if show_overview:
+        st.caption("현재 리포트 검색 조건에 맞는 종목들의 최종 의견과 전략별 판단을 한 번에 비교합니다.")
+        from invest_bot.dashboard.streamlit_interpretations import render_interpretations_panel
+
+        render_interpretations_panel(report_entries, service, show_reason_expander=False)
+
+    if not visible_entries:
         return
 
-    render_report_candidate_cards(
-        visible_entries[:4],
-        service=service,
-        total_count=len(visible_entries),
-        selection_key=REPORT_SELECTION_KEY,
-        key_prefix="report_candidate",
-    )
-
-    selected_entry_key = resolve_report_selection_from_state(visible_entries, REPORT_SELECTION_KEY)
-    selected_key = st.selectbox(
-        "리포트 선택",
-        options=[str(entry["entry_key"]) for entry in visible_entries],
-        index=selected_entry_key_index(visible_entries, selected_entry_key),
-        format_func=lambda entry_key: format_report_selection_option(visible_entries, entry_key),
-        key=REPORT_SELECTION_KEY,
-    )
-    selected_entry = get_report_entry_by_key(visible_entries, selected_key)
-
-    st.caption(
-        f"현재 조건에서 {len(visible_entries)}개의 리포트 중 선택한 1건만 본문에 표시합니다."
-    )
     render_scroll_anchor_if_requested(REPORT_SELECTION_KEY)
     render_market_report_card(
         selected_entry["preview"],

@@ -116,6 +116,9 @@ class _FakeStreamlit:
     def container(self, **kwargs):
         return _FakeContext()
 
+    def expander(self, label, **kwargs):
+        return _FakeContext()
+
     def columns(self, spec, **kwargs):
         count = spec if isinstance(spec, int) else len(spec)
         return [_FakeMetricColumn(self) for _ in range(count)]

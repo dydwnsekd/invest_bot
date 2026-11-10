@@ -114,7 +114,7 @@ def render_interpretation_cards(rows: list[dict[str, object]]) -> str:
             </article>
             """
         )
-    return f"<div class='interpretation-grid'>{''.join(cards)}</div>"
+    return f"<div class='interpretation-grid'>{''.join(' '.join(card.splitlines()).strip() for card in cards)}</div>"
 
 
 def render_signal_cell(label: str, value: object) -> str:
@@ -140,7 +140,7 @@ def render_strategy_reason_cards(rows: list[dict[str, object]]) -> str:
             </article>
             """
         )
-    return f"<div class='interpretation-reason-list'>{''.join(items)}</div>"
+    return f"<div class='interpretation-reason-list'>{''.join(' '.join(item.splitlines()).strip() for item in items)}</div>"
 
 def filter_interpretation_entries(
     entries: list[dict[str, object]],

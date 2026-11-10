@@ -133,11 +133,6 @@ def render_backtest_tab(
     *,
     symbol_lookup: SymbolLookup,
 ) -> None:
-    st.markdown('<h3 class="section-title">백테스트</h3>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-copy">선택한 종목과 전략 조합이 실제로 준비되었는지 먼저 확인한 뒤, 사용자가 직접 준비 실행과 백테스트 실행을 제어할 수 있도록 구성했습니다.</div>',
-        unsafe_allow_html=True,
-    )
     st.caption("기본 골든크로스 저장 신호는 실행 시 현재 지표의 거래일·종가와 대조합니다. 불일치하면 준비 실행으로 신호를 다시 생성해 주세요.")
 
     symbol_entries = _resolve_symbol_entries(snapshot, symbol_lookup)
@@ -151,7 +146,8 @@ def render_backtest_tab(
         st.warning("선택 가능한 종목 목록이 아직 없습니다. 먼저 종목 마스터 또는 수집 데이터를 준비해 주세요.")
         return
 
-    _render_backtest_flow_cards()
+    with st.expander("전략 검증 흐름", expanded=False):
+        _render_backtest_flow_cards()
 
     persisted_symbols = st.session_state.get(BACKTEST_SELECTED_SYMBOLS_KEY, ["005930"])
     if not isinstance(persisted_symbols, (list, tuple)):
@@ -289,7 +285,6 @@ def _render_backtest_flow_cards() -> None:
     st.markdown(
         """
         <div class="streamlit-card backtest-flow-card">
-          <h3 class="section-title">전략 검증 흐름</h3>
           <div class="section-copy">종목과 전략을 먼저 고른 뒤 준비 상태를 확인하고, 결과는 수익률·승률·거래 로그 순서로 읽습니다.</div>
           <div class="backtest-step-grid">
             <div><span>1</span><strong>종목 선택</strong><p>검증할 관심 종목을 고릅니다.</p></div>
@@ -657,7 +652,7 @@ def _render_readiness_panel(payload: dict[str, object]) -> None:
                 </div>
                 """,
             )
-        st.markdown(f'<div class="readiness-card-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="readiness-card-grid">{"".join(" ".join(card.splitlines()).strip() for card in cards)}</div>', unsafe_allow_html=True)
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.info("백테스트를 확인하려면 종목과 전략을 하나 이상 선택해 주세요.")
@@ -1175,7 +1170,7 @@ def _render_results_panel(service: DashboardDataService, result_bundle: dict[str
                 </div>
                 """,
             )
-        st.markdown(f'<div class="backtest-result-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="backtest-result-grid">{"".join(" ".join(card.splitlines()).strip() for card in cards)}</div>', unsafe_allow_html=True)
         card_columns = st.columns(min(len(summary_frame), 3) or 1, gap="small")
         for index, (_, row) in enumerate(summary_frame.iterrows()):
             column = card_columns[index % len(card_columns)]

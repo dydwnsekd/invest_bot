@@ -212,20 +212,22 @@ def apply_custom_style() -> None:
         }
 
         .compact-hero {
-            padding: 1.05rem 1.2rem;
-            margin-bottom: 0.85rem;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.65rem;
+            box-shadow: none;
         }
 
         .compact-hero .eyebrow {
-            margin-bottom: 0.55rem;
+            margin-bottom: 0.35rem;
         }
 
         .compact-hero .hero-title {
-            font-size: clamp(1.55rem, 3.1vw, 2.05rem);
+            font-size: clamp(1.4rem, 2.6vw, 1.75rem);
         }
 
         .compact-hero .hero-copy {
             max-width: 54rem;
+            margin-top: 0.4rem;
             font-size: 0.94rem;
         }
 
@@ -1034,7 +1036,9 @@ def apply_custom_style() -> None:
 
         @media (max-width: 760px) {
             .report-decision-grid,
-            .report-evidence-grid {
+            .report-evidence-grid,
+            .readiness-card-grid,
+            .backtest-result-grid {
                 grid-template-columns: 1fr;
             }
         }

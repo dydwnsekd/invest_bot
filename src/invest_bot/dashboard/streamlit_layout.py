@@ -157,7 +157,7 @@ def render_header(selected_tab: str | None = None) -> None:
         f"""
         <div class="hero-shell compact-hero">
           <div class="eyebrow">{escape(meta["eyebrow"])}</div>
-          <h1 class="hero-title">{escape(meta["title"])}</h1>
+          <h1 class="hero-title">{escape(tab_name)}</h1>
           <div class="hero-copy">{escape(meta["copy"])}</div>
         </div>
         """,
