@@ -4,6 +4,44 @@
 
 수집, 분석, 신호, 리포트, 테스트 상태를 브라우저에서 빠르게 확인하고 필요한 작업을 직접 실행할 수 있는 대시보드를 제공한다.
 
+## 자동 반응형 차트 (2026-11-10)
+
+[G08d](../operations/improvements/dashboard.md#g08d)를 main `66dbfed`의282추적 입력과 기존13개 G06c 문서 작업본에서 시작했다. 메인 실제 baseline → 기존 대시보드 → 메인 실제 화면/글자 크기 발견 → 동일 대시보드 보완 → 메인 재검사 → 기존 QA → 메인 통합을 순차 완료했다. 이번 기능·문서는 커밋 전이다. 기존 G06c 코드·테스트는 `66dbfed`에 반영됐으며 기존 문서 내용과 날짜별 증거를 보존했다.
+
+기존 차트는 이미 컨테이너 폭을 추종했지만 범례6~8개가 상단 가격 제목·도구 모음과 겹쳤다. native 수평 범례를 하단 container 영역으로 분리하고 자동 줄바꿈/여백과 축 automargin을 사용한다. 상단에는 제목과 도구 모음 공간을 확보하고 기존 chart key·고정 높이·native 확대/이동/범례 toggle을 유지한다. 출력은 stretch/responsive와 항상 보이는 기본 도구 모음을 사용하며 새 모바일 모드·UA 추정·JS viewport bridge·라이브러리를 추가하지 않았다. 폰트 하한은 기존0.8rem 기준을 차트 범례/눈금에도 적용한다.
+
+**실제 화면과 보완:** 기존 [동일 fixture](../../tests/g06c_layout_fixture.py)의 실제 main/router/service/styles/임시 SQLite를 사용했다. NAVER(수급 없음/범례6), 현대차(실제0 수급/7), 삼성(summary 외국인·기관/8)을1920×958·390×844에서 비교했다. 초기 모바일 chart330×640의 범례48~86px가 가격 제목과 도구 모음을 침범했다. 첫 후보에서 겹침은 사라졌으나 실제 SVG 범례/눈금11.25px가 root15px의0.8rem=12px보다 작아 MAIN-G08d-UI-01로 보완했다. 최종 세 사례의 PC/모바일 차트는1440/330×640px, 범례6/7/8개와 최소12px를 유지했고 범례/제목/도구 모음·동일축 눈금의 겹침과 잘림은0이었다. 실제0 눈금 간격은26.9px였으며768px에서도 안정된 host/SVG408px가 일치했다.
+
+실제0 수급 패널에서는 SVG 눈금 글자 영역16px에 인접 간격13.45~13.46px가 겹치는 UI-02를 추가 확인했다. 수급축의 native 자동 눈금 목표를3개로 제한해 표시 간격만 보완했다. 보호 계약은 새 표시 필드 `yaxis4.nticks`만 명시적 예외로 두고 기존17개 hash 상수·다른 축/범위/형식/데이터는 그대로 유지했다. 글자 후속48개와 눈금 후속54개는 각각 별도 단계이며 전체 통과 수와 합산하지 않는다.
+
+같은 세션의 창 크기 변경은 수동 설정이나 새 Python 조회 없이 반영됐다. 768px의 첫 관찰은 sidebar/차트 resize 진행 중의 다른 폭을 포함해 별도로 남겼고, 최종 판단은 host와 SVG의 크기가 일치한 안정 상태를 사용했다. 범례 숨김 상태는 크기 변경 후에도 유지됐고 다시 켤 수 있었다. 확대 후 축 눈금 변화, 초기화와 이동 모드, 전체 화면을 실제 UI에서 확인한 범위는 메인 브라우저 기록을 따른다. 다운로드 버튼의 보존과 실제 파일 내보내기 검증은 구분한다. 캡처·기하는 메인 수행이며 QA의 별도 AppTest/제공 캡처 검토와 구분한다.
+
+**데이터·조회 계약:** 수정 전 trace·주석·수평 기준선·축 의미17개를 고정했다. 전문3종목×일/주/월9개, 일반6개, 비교2개다. 날짜/값/색/이름/순서·OHLC·hover·수급0/null/gap·선+marker/connectgaps=False·지표/집계·출처/기간/선택/복원은 유지한다. 실제 리포트·관심종목 완료 render는 SELECT3(snapshot2+즐겨찾기1), frame 소비자0·runner/job/write0이다. 모든 script 시도 합계와 완료 render는 구분하며 더 긴 이동 순서의 누적치를 한 화면 비용과 섞지 않는다. 실제 resize·범례/줌 등 client 조작은 동일한 계수와 세션을 유지했다.
+
+**검증:** 구현 전 관련268개·고정 계약17개 통과 후 새 배치7개 RED를 남겼다. 신규30개 통과 뒤 첫 관련295 pass/3 fail은 기존 fake의 축 호출 형태와 yaxis dict 호환성 차이였다. 기존 테스트를 완화하지 않고 소유 제품 호출을 기존 형태로 조정해298개를 통과했다. 글자 하한의 실제 RED와 후속 검증은 기존17개 보호 계약을 유지했다. 독립 QA 12개·관련 315개, 메인 최종284입력 격리 후보 기본 **1994 passed / 2 deselected / 51 warnings, 120.41초**가 통과했다. QA 자체 실패는 없었다. 메인 첫 기본은1993 passed /1 failed /2 deselected /51 warnings,111.64초였으며 새 삼성 관심종목 AppTest의30초 대기 오류1건이었다. 해당 사례는 같은 source로 격리 재검사1 passed /34 deselected,2.53초였고 전체 입력을 바꾸지 않은 두 번째 기본도 모두 통과했다. 최초 XML에는 해당 test 소요0.720초와30초 timeout이 함께 기록돼 있으나 원인을 확정하지 않으며, 단발성 대기 오류 기록과 한계로 보존한다.
+
+[기능 회귀](../../tests/test_g08d_responsive_charts.py)·[독립 회귀](../../tests/test_g08d_independent_qa.py)를 따른다. 지정 범위 재검증 예시는 `.venv/bin/python -B -m pytest tests/test_g08d_responsive_charts.py tests/test_g08d_independent_qa.py -q`다. 실제 검증은 추적 입력 격리본·env-i·지정 venv·별도 cache/basetemp/XML/log로 수행했다. 전체 기본은 `python -B -m pytest -q`이며 실제 network/PG opt-in2개는 제외했다. 전체 통과 이후 Python source는 SHA로 고정하고 문서만 갱신해 링크/HTML/탐색을 별도로 검사했다. 기존 테스트/fixture·비소유 source·설정/backup·Git index/HEAD/branch·모드를 보존했고 stage/commit/push는 하지 않았다.
+
+공식 API 근거: [Plotly 범례 위치와 container 여백](https://plotly.com/python/legend/#positioning-legends), [Streamlit1.58 Plotly 출력](https://docs.streamlit.io/1.58.0/develop/api-reference/charts/st.plotly_chart). 설치된 Plotly6.8/plotly.js3.6·Streamlit1.58 코드/실제 출력으로 확인했으며 향후 모든 버전 호환을 인증한 결과는 아니다. 로그·SHA·원문 SQL·PNG는 로컬 임시 `invest-bot-g08d-c4ccgh58`에 보존하고 Git에 넣지 않았다. 임시 서버/탭은 종료하고 viewport를 복원했다. AST/메모리 구문·공백·MD 링크/ID·HTML12페이지/문서58개·Node 모의 탐색19개를 검사했다. lint/typecheck는 설정/도구가 없어 수행했다고 표현하지 않는다. 실제 KIS/API·운영 DB/PG·배포·원격 CI·대용량 성능·전체 접근성 인증은 미검증이다. G01a·QA01 원격 CI 확인은 별도 대기다.
+
+## 헤더·카드·필터 배치 (2026-11-09)
+
+[G06c](../operations/improvements/dashboard.md#g06c)를 main `7c305c6`의279추적 파일에서 시작해 기존 대시보드 → 메인 실제 화면 → 동일 대시보드 모바일 보완 → 메인 재검사 → 기존 QA → 메인 통합 순서로 완료했다. 커밋 전이며 새 세션·병렬 전문 작업은 만들지 않았다.
+
+홈 후보·해석·전략 근거·백테스트 준비/결과의 다섯 다중 HTML 조립에서 빈 줄과 들여쓰기를 정규화했다. 값·escape·순서·0/누락·판단 계산은 유지하고 새 HTML 추상화나 의존성은 추가하지 않았다. 공유 헤더는 현재 탭 이름으로 줄이고 반복 소개를 제거했다. 리포트 검색·즐겨찾기·정렬·후보·선택을 확장된 해석 내용 앞에 배치했다. 관심종목은 전체 등록 종목판과 별개인 상세 선택 필터를 먼저 표시하되 카드 클릭의 검색어 초기화/선택 요청은 위젯 생성 전에 처리한다. 정적인 백테스트 사용 순서만 접고 신호 정합성·준비 사유·실제 입력/평가 기간·실행/저장 범위는 계속 표시한다. 그림자 제거는 시각 취향에 따른 정돈이며 기능 결함 수정과 구분한다.
+
+**실제 화면:** 같은 신규 [fixture](../../tests/g06c_layout_fixture.py)를 초기 제품 baseline과 후보에 그대로 사용했다. 고정 원본 날짜/값·네 종목·임시 SQLite를 사용하며 seed 저장시각은 각 생성 시각이라 동일하지 않다. 메인이 CUA로1920×958·390×844를 비교해 홈 실제 카드1→4, 해석1→4, 근거의 HTML 코드 노출→16개 카드, 준비1→2, 명시 실행 결과1→3을 확인했다. 후보에서 다섯 경로의 `pre/code` HTML 노출은0이다. 준비·결과의 기존4열 때문에390px 카드가75~83px로 좁아진 MAIN-G06c-UI-01을 기록한 뒤 같은 소유자가 기존760px breakpoint의1열로 보완했다. 재검사에서 준비330px·결과360px 폭과 숫자/설명 줄바꿈을 확인했으며 데스크톱4열은 유지했다.
+
+홈 헤더 높이는 desktop176→154px, mobile190→170px다. 해석 모아보기를 연 상태에서 리포트 검색의 문서상 y는 desktop379→268px, mobile415→285px, 기본 정렬은4561→347px/5482→408px로 앞당겨졌다. 관심종목 검색도1334→919px/2834→1857px로 전체 종목판 위에 배치됐다. 필터는 기존 의미·키를 유지하며 검색/즐겨찾기/정렬, 선택 복원과 삼성 검색 중 현대차 카드 클릭→검색어 초기화/현대차 상세 이동을 확인했다.12px 라벨은 실측 root15px의0.8rem이며 Material 아이콘과 키보드 focus 표시를 확인했다. 앱 전체 접근성 인증이나 사용자가5초 이내 찾는지의 사용성 실험을 수행한 것은 아니다.
+
+**조회·실행 경계:** 완료된 render 기준 홈 SELECT2(snapshot2), 리포트/관심종목3(snapshot2+즐겨찾기1), snapshot 이후 frame 소비자 SELECT0이다. 백테스트는 기존 원본 latest/load8+이력2+snapshot2의12SELECT를 유지하므로 전체 탭의0SQL을 주장하지 않는다. 모든 script 시도 합계와 완료 render는 별도 계수했다. 조회/검색/정렬/탭 이동·조건 변경의 job/쓰기0, 명시 실행만 실제 runner3회이며 이후 Trend Filter 추가에도 준비3/기존 결과3과 runner3회가 유지됐다. seed는 화면 조회 전 준비이며 조회 쓰기와 구분한다.
+
+**검증:** 구현 전 기존 관련359개 통과. 첫 신규 RED의 CSS 문자열 선택자 오류를 분리한 수정 RED에서 다섯 HTML 경로 실패를 확인했다. 새 AppTest의 명시 rerun 뒤 낡은 위젯 이벤트도 신규 테스트 drain으로 보정했다. 첫 관련372개 통과 이후 UI-01의 RED→모바일 보완 회귀를 통과했다. 독립 QA 10개와 관련 390개, 메인 최종282입력 격리 후보 기본 **1947 passed / 2 deselected / 51 warnings, 106.09초**가 통과했다. [구현 회귀](../../tests/test_g06c_layout.py)·[독립 회귀](../../tests/test_g06c_independent_qa.py)를 따른다. 기존 backtest fake에는 누락된 expander API3줄만 추가했고 기존 assertion/테스트 본문은 보존했다. 모든 Python 검증은 env-i·지정 venv·임시 cache/basetemp/XML을 사용했다.
+
+독립 QA의 첫9 fail/1 pass는 조회 기록의 키와 스타일 함수명 작성 오류였고 QA 소유 파일에서만 보정했다. 최종390개에 포함된 명시 저장 회귀는 실제 가상 CSV6파일의 저장/중복 저장 방지를 확인했으며 조회 중 쓰기0과 구분한다. 재검증은 프로젝트 루트에서 `.venv/bin/python -B -m pytest tests/test_g06c_layout.py tests/test_g06c_independent_qa.py -q`로 지정 범위를 실행할 수 있다. 실제 검증은 위 격리본·깨끗한 환경에서 수행했고 전체 기본 명령은 `python -B -m pytest -q`에 별도 cache/basetemp/XML을 지정했다.
+
+메인이 실제 브라우저 조작·기하 측정을 수행했고 QA의 별도 테스트/제공 캡처 검토와 구분한다. 캡처·원문 SQL·SHA/모드·단계별 XML은 로컬 임시 `invest-bot-g06c-o9j7_kn2`에 남겼으며 Git에 포함하지 않는다. 임시 서버3개·탭을 종료하고 viewport를 복원했다. AST/메모리 구문 검사·공백·MD 링크/ID·HTML12페이지/문서58개·Node 모의 탐색19개를 확인했다. 설정된 lint/typecheck 도구가 없어 해당 검사를 했다고 표현하지 않는다. 실제 설정·API/토큰·운영 DB/PG·배포·원격 CI·대용량 성능과 전체 접근성은 미검증이다. 기존 deprecation/session-state/pandas 경고는 별도 유지한다. 차트 spec/모바일 범례 **G08d**가 다음 기능이며 **G01a·QA01 원격 CI**는 검증 대기를 유지한다. stage/commit/push는 수행하지 않았다.
+
 ## 조합 설정과 명시 저장 (2026-11-08)
 
 G08c의 실제 실행 context와 저장 함수를 메인이 화면에 연결했다. 구성 전략별 당시 설정·신호/입력 출처를 보여 주고 이번 세션의 요약/거래를 누를 때만 저장한다. 이력 선택은 재실행/저장을 하지 않는다. CSV005930 앞자리0과 기록된 지표 출처 fallback도 보완했다. [필드·호환·저장 한계·검증](05_strategy_backtest.md#조합-설정-저장재로드-2026-11-08)을 따른다.
