@@ -63,6 +63,12 @@ def apply_custom_style() -> None:
             color: var(--app-text);
         }
 
+        /* Match the app's auxiliary label floor without styling plot data or icons. */
+        [data-testid="stPlotlyChart"] text.legendtext,
+        [data-testid="stPlotlyChart"] g[class$="tick"] > text {
+            font-size: 0.8rem !important;
+        }
+
         .material-symbols-rounded,
         .material-symbols-outlined,
         .material-icons,

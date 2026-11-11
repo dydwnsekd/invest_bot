@@ -680,7 +680,12 @@ def preferred_chart_library() -> str:
 
 def render_chart(chart, *, key_prefix: str) -> None:
     if preferred_chart_library() == "plotly" and go is not None:
-        st.plotly_chart(chart, use_container_width=True, key=f"{key_prefix}_plotly_chart")
+        st.plotly_chart(
+            chart,
+            width="stretch",
+            key=f"{key_prefix}_plotly_chart",
+            config={"responsive": True, "displayModeBar": True},
+        )
         return
     st.altair_chart(chart, use_container_width=True)
 
@@ -743,16 +748,20 @@ def build_professional_plotly_chart(frame: pd.DataFrame, *, timeframe: str = "da
 
     figure.update_layout(
         height=height,
+        autosize=True,
         hovermode="x unified",
-        margin=dict(l=20, r=20, t=28, b=24),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        xaxis=dict(showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikethickness=1, rangeslider=dict(visible=False)),
+        # Keep the native toolbar above titles; the bottom container legend
+        # reserves its measured height as its items wrap on a narrow container.
+        margin=dict(l=20, r=20, t=56, b=40, autoexpand=True),
+        legend=dict(orientation="h", yref="container", yanchor="bottom", y=0, xanchor="left", x=0),
+        xaxis=dict(automargin=True, showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikethickness=1, rangeslider=dict(visible=False)),
+        **{f"xaxis{row}": dict(automargin=True) for row in range(2, row_count + 1)},
     )
-    figure.update_yaxes(title_text="가격", tickformat=",", row=1, col=1)
-    figure.update_yaxes(title_text="거래량" if has_volume else "거래량 없음", row=2, col=1)
-    figure.update_yaxes(title_text="RSI 14", range=[0, 100], row=3, col=1)
+    figure.update_yaxes(title_text="가격", tickformat=",", automargin=True, row=1, col=1)
+    figure.update_yaxes(title_text="거래량" if has_volume else "거래량 없음", automargin=True, row=2, col=1)
+    figure.update_yaxes(title_text="RSI 14", range=[0, 100], automargin=True, row=3, col=1)
     if flow_columns:
-        figure.update_yaxes(title_text="순매수", row=4, col=1)
+        figure.update_yaxes(title_text="순매수", automargin=True, nticks=3, row=4, col=1)
     return figure
 
 
@@ -871,10 +880,12 @@ def build_plotly_chart(frame: pd.DataFrame, chart_type: str, *, height: int = 28
 def apply_plotly_interaction_layout(figure, *, height: int, yaxis_title: str) -> None:
     figure.update_layout(
         height=height,
+        autosize=True,
         hovermode="x unified",
-        margin=dict(l=20, r=20, t=16, b=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=20, r=20, t=56, b=40, autoexpand=True),
+        legend=dict(orientation="h", yref="container", yanchor="bottom", y=0, xanchor="left", x=0),
         xaxis=dict(
+            automargin=True,
             title="날짜",
             showspikes=True,
             spikemode="across",
@@ -885,6 +896,7 @@ def apply_plotly_interaction_layout(figure, *, height: int, yaxis_title: str) ->
         ),
         yaxis=plotly_yaxis_config(yaxis_title),
     )
+    figure.update_yaxes(automargin=True)
 
 
 def plotly_yaxis_config(title: str) -> dict[str, str]:
