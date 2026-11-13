@@ -49,7 +49,7 @@ class FixedDate(date):
 
 class QA02Harness:
     def __init__(self, directory: Path | None = None):
-        self.directory = directory or Path(tempfile.mkdtemp(prefix="qa02-synthetic-", dir="/private/tmp"))
+        self.directory = directory or Path(tempfile.mkdtemp(prefix="qa02-synthetic-"))
         self.directory.mkdir(parents=True, exist_ok=True)
         self.database_url = f"sqlite:///{self.directory / 'qa02.sqlite'}"
         engine = build_engine(self.database_url)
