@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | D-OKF | [OKF](../../OKF.md) | policy | active | 통합 · 지식 관리 규약 |
 | D-HOME | [지식 홈](../README.md) | index | active | 통합 · 질문별 탐색 |
-| D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·설치/화면 사용법·최근 개선·설정/로그·OKF 검색; 2026-11-10 main 66dbfed + G08d 검토 작업본; 12페이지·문서 분할 탐색 |
+| D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·설치/화면 사용법·최근 개선·설정/로그·OKF 검색; 2026-11-13 main 7b42920 + QA04 검토 작업본; 12페이지·문서 분할 탐색 |
 | D-CATALOG | [문서 등록부](catalog.md) | index | active | 통합 · 문서 역할과 상태 |
 | D-CONCEPTS | [개념 지도](concepts.md) | concept | active | 통합 · 수집 범위·분석 준비·핵심 개념·보충 수집·비교·슬라이딩 연구의 구현/검증 근거 |
 | D-TEMPLATE | [작성 양식](template.md) | policy | active | 통합 · 새 문서 작성 |
@@ -51,7 +51,7 @@
 | D-IMPROVEMENT-QUANT | [퀀트 작업](../operations/improvements/quant.md) | plan | proposed | 퀀트 · G03·G04·G08c 상태·근거·완료 조건 |
 | D-IMPROVEMENT-DASHBOARD | [대시보드 작업](../operations/improvements/dashboard.md) | plan | proposed | 대시보드 · 수급·상태·안내·디자인·입력 범위 |
 | D-IMPROVEMENT-OPERATIONS | [운영 작업](../operations/improvements/operations.md) | plan | proposed | 운영 · G02·G07a·G07b 상태·근거·완료 조건 |
-| D-IMPROVEMENT-QA | [QA 작업](../operations/improvements/qa.md) | plan | proposed | QA · QA01·QA02·QA03 독립 검증·CI 조건 |
+| D-IMPROVEMENT-QA | [QA 작업](../operations/improvements/qa.md) | plan | proposed | QA · QA01·QA02·QA03·QA04 독립 검증·CI/OS 호환성 조건 |
 | D-DB-OPS-PLAN | [DB 운영 계획](../operations/db_migration_plan.md) | plan | proposed | 운영 · 구조 개편의 운영 관점, 현재 구현 명세 아님 |
 | D-DB-OPS-ERD | [운영 ERD](../operations/db_erd.md) | reference | review-required | 운영 · 최신 테이블·쓰기 경계 재검토 필요 |
 | D-STRATEGY-REFERENCE | [전략 후보 설명](../strategies/01_reference_strategies.md) | reference | review-required | 퀀트 · 원본 reference 미포함; 아이디어 설명 재검토, 구현 여부는 D-BACKTEST |

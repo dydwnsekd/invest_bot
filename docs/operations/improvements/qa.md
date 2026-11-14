@@ -4,6 +4,8 @@
 
 담당 세션은 **QA·독립 검증 체계 개선**이다. 이전 결과는 [9월 보고서](../session_reports/2026-09-13_qa.md), 현재 순서는 [작업 색인](README.md)을 따른다. QA는 기능 구현을 중복 소유하지 않고 검증 공백·환경·CI·독립 완료 판정을 맡는다.
 
+2026-11-13 현재 기준은 main `7b42920` + QA04 검토 작업본이다. G08d 코드는 `7b42920`, G06c 문서는 `ef5337e`로 반영됐다. G01a·QA01은 동일 main의 [원격 PostgreSQL 검사](https://github.com/dydwnsekd/invest_bot/actions/runs/43046475982/job/130611635459)2 passed /2 warnings,1.13초와 아래 임시 DB 재검증으로 완료했다. 전체 원격 run의 기본 suite 실패는 별도 QA04로 분리했다. QA04의 신규4개·관련35개와 메인 기본1998개는 로컬 후보의 결과이며, 수정 후 원격 CI 재실행은 미수행이다. 기존 역할 하나만 재사용했고 메인이 공유 문서·원본 통합·임시 DB·GitHub/CUA·최종 검증을 소유했다. 아래 날짜별 대기/커밋 전 표시는 당시 기록이다.
+
 2026-11-10 G08d 독립 검증 완료·커밋 전: 최신283입력을 보존하고 신규 [독립 회귀](../../../tests/test_g08d_independent_qa.py)만 추가했다. 독립12개·관련315개, 메인 최종284입력 기본1994 passed / 2 deselected / 51 warnings, 120.41초다. 데이터/출처/조회·명시 실행 경계와 실제 배치 수행 주체/한계는 [Task04](../../tasks/04_dashboard.md#자동-반응형-차트-2026-11-10)를 따른다. QA01 원격 CI는 대기를 유지하고 공유 문서는 메인 소유다.
 
 2026-11-09 G06c 독립 검증 완료·커밋 전: 기존 대시보드 구현·메인 실제 전후 화면/모바일 보완 종료 후 최신281입력을 고정하고 신규 [독립 회귀](../../../tests/test_g06c_independent_qa.py)만 추가했다. 독립10개·관련390개로 지정 모의 범위를 승인했고 메인 최종282입력 기본1947 passed / 2 deselected / 51 warnings, 106.09초도 통과했다. 수행 주체·실패 분류·조회 예산·실제 화면과 검증 한계는 [Task04](../../tasks/04_dashboard.md#헤더카드필터-배치-2026-11-09)를 따른다. QA01 원격 CI 대기는 유지하며 제품/기존 테스트/공유 문서는 QA 소유가 아니다.
@@ -44,18 +46,23 @@ G06b는 2026-10-22 메인이 가상 데이터 실제 renderer의 상태 대비·
 
 | ID | 우선순위 | 작업 | 상태 |
 | --- | --- | --- | --- |
-| QA01 | P1 | SQLite·PostgreSQL 최신 정렬과 CI | 검증 대기 |
+| QA01 | P1 | SQLite·PostgreSQL 최신 정렬과 CI | 완료 (2026-11-13 원격 실행 확인) |
 | QA02 | P1 | 실제 renderer 호출 경계·조회·브라우저 | 완료 (main 반영: `6607de7`·`09bfcd7`) |
-| QA03 | P2 | 실제 조합 artifact 저장·재로드 | 완료·커밋 전 |
+| QA03 | P2 | 실제 조합 artifact 저장·재로드 | 완료·main 반영 |
+| QA04 | P1 | CI 임시 경로 OS 호환성 | 검증 대기 (로컬 수정·검증 완료, 커밋 전) |
 
 <a id="qa01"></a>
 ## QA01 — SQLite·PostgreSQL 최신 정렬과 CI
 
-- **우선순위:** P1 · **상태:** 검증 대기 · **연결:** [G01a](data.md#g01a)의 완료 판정 전. fixture·기대값은 수정 전 준비할 수 있다.
+- **우선순위:** P1 · **상태:** 완료 (2026-11-13, 원격 실행 확인) · **연결:** [G01a](data.md#g01a)의 완료 판정 전. fixture·기대값은 수정 전 준비할 수 있다.
 - **근거:** 10월 5일 검토 당시 [PostgreSQL 테스트:24](../../../tests/integration/test_postgresql_migrations.py)는 migration·테이블·revision만 검사하고 [CI:52](../../../.github/workflows/tests.yml)도 이 파일만 선택한다. [SQLite 회귀](../../../tests/test_dataset_frame_list_latest_batch.py)는 같은 종목의 dated/NULL 경쟁을 다루지 않는다. 따라서 기존 CI 성공은 운영에서 확인한 정렬 결함의 수정 증거가 아니다.
 - **작업:** 데이터 담당의 repository 회귀와 격리 PostgreSQL 환경·CI 실행을 연결한다. 기능 테스트 파일의 소유권은 데이터 담당에게 두고 QA의 통합 파일·workflow는 QA가 담당한다.
 - **완료 조건:** 같은 fixture로 세 조회 메서드의 dated/NULL·동률 id·NULL fallback 기대값을 양쪽 DB에서 검증한다. PostgreSQL CI가 해당 테스트를 실제 실행한 결과가 있다. 실행하지 못한 DB는 미검증으로 남긴다.
 - **증거:** HEAD/작업 트리·임시 DB 종류·선택한 테스트·명령·결과·운영 DB 미사용을 기록한다. skip/xfail로 실패를 숨기지 않는다.
+
+- **완료 근거 (2026-11-13):** 현재 local/main과 remote/main의 SHA가 `7b4292048ecccb8c0652cdf6229c9c22c649db25`로 일치한다. run `43046475982`의 [PostgreSQL job `130611635459`](https://github.com/dydwnsekd/invest_bot/actions/runs/43046475982/job/130611635459)에서 `python scripts/run_tests.py --suite postgresql tests/integration -q`가 실제 실행돼 **2 passed /2 warnings,1.13초**였고 종료 코드0·job success·컨테이너 정리 단계 success를 확인했다. 실행일은2026-11-12 00:15경 KST이며11월13일 조회했다. GitHub 공개 API는 job/step 결과를, 로그인된 기존 Chrome의 읽기 전용 화면은 실제 로그 수치를 증명했다. CLI 미인증·공개 로그 다운로드 API403을 우회 인증이나 토큰 생성으로 해결하지 않았다.
+- **독립 임시 DB 재검증:** main284추적 입력만 복사하고 설치된 PostgreSQL17.10 이미지로 별도 이름·임의 loopback 포트·tmpfs를 사용했다. host bind/영속 volume·운영 설정/DB 없이 기존 migration/정렬2개를 실행해 **2 passed /2 warnings,1.44초**였고 컨테이너 삭제를 확인했다. DB 이름 `_test`, 정렬용 UUID schema 생성·정리, 기존 SQLite/PG 공통 기대값을 유지한다. 최초 wrapper는 Docker의 tmpfs 표시 위치를 잘못 가정한 사전검사에서 중단됐고 DB를 정리했다. HostConfig.Tmpfs와 빈 Mounts/Binds를 함께 확인하도록 task-local 검사만 보완했으며 첫 실패를 보존했다. 제품/기존 PG 테스트를 바꾼 결과가 아니다. 두 경고는 기존 Alembic path_separator deprecation이다.
+- **경계:** 같은 run의 [기본 suite](https://github.com/dydwnsekd/invest_bot/actions/runs/43046475982/job/130611636031)는27 failed /1967 passed /2 deselected /111 warnings,181.35초였다. 따라서 PostgreSQL 통과를 전체 Actions 성공으로 표현하지 않는다. 원인은 아래 QA04의 테스트 fixture 경로이며 Node/Ubuntu 이동 안내는 원인으로 확정하지 않는다. 운영 데이터·실제 API/키·배포·프로젝트 서비스·원격 재실행·commit/push는 수행하지 않았다. 원문 API/DOM/log/XML과 보호 SHA는 로컬 임시 `invest-bot-qa01-pg-59z1vjsi`에 보존한다.
 
 <a id="qa02"></a>
 ## QA02 — 실제 renderer 호출 경계·조회·브라우저
@@ -80,6 +87,16 @@ G06b는 2026-10-22 메인이 가상 데이터 실제 renderer의 상태 대비·
 - **작업:** RSI40/60을 포함한 실제 조합 출력을 임시 artifact에 저장하고 새 service에서 재로드하는 왕복 회귀를 기능 담당과 연결한다. 운영 artifact를 덮어쓰지 않는다.
 - **완료 조건:** 구성 전략 설정·방식·가중치·입력 provenance·거래·최종자산·MDD를 저장 전후 비교한다. 중복 날짜는 G03 정책을 적용하고, 기존 artifact의 호환/미지원 정책도 확인한다.
 - **검증 경로:** [persistence 회귀](../../../tests/test_backtest_persistence.py), [조합](../../../tests/test_backtest_combination.py), [대시보드 백테스트](../../../tests/test_streamlit_backtest.py). 실제 생성 결과를 사용했는지 명시한다.
+
+<a id="qa04"></a>
+## QA04 — CI 임시 경로 OS 호환성
+
+- **우선순위:** P1 · **상태:** 검증 대기 (로컬 수정·검증 완료·커밋 전;2026-11-13) · **선행:** QA01 원격 결과 조회.
+- **실제 결함:** main `7b42920`의 [기본 CI](https://github.com/dydwnsekd/invest_bot/actions/runs/43046475982/job/130611636031)27실패 로그는 Ubuntu에서 `/private/tmp/qa02-synthetic-*`를 찾지 못했다. [QA02 fixture](../../../tests/qa02_dashboard_fixture.py)의 기본 directory가 macOS 경로를 고정했다. 기존31개 중 실제 AppTest 경로27개가 이 초기화 실패로 중단됐다.
+- **작업·결과:** 고정된 `dir` 인자를 제거해 Python 표준 `tempfile`의 시스템/설정된 임시 루트를 사용한다. 명시적 directory는 계속 우선한다. 데이터 seed/SQLite·loader·snapshot/조회·runner/전송 경계와 기존 assertions는 보존했다. 새 helper/의존성·운영 코드/설정·CI 서버 변경이나 `/private/tmp` 생성 우회는 추가하지 않았다.
+- **회귀·검증:** 기존 QA 세션이 소유 fixture1개와 신규 [경로 회귀](../../../tests/test_qa02_temp_directory.py)만 변경했다. 최초 신규4실패는 경로 불일치3건과 신규 날짜 기대값 작성 오류1건이었다. 작성 오류만 보정한 기존 fixture에서3 failed /1 passed를 재확인한 뒤 경로 인자만 제거했다. 최초 RED와 확인 RED 로그/XML을 각각 보존했다. 최종 신규4개·기존 QA02 포함 관련35개가 통과했다. 메인 최종285입력 격리 후보의 기본 **1998 passed / 2 deselected / 51 warnings, 107.28초**도 통과했다. 수치는 포함 관계이며 합산하지 않는다. Python은 깨끗한 환경·기존 venv·-B·task-local TMPDIR/cache/basetemp/XML/log로 실행했다.
+- **완료 조건:** 설정된 TMPDIR·tempfile cache와 명시 directory의 우선순위 및 실제 SQLite 데이터/조회 경계가 유지되고 기본 suite가 통과해야 한다. 수정이 반영된 새 SHA의 Ubuntu Actions에서 해당 기본 회귀가 성공한 결과가 있어야 원격 검증까지 완료한다. 현재 변경은 미커밋이므로 그 조건은 미충족이다.
+- **소유·한계:** 메인은 원본 통합/공유 문서/전체 검사, QA는 위2파일만 소유했다. QA 격리본의 비소유283입력은 불변이며 메인은 공유 문서11개를 별도로 갱신했다. 기존 테스트·fixture의 나머지 의미·운영 source·실제 설정/backup/index/HEAD/branch/모드는 보존했다. Mac에서 설정된 temp root를 제어하는 회귀와 기존 AppTest를 실행했으며 새 Linux 프로세스/수정 후 원격 CI를 실행했다고 주장하지 않는다. 전체 검사 후 Python SHA를 고정하고 문서·HTML만 갱신했다. AST/메모리 compile·공백·MD 링크/ID·HTML12페이지/문서58개·Node 탐색19개를 검사하며 lint/typecheck 도구를 새로 설치하지 않는다. 커밋·push·원격 재실행은 사용자 명시 요청 전까지 하지 않는다.
 
 ## 실행 기록
 

@@ -4,6 +4,12 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다. 다음 개선 작업·우선순위·진행 상태는 [개선 작업 색인](../operations/improvements/README.md)과 담당 역할 문서를 먼저 확인합니다.
 
+## 현재 상태 (2026-11-13)
+
+main `7b42920`의 깨끗한284입력에서 시작했다. 원격 main/SHA 일치와 PostgreSQL job의 **2 passed /2 warnings,1.13초**를 실제 로그로 확인하고, 별도 tmpfs 임시PG17.10의 **2 passed /2 warnings,1.44초** 후 삭제를 확인했다. G01a·QA01은 완료다.
+
+같은 원격 run의 기본27실패는 테스트 fixture의 macOS 임시 경로 고정이었다. [QA04](../operations/improvements/qa.md#qa04)로 분리해 기존 QA 하나에서 회귀 RED→최소 수정→관련35개를 통과한 뒤 메인이 최종285입력 기본 **1998 passed / 2 deselected / 51 warnings, 107.28초**를 확인했다. 기존 테스트를 완화하지 않았고 운영 source/설정·API/데이터/서비스·원격 재실행·stage/commit/push를 사용하지 않았다. 이번 변경은 커밋 전이며 새 SHA의 원격 기본 suite 성공은 아직 미검증이다. [완료·대기와 원문 근거](../operations/improvements/qa.md)를 따른다. 이하 날짜별 결과는 당시 기록이다.
+
 ## 현재 상태 (2026-11-10)
 
 main `66dbfed` + 기존13개 G06c 문서 작업본에서 **G08d 자동 반응형 차트**를 순차 완료했다. 하단 범례·자동 줄바꿈/여백·상단 도구 모음 공간을 적용하고, 실제 SVG에서 발견한 글자 하한도 보완했다. 데이터·0/null/gap·기간/봉 기준·확대/이동/선택·조회/실행/저장 경계를 유지한다. G06c 코드·테스트는 반영됐고 이번 G08d 코드/테스트·문서는 검토 작업본이다.

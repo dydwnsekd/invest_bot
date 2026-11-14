@@ -6,18 +6,20 @@
 
 | ID | 우선순위 | 작업 | 상태 |
 | --- | --- | --- | --- |
-| G01a | P1 | 최신 snapshot NULL 정렬 | 검증 대기 |
+| G01a | P1 | 최신 snapshot NULL 정렬 | 완료 (2026-11-13 원격 CI 확인) |
 | G01b | P2 | 숫자형 snapshot 날짜 정규화 | 완료 (main 반영: `3de986c`·`893d0e6`) |
 | G08a | P2 | 요청한 일봉 수집 기간 확보 | 완료 (코드 `c1b7810` 반영·문서 검토) |
 
 <a id="g01a"></a>
 ## G01a — 최신 snapshot NULL 정렬
 
-- **우선순위:** P1 · **상태:** 검증 대기 · **선행:** 없음 · **연결:** [QA01](qa.md#qa01).
+- **우선순위:** P1 · **상태:** 완료 (2026-11-13 원격 CI 확인) · **선행:** 없음 · **연결:** [QA01](qa.md#qa01).
 - **근거:** 10월 5일 검토 당시 [repository:237·263](../../../src/invest_bot/db/repositories.py)의 날짜 내림차순에 NULL 위치가 명시되지 않았다. 10월 5일 메인의 운영 PostgreSQL 읽기 전용 비교에서 삼성전자·SK하이닉스의 오래된 NULL·0행 수급 snapshot이 선택됐다. NULL을 뒤로 보내면 두 종목의 10월 2일·30행 snapshot이 선택됐다. 실제 조회 결함을 확인했으며 데이터는 수정하지 않았다.
 - **작업:** `latest_for_symbol`, `list_latest`, `list_for_dataset`의 최신 관측일 우선·NULL fallback·동률 선택 계약을 일치시킨다. 실패/빈 수집 이력의 표시와 유효 데이터 선택을 혼동하지 않는다.
 - **완료 조건:** 같은 synthetic fixture를 임시 SQLite와 격리 PostgreSQL에 넣어 dated/NULL 경쟁, 날짜·생성시간 동률의 id 선택, NULL만 있는 fallback을 명시한 기대값과 비교한다. 세 메서드가 일치하고 PostgreSQL CI가 새 회귀를 실제 선택해야 한다. snapshot 이후 추가 조회0회 계약도 보존한다.
 - **검증 경로:** [최신 목록 회귀](../../../tests/test_dataset_frame_list_latest_batch.py), [조회 횟수 회귀](../../../tests/test_watchlist_snapshot_queries.py), [현재 PostgreSQL migration 테스트](../../../tests/integration/test_postgresql_migrations.py), [CI](../../../.github/workflows/tests.yml). 10월 5일 기존 PostgreSQL 테스트는 migration 검증만 했다. 10월 9일 [정렬 회귀](../../../tests/integration/test_postgresql_dataset_frame_ordering.py)를 추가하고 CI에 연결했다. PostgreSQL 미실행은 통과로 기록하지 않는다.
+
+- **완료 확인 (2026-11-13):** main `7b42920`과 일치하는 [원격 PostgreSQL job](https://github.com/dydwnsekd/invest_bot/actions/runs/43046475982/job/130611635459)의 정렬/migration2개가2 passed /2 warnings,1.13초였고, 별도 tmpfs 임시PG17.10에서도2 passed /2 warnings,1.44초 후 삭제를 확인했다. [QA01 증거·경계](qa.md#qa01)를 따른다. 전체 CI 기본 suite27실패는 별도 [QA04](qa.md#qa04)로 분리하며 G01a/QA01의 정렬 조건 통과와 구분한다. 아래 날짜별 대기 표시는 당시 기록이다.
 
 <a id="g01b"></a>
 ## G01b — 숫자형 snapshot 날짜 정규화
