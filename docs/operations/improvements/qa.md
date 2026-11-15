@@ -4,6 +4,8 @@
 
 담당 세션은 **QA·독립 검증 체계 개선**이다. 이전 결과는 [9월 보고서](../session_reports/2026-09-13_qa.md), 현재 순서는 [작업 색인](README.md)을 따른다. QA는 기능 구현을 중복 소유하지 않고 검증 공백·환경·CI·독립 완료 판정을 맡는다.
 
+2026-11-15 현재 기준은 main `c86b0f6` + QA04 후속 검토 작업본이다. 최초 임시 경로 수정은 `e89c1d2`, 관련 문서는 `c86b0f6`으로 반영됐다. 같은 SHA의 [기본 CI](https://github.com/dydwnsekd/invest_bot/actions/runs/43589614419/job/132431351332)에서 기존27개 경로 실패는 해소됐으나 신규3개의 SQL 계측 누락이 남았다. 기존 QA 세션 하나를 재사용해 URL 표시 문자열과 실제 DB 식별을 분리했고, 메인이 네트워크가 차단된 Linux에서 동일3실패를 재현한 뒤 관련·전체 Linux/Mac 검증을 수행했다. 수정 후 원격 CI는 미실행이다. 현재 상세는 [QA04](#qa04)를 따르며 아래 날짜별 커밋 전/미실행 표시는 당시 기록이다.
+
 2026-11-13 현재 기준은 main `7b42920` + QA04 검토 작업본이다. G08d 코드는 `7b42920`, G06c 문서는 `ef5337e`로 반영됐다. G01a·QA01은 동일 main의 [원격 PostgreSQL 검사](https://github.com/dydwnsekd/invest_bot/actions/runs/43046475982/job/130611635459)2 passed /2 warnings,1.13초와 아래 임시 DB 재검증으로 완료했다. 전체 원격 run의 기본 suite 실패는 별도 QA04로 분리했다. QA04의 신규4개·관련35개와 메인 기본1998개는 로컬 후보의 결과이며, 수정 후 원격 CI 재실행은 미수행이다. 기존 역할 하나만 재사용했고 메인이 공유 문서·원본 통합·임시 DB·GitHub/CUA·최종 검증을 소유했다. 아래 날짜별 대기/커밋 전 표시는 당시 기록이다.
 
 2026-11-10 G08d 독립 검증 완료·커밋 전: 최신283입력을 보존하고 신규 [독립 회귀](../../../tests/test_g08d_independent_qa.py)만 추가했다. 독립12개·관련315개, 메인 최종284입력 기본1994 passed / 2 deselected / 51 warnings, 120.41초다. 데이터/출처/조회·명시 실행 경계와 실제 배치 수행 주체/한계는 [Task04](../../tasks/04_dashboard.md#자동-반응형-차트-2026-11-10)를 따른다. QA01 원격 CI는 대기를 유지하고 공유 문서는 메인 소유다.
@@ -49,7 +51,7 @@ G06b는 2026-10-22 메인이 가상 데이터 실제 renderer의 상태 대비·
 | QA01 | P1 | SQLite·PostgreSQL 최신 정렬과 CI | 완료 (2026-11-13 원격 실행 확인) |
 | QA02 | P1 | 실제 renderer 호출 경계·조회·브라우저 | 완료 (main 반영: `6607de7`·`09bfcd7`) |
 | QA03 | P2 | 실제 조합 artifact 저장·재로드 | 완료·main 반영 |
-| QA04 | P1 | CI 임시 경로 OS 호환성 | 검증 대기 (로컬 수정·검증 완료, 커밋 전) |
+| QA04 | P1 | CI 임시 경로·SQL 계측 호환성 | 검증 대기 (후속 Mac·Linux 검증 완료, 커밋 전) |
 
 <a id="qa01"></a>
 ## QA01 — SQLite·PostgreSQL 최신 정렬과 CI
@@ -91,7 +93,20 @@ G06b는 2026-10-22 메인이 가상 데이터 실제 renderer의 상태 대비·
 <a id="qa04"></a>
 ## QA04 — CI 임시 경로 OS 호환성
 
-- **우선순위:** P1 · **상태:** 검증 대기 (로컬 수정·검증 완료·커밋 전;2026-11-13) · **선행:** QA01 원격 결과 조회.
+- **우선순위:** P1 · **상태:** 검증 대기 (후속 Mac·Linux 수정·검증 완료·커밋 전;2026-11-15) · **선행:** 최초 경로 보완 `e89c1d2` 반영.
+
+### URL 표시·SQL 계측 후속 (2026-11-15)
+
+- **현재 증거:** main `c86b0f6`과 일치하는 [run `43589614419`/job `132431351332`](https://github.com/dydwnsekd/invest_bot/actions/runs/43589614419/job/132431351332)는 **3 failed /1995 passed /2 deselected /111 warnings,241.80초**였다. 실패는 QA04의 TMPDIR-reset-cache, configured-cache, actual-app 세 사례에서 기대한 snapshot/SELECT2회가0회로 집계된 것이다. 원래27개 부모 디렉터리 실패와 구분한다. 메인의 로그인된 기존 Chrome 읽기 전용 화면에서 실제 로그를 확인했으며 원격 job 재실행/설정·계정 변경은 하지 않았다.
+- **재현·원인:** 설치된 캐시 이미지를 네트워크 없이 실행한 Linux에서 수정 전 **3 failed /1 passed,1.11초**를 재현했다. 임시 폴더·SQLite·원본 값은 생성됐지만 `str(conn.engine.url)`과 원문 DB URL의 비교가 공백/한글 경로를 동일 DB로 식별하지 못했다. [SQLAlchemy2.1 공식 변경](https://docs.sqlalchemy.org/en/21/changelog/migration_21.html#url-stringify-and-parse-now-supports-url-escaping-for-the-database-portion)은 database 부분의 URL 문자열 escaping을 설명한다. 실제 로컬은 SQLAlchemy2.0.50, 사용한 Linux 이미지는2.1.4이며 OS 자체만의 차이로 단정하지 않는다.
+- **최소 수정:** 기존 QA02와 파생 G06c의 계측/쓰기 차단에서 표시 문자열 대신 공개 `make_url`/`URL` 연결 정보로 같은 DB를 판별한다. 실제 데이터·서비스·loader·seed·snapshot2/frame0·SQL 분류와 G06c 쓰기 차단 의미는 유지한다. 제품 source/의존성·버전 pin·운영 설정/DB는 변경하지 않았다.
+- **회귀·역할 검증:** 기존 QA는 두 fixture와 신규 [SQL 관측 회귀](../../../tests/test_qa04_sql_observation.py)만 소유했다. macOS에서 URL의 표시 전용 escaping만 제어한 신규6개가 수정 전 모두 실패했다. 실제 조회 계측4개와 실제 INSERT/UPDATE 차단2개의 누락이며, 두 observer만 보완한 뒤 기존 관련 assertions를 유지해 통과했다. 신규 테스트 작성 오류나 실패 제외는 없었다. 최종 신규6개를 포함한 관련50개가 통과했다. 실제 SQLite·Engine 이벤트/loader 또는 AppTest를 사용하고 표시 전용 차이만 제어하며, 소비자/결과를 성공 fake로 바꾸지 않았다. 다른 DB의 쿼리 제외, 같은 DB 실제 조회, G06c 쓰기 차단을 검증했다. 기존 경로4개/QA02·G06c·G08d assertions는 완화하지 않았다.
+- **메인 Linux 검증:** 같은 캐시 이미지/격리 조건에서 관련50개가 통과한 뒤, 최종286입력의 전체 기본 **2004 passed / 2 deselected / 111 warnings, 170.13초**를 확인했다. Linux7/linuxkit ARM64·Python3.13.16·SQLAlchemy2.1.4·Streamlit1.65.0·Plotly6.9.0 환경이며 GitHub Ubuntu/Python3.13.18과 완전히 동일한 환경은 아니다. 기존 이미지에 설치된 라이브러리만 사용했고 네트워크 none·read-only root/source·tmpfs tmp/task/app·작업별 결과 폴더만 허용했다. 앱 entrypoint를 실행하지 않고 소유 임시 컨테이너를 정리했다. 첫 전체의169 failed/1835 passed(55.10초)와 두 번째63 failed/1941 passed(54.08초)는 task-local runner의 산출물 읽기 전용·표준 Python 경로·임시 스크립트 실행권한 조건에서 발생했다. 원문을 보존하고 .tmp 전용 writable tmpfs, 기존 interpreter launcher, 임시 fakes의 exec 조건만 보정했다. 대표 준비 확인2개가 통과한 뒤 동일한 source/선택의 최종 전체가 통과했다. 실제 테스트나 제품 assertions를 바꾸거나 실패를 제외하지 않았다.
+- **메인 Mac 검증:** SQLAlchemy2.0.50·Streamlit1.58.0·Plotly6.8.0의 기존 venv, env-i·task-local TMPDIR/cache/basetemp/XML/log·-B에서 전체 기본 **2004 passed / 2 deselected / 51 warnings, 110.39초**를 확인했다. 두 환경의 수치는 별도 검증이며 합산하지 않는다. 전체 통과 후 Python SHA는 고정하고 공유 문서만 갱신했다.
+- **완료 조건·경계:** 로컬 source/회귀는 검증됐지만 변경은 미커밋이다. 새 SHA가 반영된 GitHub 기본 suite 성공은 아직 미검증이므로 QA04의 원격 완료는 대기다. 기존 QA 격리본의 비소유283입력·기존 assertions, 메인의 비소유 source·실제 설정/backup/index/HEAD/branch/모드·불변 baseline285개를 확인했다. AST/메모리 compile·공백·MD 링크/ID·HTML12페이지/문서58개·Node 탐색19개로 문서를 검사한다. 린트/타입 검사 도구를 새로 설치하지 않았고 수행했다고 표현하지 않는다. 실제 API/키·운영 데이터/DB·프로젝트 서비스·stage/commit/push·원격 재실행은 사용하지 않았다. 원문 DOM/로그/XML·버전·SHA와 초기 RED는 로컬 임시 `invest-bot-qa04-followup-m7_zy3sk`에 보존한다.
+
+### 최초 임시 경로 보완 기록 (2026-11-13)
+
 - **실제 결함:** main `7b42920`의 [기본 CI](https://github.com/dydwnsekd/invest_bot/actions/runs/43046475982/job/130611636031)27실패 로그는 Ubuntu에서 `/private/tmp/qa02-synthetic-*`를 찾지 못했다. [QA02 fixture](../../../tests/qa02_dashboard_fixture.py)의 기본 directory가 macOS 경로를 고정했다. 기존31개 중 실제 AppTest 경로27개가 이 초기화 실패로 중단됐다.
 - **작업·결과:** 고정된 `dir` 인자를 제거해 Python 표준 `tempfile`의 시스템/설정된 임시 루트를 사용한다. 명시적 directory는 계속 우선한다. 데이터 seed/SQLite·loader·snapshot/조회·runner/전송 경계와 기존 assertions는 보존했다. 새 helper/의존성·운영 코드/설정·CI 서버 변경이나 `/private/tmp` 생성 우회는 추가하지 않았다.
 - **회귀·검증:** 기존 QA 세션이 소유 fixture1개와 신규 [경로 회귀](../../../tests/test_qa02_temp_directory.py)만 변경했다. 최초 신규4실패는 경로 불일치3건과 신규 날짜 기대값 작성 오류1건이었다. 작성 오류만 보정한 기존 fixture에서3 failed /1 passed를 재확인한 뒤 경로 인자만 제거했다. 최초 RED와 확인 RED 로그/XML을 각각 보존했다. 최종 신규4개·기존 QA02 포함 관련35개가 통과했다. 메인 최종285입력 격리 후보의 기본 **1998 passed / 2 deselected / 51 warnings, 107.28초**도 통과했다. 수치는 포함 관계이며 합산하지 않는다. Python은 깨끗한 환경·기존 venv·-B·task-local TMPDIR/cache/basetemp/XML/log로 실행했다.

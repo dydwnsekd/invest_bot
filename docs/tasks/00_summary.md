@@ -4,6 +4,12 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다. 다음 개선 작업·우선순위·진행 상태는 [개선 작업 색인](../operations/improvements/README.md)과 담당 역할 문서를 먼저 확인합니다.
 
+## 현재 상태 (2026-11-15)
+
+main `c86b0f6`의 깨끗한285입력에서 QA04 후속을 진행했다. 최초 경로 수정 `e89c1d2`는 반영됐지만 동일 SHA 기본 CI는3 failed /1995 passed였다. 메인은 같은 세 사례의 Linux3실패를 재현했고 기존 QA는 URL 문자열 표시 차이로 누락되던 SQLite 계측과 G06c 쓰기 차단을 두 fixture·신규 회귀1파일에서 보완했다. 실제 운영 source/설정·API·데이터/DB·서비스나 의존성은 변경하지 않았다.
+
+신규6개를 포함한 역할 관련50개, 메인 Linux 관련50개·기본 **2004 passed / 2 deselected / 111 warnings, 170.13초**, Mac 기본 **2004 passed / 2 deselected / 51 warnings, 110.39초**를 확인했다. 최종286입력·보호6개·baseline285개·테스트 후 Python SHA와 모드를 대조했고 공유 문서9개를 갱신했다. [현재 계약·RED/보완·공식 API·수행 환경·한계](../operations/improvements/qa.md#qa04)를 따른다. 후속 변경은 미커밋이며 새 SHA의 GitHub 재검증은 대기다. 기존 QA 세션 하나만 재사용했고 stage/commit/push·원격 재실행은 하지 않았다. 아래 날짜별 미커밋/대기 표시는 당시 상태다.
+
 ## 현재 상태 (2026-11-13)
 
 main `7b42920`의 깨끗한284입력에서 시작했다. 원격 main/SHA 일치와 PostgreSQL job의 **2 passed /2 warnings,1.13초**를 실제 로그로 확인하고, 별도 tmpfs 임시PG17.10의 **2 passed /2 warnings,1.44초** 후 삭제를 확인했다. G01a·QA01은 완료다.

@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st
 from sqlalchemy import Engine, event
+from sqlalchemy.engine import make_url
 
 from tests.qa02_dashboard_fixture import NAMES, QA02Harness
 from invest_bot.dashboard import streamlit_actions as actions
@@ -52,9 +53,10 @@ class G06cHarness(QA02Harness):
 
     @contextmanager
     def observe(self):
+        target_url = make_url(self.database_url)
         events = []
         def deny_write(conn, _cursor, statement, _parameters, _context, _many):
-            if str(conn.engine.url) == self.database_url:
+            if conn.engine.url == target_url:
                 verb = statement.lstrip().split(None, 1)[0].upper()
                 if verb == "SELECT":
                     events.append({"phase": self.phase, "context": self.sql_context, "statement": statement})
