@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import pandas as pd
 from sqlalchemy import Engine, event
+from sqlalchemy.engine import make_url
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
@@ -121,10 +122,11 @@ class QA02Harness:
 
     @contextmanager
     def observe(self):
+        target_url = make_url(self.database_url)
         self.phase = "before"
         self.selects: list[tuple[str, str]] = []
         def listener(conn, _cursor, statement, _parameters, _context, _executemany):
-            if str(conn.engine.url) == self.database_url and statement.lstrip().upper().startswith("SELECT"):
+            if conn.engine.url == target_url and statement.lstrip().upper().startswith("SELECT"):
                 self.selects.append((self.phase, statement))
         event.listen(Engine, "before_cursor_execute", listener)
         try:
