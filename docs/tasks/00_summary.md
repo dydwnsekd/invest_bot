@@ -4,6 +4,12 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다. 다음 개선 작업·우선순위·진행 상태는 [개선 작업 색인](../operations/improvements/README.md)과 담당 역할 문서를 먼저 확인합니다.
 
+## 현재 상태 (2026-11-16)
+
+main `b34219faf276e586a4d10b34d968fde8ab399d76`의 [원격 CI run `43776628811`](https://github.com/dydwnsekd/invest_bot/actions/runs/43776628811)가 성공했다. 실제 로그의 기본 검증은 **2004 passed / 2 deselected / 111 warnings, 248.27초**, PostgreSQL 통합은 **2 passed / 2 warnings, 0.89초**다. QA04의 새 SHA 원격 완료 조건을 충족했다. 직전 `b7d869c`의4실패는 G06c observer 보완 누락과 일치하며, 최신 커밋에 해당 변경이 포함된 것을 대조했다. [버전별 로그·완료 판정·한계](../operations/improvements/qa.md#qa04)를 따른다.
+
+기존 개선 작업에 등록된 G항목과 QA01~QA04의 지정 범위는 완료다. 다음 후보는 [Task06 주문·리스크](06_trading_risk.md)의 모의투자 주문과 주문 전 검증 범위·설계이며 미착수 계획이다. 전체 프로젝트나 실거래 준비 완료를 뜻하지 않는다. 오늘은 기존 QA 하나의 증거 검토·완료 판정 후 공유 문서9개와 HTML의 상태를 갱신했다. MD58개/로컬 링크884개·HTML12페이지/문서58개·Node 탐색19개를 검증했다. 코드·설정·API·운영 DB·서비스 변경이나 전체 테스트 재실행 없이 문서만 검토했으며 stage/commit/push는 하지 않았다. 아래 날짜별 수치·대기·커밋 전 표시는 당시 기록이다.
+
 ## 현재 상태 (2026-11-15)
 
 main `c86b0f6`의 깨끗한285입력에서 QA04 후속을 진행했다. 최초 경로 수정 `e89c1d2`는 반영됐지만 동일 SHA 기본 CI는3 failed /1995 passed였다. 메인은 같은 세 사례의 Linux3실패를 재현했고 기존 QA는 URL 문자열 표시 차이로 누락되던 SQLite 계측과 G06c 쓰기 차단을 두 fixture·신규 회귀1파일에서 보완했다. 실제 운영 source/설정·API·데이터/DB·서비스나 의존성은 변경하지 않았다.

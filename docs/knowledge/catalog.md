@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | D-OKF | [OKF](../../OKF.md) | policy | active | 통합 · 지식 관리 규약 |
 | D-HOME | [지식 홈](../README.md) | index | active | 통합 · 질문별 탐색 |
-| D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·설치/화면 사용법·최근 개선·설정/로그·OKF 검색; 2026-11-15 main c86b0f6 + QA04 후속 검토 작업본; 12페이지·문서 분할 탐색 |
+| D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·설치/화면 사용법·최근 개선·설정/로그·OKF 검색; 2026-11-16 main b34219f의 QA04 원격 완료 + 문서 검토본; 12페이지·문서 분할 탐색 |
 | D-CATALOG | [문서 등록부](catalog.md) | index | active | 통합 · 문서 역할과 상태 |
 | D-CONCEPTS | [개념 지도](concepts.md) | concept | active | 통합 · 수집 범위·분석 준비·핵심 개념·보충 수집·비교·슬라이딩 연구의 구현/검증 근거 |
 | D-TEMPLATE | [작성 양식](template.md) | policy | active | 통합 · 새 문서 작성 |

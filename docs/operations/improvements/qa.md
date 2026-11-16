@@ -4,6 +4,8 @@
 
 담당 세션은 **QA·독립 검증 체계 개선**이다. 이전 결과는 [9월 보고서](../session_reports/2026-09-13_qa.md), 현재 순서는 [작업 색인](README.md)을 따른다. QA는 기능 구현을 중복 소유하지 않고 검증 공백·환경·CI·독립 완료 판정을 맡는다.
 
+2026-11-16 main `b34219f`의 [원격 run `43776628811`](https://github.com/dydwnsekd/invest_bot/actions/runs/43776628811)는 전체 성공이다. 같은 SHA의 실제 로그에서 기본2004개와 PostgreSQL2개 통과를 확인해 QA04를 완료했다. 직전 실패는 G06c 계측 수정이 빠진 `b7d869c`의 결과로 분리해 남겼다. 오늘은 코드 변경 없이 기존 QA 하나에서 저장 증거를 검토하고 메인이 완료 기록·공유 문서·HTML만 갱신한다. 이번 문서 변경은 커밋 전이며 아래 날짜별 원격 대기/미실행 표시는 당시 기록이다. 상세는 [QA04](#qa04)를 따른다.
+
 2026-11-15 현재 기준은 main `c86b0f6` + QA04 후속 검토 작업본이다. 최초 임시 경로 수정은 `e89c1d2`, 관련 문서는 `c86b0f6`으로 반영됐다. 같은 SHA의 [기본 CI](https://github.com/dydwnsekd/invest_bot/actions/runs/43589614419/job/132431351332)에서 기존27개 경로 실패는 해소됐으나 신규3개의 SQL 계측 누락이 남았다. 기존 QA 세션 하나를 재사용해 URL 표시 문자열과 실제 DB 식별을 분리했고, 메인이 네트워크가 차단된 Linux에서 동일3실패를 재현한 뒤 관련·전체 Linux/Mac 검증을 수행했다. 수정 후 원격 CI는 미실행이다. 현재 상세는 [QA04](#qa04)를 따르며 아래 날짜별 커밋 전/미실행 표시는 당시 기록이다.
 
 2026-11-13 현재 기준은 main `7b42920` + QA04 검토 작업본이다. G08d 코드는 `7b42920`, G06c 문서는 `ef5337e`로 반영됐다. G01a·QA01은 동일 main의 [원격 PostgreSQL 검사](https://github.com/dydwnsekd/invest_bot/actions/runs/43046475982/job/130611635459)2 passed /2 warnings,1.13초와 아래 임시 DB 재검증으로 완료했다. 전체 원격 run의 기본 suite 실패는 별도 QA04로 분리했다. QA04의 신규4개·관련35개와 메인 기본1998개는 로컬 후보의 결과이며, 수정 후 원격 CI 재실행은 미수행이다. 기존 역할 하나만 재사용했고 메인이 공유 문서·원본 통합·임시 DB·GitHub/CUA·최종 검증을 소유했다. 아래 날짜별 대기/커밋 전 표시는 당시 기록이다.
@@ -51,7 +53,7 @@ G06b는 2026-10-22 메인이 가상 데이터 실제 renderer의 상태 대비·
 | QA01 | P1 | SQLite·PostgreSQL 최신 정렬과 CI | 완료 (2026-11-13 원격 실행 확인) |
 | QA02 | P1 | 실제 renderer 호출 경계·조회·브라우저 | 완료 (main 반영: `6607de7`·`09bfcd7`) |
 | QA03 | P2 | 실제 조합 artifact 저장·재로드 | 완료·main 반영 |
-| QA04 | P1 | CI 임시 경로·SQL 계측 호환성 | 검증 대기 (후속 Mac·Linux 검증 완료, 커밋 전) |
+| QA04 | P1 | CI 임시 경로·SQL 계측 호환성 | 완료 (main `b34219f` 원격 기본2004개·PostgreSQL2개;2026-11-16 확인) |
 
 <a id="qa01"></a>
 ## QA01 — SQLite·PostgreSQL 최신 정렬과 CI
@@ -93,7 +95,17 @@ G06b는 2026-10-22 메인이 가상 데이터 실제 renderer의 상태 대비·
 <a id="qa04"></a>
 ## QA04 — CI 임시 경로 OS 호환성
 
-- **우선순위:** P1 · **상태:** 검증 대기 (후속 Mac·Linux 수정·검증 완료·커밋 전;2026-11-15) · **선행:** 최초 경로 보완 `e89c1d2` 반영.
+- **우선순위:** P1 · **상태:** 완료 (2026-11-16 원격 검증 확인) · **선행:** 최초 경로 보완 `e89c1d2` 및 두 observer의 URL 계측 보완이 main `b34219f`에 반영됨.
+
+### 원격 완료 확인 (2026-11-16)
+
+- **대상·전체 판정:** 로컬 main과 원격 run의 SHA는 `b34219faf276e586a4d10b34d968fde8ab399d76`으로 같다. [run `43776628811`](https://github.com/dydwnsekd/invest_bot/actions/runs/43776628811)는 `completed/success`이며 KST11월16일08:46:37에 생성되고08:51:23에 마지막 갱신됐다. 두 job 모두 성공이다. 메인이 읽기 전용 GitHub 메타데이터와 실제 Chrome 로그 화면을 확인했으며 재실행 버튼은 사용하지 않았다.
+- **기본 suite:** [pytest job `133004256370`](https://github.com/dydwnsekd/invest_bot/actions/runs/43776628811/job/133004256370)의 `python scripts/run_tests.py --suite default -q`는 **2004 passed / 2 deselected / 111 warnings, 248.27초**, 종료 코드0이다. 실제 Python3.13.18 로그이며 이전 Mac/Linux 로컬 수치와 구분한다. `external_network`·`postgresql` 제외는 기존 기본 suite 선택이다.
+- **PostgreSQL suite:** [postgresql-migrations job `133004256238`](https://github.com/dydwnsekd/invest_bot/actions/runs/43776628811/job/133004256238)의 `python scripts/run_tests.py --suite postgresql tests/integration -q`는 **2 passed / 2 warnings, 0.89초**, 종료 코드0이다. 경고는 Alembic의 기존 `path_separator` 안내다. 기본 suite와 별도 job이며 모든 suite의 무경고를 뜻하지 않는다.
+- **직전 실패와 커밋 범위:** [run `43706452912`의 기본 job](https://github.com/dydwnsekd/invest_bot/actions/runs/43706452912/job/132788482128)은 `b7d869c2b8e109738354f2bb031e860fa2c47cc8`에서 **4 failed / 2000 passed / 2 deselected / 111 warnings, 145.50초**였다. 실패는 G06c의 같은 DB SELECT 관측, 실제 INSERT/UPDATE 차단2개, 실제 main SELECT 예산이다. `git diff b7d869c b34219f -- tests/g06c_layout_fixture.py`로 첫 커밋에는 파생 observer의 `make_url`/URL 비교 보완이 없고 다음 커밋에 포함됐음을 확인했다. 제목이 문서 반영인 최신 커밋에도 이 테스트 fixture 수정이 들어 있다. 앞선 실패는 검증된3파일 중 하나가 빠진 소스에 해당하며 불안정한 재실행으로 설명하지 않는다.
+- **완료 조건·독립 판정:** 두 observer와 신규 SQL 회귀3파일은11월15일 전체 검증된 최종 파일과 SHA가 일치한다. 경로/TMPDIR 우선순위·실제 SQLite 조회/쓰기 차단·기존 assertions를 유지한 상태로 새 SHA의 Ubuntu 기본 suite 성공이 확인됐으므로 QA04를 완료한다. 기존 QA 하나도 고정286입력의 SHA/권한과 메인이 저장한 CI 증거를 대조해 지정 완료 조건 충족으로 판정했다. QA는 외부 조회나 브라우저/테스트를 재실행하지 않았고 역사적 커밋 diff는 메인 확인 근거로 구분했다. 메인이 원본 문서·HTML·정합성을 소유했으며 오늘은 코드/의존성 변경이나 전체 테스트 재실행을 하지 않았다.
+- **문서 검증:** Markdown58개·로컬 링크884개·등록ID58개·개념14개/관계18개에서 오류0, HTML12페이지·11섹션·문서58행·고유ID43개·로컬 참조110개·기존7앵커와 외부 자원0개를 확인했다. 기존 Node 모의 DOM의 탐색·검색/목록 분할·이력·인쇄/복원·복사19개가 통과했고 JavaScript는 기준본과 같다. HTML 실제 브라우저 배치는 기존 로컬 파일 접근 제한으로 검사하지 않았다. 오늘 새로 수행한 GitHub 로그 화면 확인과 구분한다.
+- **경계·보존:** CI 성공은 실제 KIS 인증/주문·운영 DB/데이터·배포·서비스 재시작·대용량 성능 검증을 뜻하지 않는다. 실제 설정/backup/index/HEAD/branch/모드와 baseline286입력을 보존하고, 이번 공유 문서9개는 커밋 전이다. stage/commit/push·원격 job 재실행은 하지 않았다. 원문 메타데이터·화면 로그·입력 SHA와 판정은 로컬 임시 `invest-bot-qa04-close-g22g6aft`에 보존한다. 아래11월15일·13일의 미커밋/원격 대기는 각 날짜 당시 상태다.
 
 ### URL 표시·SQL 계측 후속 (2026-11-15)
 
