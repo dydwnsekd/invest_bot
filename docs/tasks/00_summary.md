@@ -4,6 +4,12 @@
 
 문서 탐색은 [지식 홈](../README.md), 문서별 역할과 상태는 [OKF 분류표](../knowledge/catalog.md)를 기준으로 합니다. 다음 개선 작업·우선순위·진행 상태는 [개선 작업 색인](../operations/improvements/README.md)과 담당 역할 문서를 먼저 확인합니다.
 
+## 현재 상태 (2026-11-17)
+
+QA04 완료 기록이 main `6595f67`에 반영된 깨끗한286입력에서 [Task06 모의 주문·리스크](06_trading_risk.md)의 **설계 T06a를 완료**했다. 현재 코드 경계·도메인 계약·V01~V15 검증 시나리오·선행/완료 조건을 문서화하고 기존 퀀트 자문→메인 보완→기존 QA 독립 문서 승인을 순차 수행했다. 기능은 미구현이며 다음 구현은 **T06b 오프라인 검증/가상 실행**이다. 이후 T06c 영속 원장/예약/미확정 대사 → T06d 모의 전용 어댑터 순서다. API 규격과 실제 모의 호출은 아직 검증하지 않았다.
+
+QA 판정은 APPROVE·차단 지적0개이며 주문 기능의 동작 승인과 구분한다. MD58개/로컬 링크912개·HTML12페이지/58문서·Node 모의 DOM19항목의 문서 검사를 통과했고 코드/기존 테스트·의존성과 실제 설정/backup/index/HEAD/branch·권한을 보존했다. 실제 API/키/토큰·운영 DB/데이터·프로젝트 서비스·기능 테스트/전체 suite·stage/commit/push는 수행하지 않았다. 이번 문서11개는 커밋 전이고 아래 날짜별 상태는 당시 기록이다.
+
 ## 현재 상태 (2026-11-16)
 
 main `b34219faf276e586a4d10b34d968fde8ab399d76`의 [원격 CI run `43776628811`](https://github.com/dydwnsekd/invest_bot/actions/runs/43776628811)가 성공했다. 실제 로그의 기본 검증은 **2004 passed / 2 deselected / 111 warnings, 248.27초**, PostgreSQL 통합은 **2 passed / 2 warnings, 0.89초**다. QA04의 새 SHA 원격 완료 조건을 충족했다. 직전 `b7d869c`의4실패는 G06c observer 보완 누락과 일치하며, 최신 커밋에 해당 변경이 포함된 것을 대조했다. [버전별 로그·완료 판정·한계](../operations/improvements/qa.md#qa04)를 따른다.
