@@ -1,7 +1,73 @@
 # Task 06. Trading And Risk
 
-> OKF ID: `D-TRADING` · 종류: `plan` · 상태: `proposed` · 관리: 통합, 퀀트 자문·QA 검토
-> 설계 기준: 2026-11-17 main `6595f67` · 이번 범위: 설계 문서만. 제품 기능은 미구현이다.
+> OKF ID: `D-TRADING` · 종류: `status` · 상태: `active` · 관리: 통합, 퀀트 구현·QA 검증
+> 현재 기준: 2026-11-18 main `0c909fd` + T06b 검토 작업본. T06c/d는 후속 계획이다.
+
+## 현재 진행 (2026-11-18)
+
+T06a는 main `0c909fd`에 반영됐으며 **T06b 오프라인 주문 검증·가상 실행을 완료**했다. 기존 퀀트 구현79개→메인 통합/초기95개→기존 QA 독립55개/합산134개→메인 최종 관련150개·기본2138개를 순차 통과했다. 새 코드7파일과 관련 문서는 커밋 전이다. 실제 KIS 모의 인증/주문·체결·영속 원장·다중 프로세스/재시작 보장은 후속이며 다음 구현은 T06c다. 아래11월17일 설계/미구현 표시는 당시 기록이다.
+
+### T06b 공개 API와 구현 범위
+
+| 구현 | 현재 역할 |
+| --- | --- |
+| [주문 모델](../../src/invest_bot/trading/models.py) | 불변/slotted 요청·binding·정책·계좌/시장 자료·예약/book·판정/결과와 상태/사유 enum. 입력에 실제 자격정보 필드는 없다. |
+| [순수 검증](../../src/invest_bot/risk/order_validation.py) | `validate_order(intent, binding, policy, account, market, book, *, now)`가 명시 입력만으로 `RiskDecision`을 반환한다. 생성/허용 판정은 가상 접수나 체결의 증거가 아니다. |
+| [가상 처리](../../src/invest_bot/trading/dry_run.py) | `DryRunBroker(bindings=tuple, book_id=..., outcomes=...)`의 `execute(intent, *, policy, account, market, now, received_at=None)`가 한 인스턴스의 순차 메모리 예약·원본 결과 replay·명시 outcome을 처리한다. |
+
+새 도메인은 settings/KISClient/DB/runner에 직접 의존하지 않는다. 정상 `invest_bot.trading/risk` import는 기존 root의 수동적 설정 클래스 재수출을 거치지만 설정 객체를 만들거나 `from_file`을 호출하지 않는다. 테스트용 가짜 package namespace는 사용하지 않는다.
+
+현재 고정한 동작은 다음과 같다.
+
+- 실행은 `mock` + `dry_run`과 국내현물/KRW/지정가 BUY·SELL만 허용한다. 종목·세션·호가/가격·한도·비용은 주입한 명시 정책/자료를 따른다. 실제 broker 규칙을 자동 추정하지 않는다.
+- 시각은 stdlib `datetime.timezone`의 UTC/고정 offset을 받는다. `created_at <= now < expires_at`이며 만료 시각부터 거절한다. 요청/자료 age와 한도의 같음은 허용하고 초과는 거절한다. 이름 기반 timezone 변환은 신뢰된 구성 경계에서 먼저 수행한다.
+- 비용 v1은 방향별 `ceil((지정가×수량×fee_rate + fixed_fee) / cost_quantum) × cost_quantum`이다. 임의 양의 금액 단위의 배수로 올림하며 float/호출자 Decimal 정밀도에 영향받지 않는다. 주문 가격/수량은 변경하지 않는다.
+- BUY는 금액+비용, SELL은 매도 가능 수량과 기존 현금의 비용을 예약한다. 예상 매도 대금이나 가상 접수로 현금을 늘리지 않는다. 노출은 기보유 평가금액+기존 매수 미체결+미반영 로컬 매수 금액이며 현금/비용은 제외한다. 이미 한도 초과인 계좌의 매도 예외 정책은 추가하지 않았다.
+- 자료는 현금/매도 가능 수량이 기존 주문을 반영한 순가용 값임을 전제로 한다. 같은 book과 watermark의 포함 active 예약 ID·매수 노출·주문 수가 맞아야 하며, 미반영 예약만 추가 차감한다. 진짜 broker가 이를 반영했다는 인증 기능은 아니다.
+- 같은 유효 scoped ID는 거절 결과까지 같은 불변 객체로 반환한다. 변경된 정책/자료/clock은 재판정하지 않는다. 다른 fingerprint는 충돌 응답이며 기존 기록/예약은 유지한다. raw 불량 객체나 예외 repr 대신 안전한 marker를 사용하며 malformed 값의 wire 직렬화 동등성은 보장하지 않는다.
+- 결과에는 안전한 client ID·구성에서 해석된 binding/version·평가 시각을 보존한다. 미해석 binding/부적합 시각은 None이다. 공개 기록/예약/book/outcome은 불변이며 `received_at`은 승인 입력/저장 metadata로 쓰지 않는다.
+- outcome은 명시 `ACKNOWLEDGED`, `BROKER_REJECTED`, `UNKNOWN`이다. 허용 판정만 outcome을 소비한다. 명확 거절만 예약을 해제하고 UNKNOWN/스크립트 소진은 예약·계좌 차단을 유지한다. `decision.allowed`만으로 접수 성공을 표시하지 않고 `state`와 `execution_target`을 함께 읽는다. 체결 엔진/해제·재시도·unknown 해결 메서드는 없다.
+
+계좌 capture는 `(binding ID, snapshot version)`별 내용과 as-of/watermark의 역행을 검사한다. **신규 ID의 정책/시장 version→내용의 불변성·진위는 신뢰된 구성의 책임**이며 처리기가 pinning/authenticate하지 않는다. 요청자가 임의 가상 자료·정책을 구성할 수 있는 Python 프로토타입은 권한 경계나 악의적 Python reflection/resource 입력을 막는 서버가 아니다. broker 한 인스턴스를 유지해야 하며 같은 프로세스에서도 재생성하면 메모리 기록을 잃는다.
+
+다음 예제는 저장소 루트의 `PYTHONPATH=src` Python 문맥에서 [명시 가상 fixture](../../tests/t06b_order_fixture.py)를 이용하는 검증용 코드다. fixture의 수치가 운영 정책 기본값이라는 뜻은 아니다. 같은 문맥의 메인 별도 프로세스 smoke에서 정상 import·가상 접수·replay·충돌·현금 초과 거절과 금지 I/O0회를 확인했다.
+
+```python
+from tests.t06b_order_fixture import case, NOW
+from invest_bot.trading.dry_run import DryRunBroker
+from invest_bot.trading.models import VirtualOutcome
+
+c = case()
+owner = DryRunBroker(
+    bindings=(c.binding,), book_id=c.book.book_id,
+    outcomes=(VirtualOutcome.ACKNOWLEDGED,),
+)
+record = owner.execute(
+    c.intent, policy=c.policy, account=c.account, market=c.market, now=NOW,
+)
+assert record.execution_target == "dry_run"
+assert record.state == "ACKNOWLEDGED"  # 가상 접수이며 체결은 아님
+assert owner.execute(c.intent, policy=None, account=None, market=None, now=None) is record
+assert owner.execution_count == 1
+```
+
+### T06b 검증 결과 (2026-11-18)
+
+| 수행 주체/대상 | 새로 확인한 결과 |
+| --- | --- |
+| 기존 퀀트의 소유6파일 | 기능79 passed /경고0,0.11초. 기존286입력 SHA/권한 보존 |
+| 메인 최초 통합 | 관련95 passed,0.64초. 별도 clean 프로세스에서 공개 import·가상 접수·원본 replay·충돌·초과 주문 거절·추적 metadata·금지 부작용0 확인 |
+| 기존 QA의 독립 회귀 | [독립55개](../../tests/test_t06b_independent_qa.py) + 기능79개 =134 passed /경고0,0.21초. 제품 결함/수정·실패 제외0, 고정292입력 SHA/권한 보존 |
+| 메인 최종 관련 | 독립 파일 통합 후150 passed /경고0,0.69초. 위 문서 예제도 clean Python 문맥에서 실행·replay 확인 |
+| 메인 전체 기본 | 최종293입력 후보에서 **2138 passed /2 deselected /51 warnings,111.76초**, 종료0 |
+
+수치는 포함 관계이며 합산하지 않는다. Mac·Python3.13.13, 기존 pytest8.4.2/SQLAlchemy2.0.50/Streamlit1.58.0/Plotly6.8.0에서 수행했다. env-i·기존 venv·-B/PYTHONDONTWRITEBYTECODE·task-local TMPDIR/cache/basetemp/log/XML을 사용했고 실제 설정/자료를 제외한 추적 파일 격리본에서만 테스트했다. 기본 선택은 기존 `not external_network and not postgresql`이며2개를 선택 제외했다. 전체51경고는 기존 코드에서 발생했고 새 기능/독립 관련134개는 경고0이다. Linux/원격 CI·실제 KIS/운영/배포·대용량 성능은 이번에 검증하지 않았다.
+
+초기53실패는 신규 모듈 미구현 RED다. 공개 import 지시 범위를 교정한 뒤에도53 RED를 보존했고, 구현 후53개를 통과했다. 확대 단계57통과/1실패는 fresh import 중 ZoneInfo의 OS 정보 파일 참조였다. 제품의 해당 의존을 제거하고 UTC/고정 offset 경계를 명시해 기존 guard/assertion을 유지한 채67→77→79개를 통과했다. QA는49개 독립 사례의 첫128통과 뒤6개 경계를 추가해 최종134개를 통과했으며 테스트/제품 실패는 없었다. 도구 orchestration 오류2건은 별도 진단 기록으로 구분했다.
+
+전체 통과 후 Python214파일의 SHA를 고정하고 문서만 갱신했다. AST/메모리 compile·새 모듈의 허용 import/금지 I/O 호출 정적 검사와 파일 권한·실제 설정/backup/index/HEAD/branch를 대조했다. 새 lint/typecheck 도구를 설치하거나 실행했다고 주장하지 않는다. 검증 계약의 단일 원본은 이 문서이며 원문 계획·역할/메인 보고서·명세·XML/log·공개 예제 관측은 로컬 임시 `invest-bot-t06b-sgr6jt0k`에 보존한다. stage/commit/push·실제 외부 인증/전송·운영 DB/서비스는 수행하지 않았다.
+
+문서58개·로컬 참조929개·등록ID58개·개념15개/관계18개에서 오류0, HTML12페이지/문서58행/고유ID43개/로컬 참조112개/외부 자원0개·기존7앵커를 확인했다. 기존 JavaScript/스타일을 유지했고 Node 모의 DOM의 탐색/검색/인쇄 복원19개가 통과했다. HTML 실제 브라우저 배치는 이전 file 접근 제한으로 미검증이며 이번에 우회하지 않았다.
 
 ## 목적과 현재 사실
 
@@ -9,7 +75,7 @@
 
 | 확인한 사실 | 코드 근거 | 설계에 미치는 영향 |
 | --- | --- | --- |
-| 주문·리스크 패키지는 설명문만 있다. | [trading 골격](../../src/invest_bot/trading/__init__.py), [risk 골격](../../src/invest_bot/risk/__init__.py), 각1행 | 새 도메인 계약부터 시작한다. |
+| T06a 당시 패키지는 설명문뿐이었고 T06b에서 위 순수 모듈3개를 추가했다. | [trading 진입점](../../src/invest_bot/trading/__init__.py), [risk 진입점](../../src/invest_bot/risk/__init__.py)는 유지 | 새 기능은 별도 모듈의 명시 API로 호출한다. |
 | 설정은 `TradingMode.MOCK/LIVE`와 해당 URL·키를 선택한다. | [settings](../../src/invest_bot/config/settings.py),16~18·118~134행 | 설정 선택만으로 주문을 허용하지 않는다. 주문 경계에서 mock 조건을 재확인한다. |
 | KIS 클라이언트는 인증·시세용 GET을 제공하고 토큰을 캐시한다. | [KISClient](../../src/invest_bot/clients/kis_client.py),25~82·90~131행 | 검증 과정에서 생성·인증하지 않는다. 기존 시세 수집에 주문 POST를 섞지 않는다. |
 | 전략 신호와 백테스트 결과는 주문·계좌 상태가 아니다. | [전략 계약](../../src/invest_bot/strategy/base.py),9~26행; [과거 시뮬레이션](../../src/invest_bot/backtest/runner.py),15~70행 | 신호만으로 주문하지 않는다. 과거 체결가·수량·평가금액은 현재 잔고의 대체물이 아니다. |
@@ -30,7 +96,7 @@
 
 ## 제안하는 도메인 계약
 
-아래 타입·파일은 향후 구현 제안이며 아직 공개 API나 구현된 클래스가 아니다. 이름은 첫 구현에서 기존 패턴과 대조해 확정한다.
+아래는 T06a의 전체 목표 계약이다. T06b는 위 공개 API와 한계로 구현됐고, 영속/체결/복구와 관련한 나머지 필드는 T06c/d 후속이다. 전체 표가 이미 구현된 공개 클래스의 필드 목록이라는 뜻은 아니다.
 
 | 입력/결과 | 필수 정보와 의미 |
 | --- | --- |
@@ -81,7 +147,7 @@ T06b 메모리 가상 실행은 한 프로세스의 순차 호출만 모의한�
 | ID / 우선순위 | 범위와 제안 파일 | 완료 조건 | 상태 |
 | --- | --- | --- | --- |
 | T06a / P1 | 이 설계와 색인·지식·HTML. 담당 통합, 퀀트 자문→QA 문서 검토 | 현재/계획 구분, 계약·복구·검증 시나리오와 선행 관계 문서화, 독립 검토·문서 검사 오류0 | 완료 (2026-11-17 문서 설계) |
-| T06b / P1 | 순수 검증+가상 broker. 제안 `trading/models.py`, `risk/order_validation.py`, `trading/dry_run.py`와 단위 테스트 | V01~V08·V13~V15의 오프라인 범위, 인증/네트워크/운영 쓰기0, 거절 시 실행0, 같은 프로세스 중복 추가 실행0. 독립 QA·관련 회귀·고정 입력 기본 suite 통과 | 대기, T06a 뒤 |
+| T06b / P1 | 순수 검증+가상 broker. 위 구현3파일과 기능/독립 테스트 | V01~V06·V08·V13~V15의 오프라인 범위, 인증/네트워크/운영 쓰기0, 거절 시 실행0, 같은 인스턴스 중복 추가 실행0. 독립 QA·관련 회귀·고정 입력 기본 suite 통과 | 완료 (2026-11-18, 관련150·기본2138) |
 | T06c / P1 | 영속 원장·원자적 예약·대사. 제안 `trading/order_store.py`, `trading/order_service.py`, 임시 SQLite 통합 회귀 | V06~V15의 영속 범위, 다중 프로세스 중복 전송0·초과 예약0·재시작 후 미확정 보존·자동재전송0. 저장 위치/DB 계약은 착수 시 결정, 운영 migration은 분리 | 대기, T06b 뒤 |
 | T06d / P2 | KIS 모의 전용 어댑터. 제안 `clients/kis_order_client.py`, 주입 session 계약 테스트 | 공식 규격·mock 지원·계좌/비밀정보 처리·timeout/접수/체결 매핑 확인, 전송 직전 mock 일치 확인, fake session의 V01·V09~V15 통과 | 보류, T06c와 아래 게이트 뒤 |
 
@@ -136,7 +202,7 @@ T06c의 동시성·재시작·저장 실패는 실제 임시 DB와 독립 프로
 
 ## 남은 기능
 
-- [ ] T06b 순수 주문 계약·리스크 검증·가상 실행
+- [x] T06b 순수 주문 계약·리스크 검증·가상 실행 (한 인스턴스 순차 메모리 범위)
 - [ ] T06c 영속 원장·중복/예약·미확정 복구
 - [ ] T06d KIS 모의 전용 어댑터·공식 규격 대조
 - [ ] 실제 모의 계좌/잔고·주문 가능 수량/현금 조회·접수/체결 대사 검증

@@ -1,6 +1,6 @@
 # 개념과 구현 근거
 
-최초 기준은 2026-09-17, 제품 커밋 `569cd97`이며 최신 대조는 2026-11-17 main `6595f67` + Task06 설계 완료 문서 작업본 기준이다. URL 표시·SQL 계측 보완이 반영된 `b34219f`의 기본2004개·PostgreSQL2개 통과는 [QA04 기록](../operations/improvements/qa.md#qa04)을 따른다. [Task06 주문·리스크](../tasks/06_trading_risk.md)의 요청/검증/원장 계약은 제안이며 아직 구현 개념으로 등록하지 않는다. 이번에는 제품 구현을 변경하지 않았다. 저장 신호·날짜·차트 수급 계약과 이후 보충 수집·비교·슬라이딩 연구는 각 연결 문서의 기능별 커밋과 검증 범위를 따른다. 이 페이지는 핵심 개념의 지도이며 모든 소스 코드를 설명하는 명세는 아니다.
+최초 기준은 2026-09-17, 제품 커밋 `569cd97`이며 최신 대조는 2026-11-18 main `0c909fd` + T06b 검토 작업본 기준이다. [Task06](../tasks/06_trading_risk.md)의 오프라인 주문 검증·순차 메모리 가상 실행을 K-ORDER로 등록한다. 기능79개·독립55개·메인 최종 관련150개/기본2138개와 부작용 차단 smoke를 통과했다. 영속 원장/대사·KIS 모의 연결은 제안으로 구분한다. 과거 `b34219f`의 원격 기본2004개·PostgreSQL2개는 [QA04 기록](../operations/improvements/qa.md#qa04)이며 새 기능의 원격 결과가 아니다. 기존 데이터/차트·전략·연구 계약은 연결 문서의 기능별 검증을 따른다. 이 페이지는 핵심 개념의 지도이며 전체 소스 명세가 아니다.
 
 ## 개념 사전
 
@@ -20,6 +20,7 @@
 | K-HISTORY | 명시적 시작일·종료일의 가격·수급을 구간별로 보충하고 별도 history snapshot을 남기는 경로. 일반 수집 G08a의 기간 확보와 신규 상장 처리 완료를 뜻하지 않는다. | [보충 수집 job](../../src/invest_bot/jobs/backfill_history.py), [CLI](../../scripts/run_historical_collection.py) | [전용 회귀](../../tests/test_backfill_history.py), [검증 범위](../tasks/02_data_collection.md#보충-수집-검증-범위) |
 | K-COMPARISON | 같은 평가기간과 초기자금에서 전략별 일별 평가금액을 가격 매수 후 보유와 비교한다. 이 리포트의 비용·배당0 가정을 슬라이딩 연구의 비용 시나리오와 구분한다. | [비교 job](../../src/invest_bot/jobs/backtest_comparison.py), [HTML 생성기](../../scripts/render_backtest_comparison.py) | [비교 회귀](../../tests/test_backtest_comparison.py), [검증 범위](../tasks/05_strategy_backtest.md#비교-리포트-검증-범위) |
 | K-ROLLING | 고정된 로컬 CSV에서 슬라이딩 창마다 현금으로 다시 시작해 단일 전략·신호 혼합·독립 자금배분을 비교하는 연구. 겹친 창 분포와 비중복 테스트 블록의 시간순 선택을 구분하며, 대시보드 조합 저장·재로드 G08c와는 별도다. | [연구 job](../../src/invest_bot/jobs/rolling_backtest_research.py), [HTML 생성기](../../scripts/render_rolling_backtest_report.py) | [연구 회귀](../../tests/test_rolling_backtest_research.py), [HTML 회귀](../../tests/test_rolling_report_renderer.py), [검증 범위](../tasks/05_strategy_backtest.md#슬라이딩-연구-검증-범위) |
+| K-ORDER | 명시 가상 binding·정책·계좌/시장 자료로 지정가 요청을 검증하고 한 처리기 인스턴스의 순차 메모리 예약·원본 결과 replay·가상 ACK/거절/UNKNOWN을 처리한다. 실제 KIS 접수/체결·영속 보장을 뜻하지 않는다. [현재 계약](../tasks/06_trading_risk.md#t06b-공개-api와-구현-범위). | [불변 모델](../../src/invest_bot/trading/models.py), [검증](../../src/invest_bot/risk/order_validation.py), [가상 처리](../../src/invest_bot/trading/dry_run.py) | [검증 회귀](../../tests/test_t06b_order_validation.py), [가상 처리 회귀](../../tests/test_t06b_dry_run.py), [독립 QA](../../tests/test_t06b_independent_qa.py) |
 
 ## 관계
 
