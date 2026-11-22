@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | D-OKF | [OKF](../../OKF.md) | policy | active | 통합 · 지식 관리 규약 |
 | D-HOME | [지식 홈](../README.md) | index | active | 통합 · 질문별 탐색 |
-| D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·설치/화면 사용법·최근 개선·설정/로그·OKF 검색; 2026-11-18 main 0c909fd + T06b 검토 작업본; 12페이지·문서 분할 탐색 |
+| D-GUIDE | [프로젝트·OKF HTML 안내서](../project-guide.html) | index | active | 통합 · 전체 구조·설치/화면 사용법·최근 개선·설정/로그·OKF 검색 · 2026-11-21 T06c 검토 작업본 · 12페이지 |
 | D-CATALOG | [문서 등록부](catalog.md) | index | active | 통합 · 문서 역할과 상태 |
 | D-CONCEPTS | [개념 지도](concepts.md) | concept | active | 통합 · 수집 범위·분석 준비·오프라인 주문·핵심 개념·보충 수집·비교·슬라이딩 연구의 구현/검증 근거 |
 | D-TEMPLATE | [작성 양식](template.md) | policy | active | 통합 · 새 문서 작성 |
@@ -29,7 +29,7 @@
 | D-ANALYSIS | [분석](../tasks/03_analysis.md) | status | active | 퀀트 · 지표 작업 |
 | D-DASHBOARD | [대시보드](../tasks/04_dashboard.md) | status | active | 대시보드 · 현재 UI·G05a 수급·G05b 날짜·G06a 실행 안내·G06b 가독성·QA02 독립 검증과 고립 관측점·G08b 입력 범위/실제 모바일·G08c 명시 저장/이력·G06c 카드/필터·G08d 자동 반응형 차트/글자 하한; 날짜별 증거 구분 |
 | D-BACKTEST | [전략·백테스트](../tasks/05_strategy_backtest.md) | status | active | 퀀트 · 구현된 전략·G08b 입력 범위·G08c 구성 설정/출처/명시 저장/호환 계약·매수 후 보유 비교·슬라이딩 혼합 연구 |
-| D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | status | active | 통합·퀀트·QA · T06b 순수 검증·순차 메모리 예약/중복·가상 접수; 영속 원장/대사·KIS 모의 연결은 후속 |
+| D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | status | active | 통합·퀀트·QA · 오프라인 주문 검증·SQLite 상태/예약·미확정 결과 확인 · KIS 모의 연결 대기 |
 | D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 시작·재시작 사전검증·유한 준비 확인, 공개/내부 포트, 스케줄러 실패 대기·시도 상한, 설정 타입·초기화·로그·Git 관리 경계 |
 | D-SESSIONS | [개선 작업 추적](../operations/improvement_sessions_2026-09-13.md) | status | active | 통합 · 역할별 단일 작업·순차 실행 |
 | D-IMPROVEMENTS | [개선 작업 색인](../operations/improvements/README.md) | index | active | 통합 · 다음 작업·우선순위·역할별 상태의 진입점 |
