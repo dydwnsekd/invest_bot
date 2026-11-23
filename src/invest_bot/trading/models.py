@@ -1,4 +1,4 @@
-"""Pure virtual-order values. No settings, transport, storage or real clock."""
+"""Pure order values. No settings, transport, storage or real clock."""
 from dataclasses import dataclass, fields
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -6,6 +6,9 @@ from enum import StrEnum
 import hashlib
 import json
 import re
+
+
+ORDER_TARGETS = frozenset({"dry_run", "kis_mock"})
 
 
 class Side(StrEnum):
@@ -204,9 +207,10 @@ def aware(value: object) -> bool:
         return False
 
 
-def order_key(intent: object) -> tuple[str, str, str, str] | None:
-    if (type(intent) is OrderIntent and type(intent.mode) is str and intent.mode == "mock"
-            and type(intent.execution_target) is str and intent.execution_target == "dry_run"
+def order_key(intent: object, *, execution_target: str = "dry_run") -> tuple[str, str, str, str] | None:
+    if (type(execution_target) is str and execution_target in ORDER_TARGETS
+            and type(intent) is OrderIntent and type(intent.mode) is str and intent.mode == "mock"
+            and type(intent.execution_target) is str and intent.execution_target == execution_target
             and valid_id(intent.account_binding_id) and valid_id(intent.client_order_id)):
         return intent.execution_target, intent.mode, intent.account_binding_id, intent.client_order_id
     return None

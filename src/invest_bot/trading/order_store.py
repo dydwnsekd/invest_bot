@@ -1,4 +1,4 @@
-"""Explicit, local SQLite ledger for synthetic virtual orders only.
+"""Explicit local SQLite ledgers for virtual orders and KIS mock orders.
 
 Bootstrap and reopen are separate operations. The seal detects accidental loss
 or edits; it is not authentication against an operator able to replace/seal a
@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from fractions import Fraction
 import fcntl
 import hashlib
 import json
@@ -19,7 +20,7 @@ from urllib.parse import quote
 import uuid
 
 from .models import AccountBinding, ReasonCode, Reservation, ReservationBook, RiskDecision, Side, valid_id
-from ..risk.order_validation import _binding_valid
+from ..risk.order_validation import _binding_valid, _decimal
 
 
 class LedgerUnavailable(RuntimeError):
@@ -50,6 +51,16 @@ class LedgerOrder:
     execution_target: str = "dry_run"
 
 
+@dataclass(frozen=True, slots=True)
+class FillReceipt:
+    event_id: str
+    order_id: str
+    cumulative_qty: int
+    cumulative_notional: Decimal
+    revision: int
+    observed_at: datetime
+
+
 SCHEMA = {
     "meta": "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "bindings": "CREATE TABLE bindings (alias TEXT PRIMARY KEY, binding_id TEXT NOT NULL UNIQUE, version TEXT NOT NULL, mode TEXT NOT NULL CHECK(mode='mock'), target TEXT NOT NULL CHECK(target='dry_run'))",
@@ -59,6 +70,14 @@ SCHEMA = {
     "audits": "CREATE TABLE audits (revision INTEGER PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(order_id), action TEXT NOT NULL, at TEXT, proof_digest TEXT)",
 }
 APPLICATION_ID = 0x49424F31
+# Keep the original dry-run file format byte-compatible. Require an explicit
+# target and a separate application ID and registry for a KIS mock ledger.
+_KIS_MOCK_SCHEMA = dict(SCHEMA)
+_KIS_MOCK_SCHEMA["bindings"] = SCHEMA["bindings"].replace("target='dry_run'", "target='kis_mock'")
+_LEDGER_FORMATS = {
+    "dry_run": (SCHEMA, APPLICATION_ID),
+    "kis_mock": (_KIS_MOCK_SCHEMA, 0x49424F32),
+}
 
 
 def encode(value):
@@ -89,7 +108,7 @@ def record(row):
         datetime.fromisoformat(data["evaluated_at"]) if data["evaluated_at"] else None,
         data["broker_order_id"], Decimal(data["reserved_cash"]), data["reserved_qty"],
         Decimal(data["reserved_exposure"]), data["remaining_qty"], data["cumulative_qty"],
-        Decimal(data["cumulative_notional"]),
+        Decimal(data["cumulative_notional"]), json.loads(row["scope"])[0],
     )
 
 
@@ -100,28 +119,36 @@ class OrderStore:
     seal in a single snapshot. No opening path creates, migrates or repairs DBs.
     """
 
-    def __init__(self, path, identity):
+    def __init__(self, path, identity, execution_target="dry_run"):
         self.path, self._identity, self._ledger_id = path, identity, None
+        self._execution_target = execution_target
         self.barrier_path = path.with_name(path.name + ".sender-lock")
 
+    @property
+    def execution_target(self):
+        return self._execution_target
+
     @classmethod
-    def bootstrap(cls, path, *, book_id, bindings):
-        if (not valid_id(book_id) or type(bindings) is not tuple or not bindings
-                or not all(_binding_valid(b) for b in bindings)
+    def bootstrap(cls, path, *, book_id, bindings, execution_target="dry_run"):
+        if (type(execution_target) is not str or execution_target not in _LEDGER_FORMATS
+                or not valid_id(book_id) or type(bindings) is not tuple or not bindings
+                or (execution_target == "kis_mock" and len(bindings) != 1)
+                or not all(_binding_valid(b, execution_target) for b in bindings)
                 or len({b.alias for b in bindings}) != len(bindings)
                 or len({b.binding_id for b in bindings}) != len(bindings)):
             raise LedgerUnavailable("invalid virtual ledger bootstrap")
         path = Path(path).absolute()
+        schema, application_id = _LEDGER_FORMATS[execution_target]
         try:
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
             os.close(fd)
-            store = cls(path, cls._file_identity(path))
+            store = cls(path, cls._file_identity(path), execution_target)
             con = store._connect()
             try:
                 con.execute("BEGIN IMMEDIATE")
-                for statement in SCHEMA.values():
+                for statement in schema.values():
                     con.execute(statement)
-                con.execute(f"PRAGMA application_id={APPLICATION_ID}")
+                con.execute(f"PRAGMA application_id={application_id}")
                 con.execute("PRAGMA user_version=1")
                 ledger_id = uuid.uuid4().hex
                 lock_fd = os.open(store.barrier_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
@@ -140,16 +167,18 @@ class OrderStore:
                 store._commit(con)
             finally:
                 con.close()
-            return cls.open(path)
+            return cls.open(path, execution_target=execution_target)
         except Exception:
             # A failed bootstrap leaves the explicit path for operator review.
             raise LedgerUnavailable("virtual ledger bootstrap failed") from None
 
     @classmethod
-    def open(cls, path):
+    def open(cls, path, *, execution_target="dry_run"):
         try:
+            if type(execution_target) is not str or execution_target not in _LEDGER_FORMATS:
+                raise LedgerUnavailable("unsupported ledger target")
             path = Path(path).absolute()
-            store = cls(path, cls._file_identity(path))
+            store = cls(path, cls._file_identity(path), execution_target)
             with store.transaction() as con:
                 store._ledger_id = store._meta(con, "ledger_id")
             return store
@@ -198,7 +227,8 @@ class OrderStore:
     def _verify(self, con):
         actual = {row["name"]: row["sql"] for row in con.execute(
             "SELECT name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_autoindex_%'")}
-        if actual != SCHEMA or con.execute("PRAGMA application_id").fetchone()[0] != APPLICATION_ID:
+        schema, application_id = _LEDGER_FORMATS[self.execution_target]
+        if actual != schema or con.execute("PRAGMA application_id").fetchone()[0] != application_id:
             raise LedgerUnavailable("ledger schema mismatch")
         if con.execute("PRAGMA user_version").fetchone()[0] != 1:
             raise LedgerUnavailable("ledger version mismatch")
@@ -289,6 +319,30 @@ class OrderStore:
     def orders(self):
         with self.transaction() as con:
             return tuple(record(row) for row in con.execute("SELECT * FROM orders ORDER BY order_id"))
+
+    def bindings(self):
+        with self.transaction() as con:
+            return tuple(AccountBinding(*row) for row in con.execute(
+                "SELECT alias,binding_id,version,mode,target FROM bindings ORDER BY alias"
+            ))
+
+    def fill_receipts(self, account_binding_id):
+        """Return observations a trusted balance capture can match to its fills."""
+        with self.transaction() as con:
+            receipts = []
+            rows = con.execute(
+                "SELECT event_id,order_id,revision,payload FROM events WHERE binding_id=? AND filled=1 ORDER BY revision",
+                (account_binding_id,),
+            )
+            for row in rows:
+                data = json.loads(row["payload"])
+                _, numerator, denominator = data["cumulative_notional"]
+                receipts.append(FillReceipt(
+                    row["event_id"], row["order_id"], data["cumulative_qty"],
+                    _decimal(Fraction(int(numerator), int(denominator))),
+                    row["revision"], datetime.fromisoformat(data["observed_at"]),
+                ))
+            return tuple(receipts)
 
     def _book(self, con):
         entries = []

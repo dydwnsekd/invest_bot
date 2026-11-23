@@ -1,4 +1,4 @@
-"""Durable one-shot virtual dispatch and explicit synthetic reconciliation.
+"""Durable one-shot dispatch and explicit reconciliation for mock orders.
 
 The injected sender is synchronous: it must not retain dispatch capability or
 queue/detach work after returning. No real broker, settings or network adapters
@@ -134,13 +134,14 @@ class OrderService:
                        remaining_qty=0)
 
     def submit(self, intent, *, context, send):
-        key, fingerprint = order_key(intent), order_fingerprint(intent)
+        target = self.store.execution_target
+        key, fingerprint = order_key(intent, execution_target=target), order_fingerprint(intent)
         if key is None:
             wrong_mode = (type(intent) is OrderIntent and
                           (type(intent.mode) is not str or intent.mode != "mock"
-                           or type(intent.execution_target) is not str or intent.execution_target != "dry_run"))
+                           or type(intent.execution_target) is not str or intent.execution_target != target))
             reason = ReasonCode.MODE_NOT_ALLOWED if wrong_mode else ReasonCode.INVALID_ORDER
-            return LedgerOrder(None, "REJECTED", decision((reason,), fingerprint), fingerprint)
+            return LedgerOrder(None, "REJECTED", decision((reason,), fingerprint), fingerprint, execution_target=target)
         scope = encode(key)
         # Fast immutable replay, repeated under the write lock for a new claim.
         with self.store.transaction() as con:
@@ -174,7 +175,7 @@ class OrderService:
                             if (self.kill_switch() is False and type(current) is ValidationContext
                                     and current.binding == binding):
                                 result = validate_order(intent, binding, current.policy, current.account,
-                                                        current.market, book, now=now)
+                                                        current.market, book, now=now, execution_target=target)
                     except Exception:
                         # No raw callback errors are recorded or exposed as broker rejection.
                         result = decision((ReasonCode.RECONCILIATION_REQUIRED,), fingerprint)
@@ -209,13 +210,46 @@ class OrderService:
             # A commit error (even one reported after the commit) cannot reach here.
             if not active:
                 return pending
-            dispatch = Dispatch(order_id, binding.binding_id, binding.version, intent.symbol,
-                                Side(intent.side), intent.qty, intent.limit_price)
+            if target == "kis_mock" and not self._dispatch_still_allowed(intent, current, book, now):
+                return self._finish(order_id, token, None, locally_skipped=True)
+            dispatch = self._dispatch_for(pending, data)
             try:
                 reply = send(dispatch)
             except Exception:
                 reply = None
             return self._finish(order_id, token, reply)
+
+    def _dispatch_still_allowed(self, intent, current, book, claimed_at):
+        try:
+            now = self.clock()
+            if not aware(now) or now < claimed_at or self.kill_switch() is not False:
+                return False
+            return validate_order(
+                intent, current.binding, current.policy, current.account, current.market,
+                book, now=now, execution_target=self.store.execution_target,
+            ).allowed
+        except Exception:
+            return False
+
+    @staticmethod
+    def _dispatch_for(order, data):
+        return Dispatch(
+            order.order_id, order.account_binding_id, order.binding_version,
+            data["symbol"], Side(data["side"]), data["qty"], Decimal(data["limit_price"]),
+            execution_target=order.execution_target,
+        )
+
+    def _lookup_claim(self, order_id):
+        with self.store.transaction() as con:
+            row = self.store._find(con, order_id)
+            if row is None:
+                return None
+            order = record(row)
+            data = json.loads(row["payload"])
+            dispatch = None
+            if order.broker_order_id is not None and order.state not in TERMINAL:
+                dispatch = self._dispatch_for(order, data)
+            return order, dispatch, data["event_sequence"]
 
     def _capture(self, con, binding, current):
         account, settled = current.account, current.settled_event_ids
@@ -245,13 +279,13 @@ class OrderService:
                         capture_digest, _time(account.captured_at), account.reservation_watermark))
         return True
 
-    def _finish(self, order_id, token, reply):
+    def _finish(self, order_id, token, reply, *, locally_skipped=False):
         with self.store.transaction(write=True) as con:
             row = self.store._find(con, order_id)
             data = json.loads(row["payload"])
             if row["state"] != "SUBMITTING" or row["sender_active"] != 1 or data["sender_token"] != token:
                 raise EvidenceRejected("CLAIM_MISMATCH")
-            status, broker_id = "UNKNOWN", None
+            status, broker_id = ("NOT_ACCEPTED" if locally_skipped else "UNKNOWN"), None
             if (type(reply) is SubmissionReply and type(reply.order_id) is str and reply.order_id == order_id
                     and type(reply.account_binding_id) is str and reply.account_binding_id == row["binding_id"]
                     and reply.confirmed is True and type(reply.status) is str):
@@ -262,8 +296,9 @@ class OrderService:
                       and (reply.broker_order_id is None or self._broker_available(con, order_id, row["binding_id"], reply.broker_order_id))):
                     status, broker_id = reply.status, reply.broker_order_id
             data["broker_order_id"], data["sender_token"] = broker_id, None
-            revision = self.store._audit(con, order_id, "SEND_" + status, data["evaluated_at"])
-            if status == "BROKER_REJECTED":
+            action = "SEND_SKIPPED" if locally_skipped else "SEND_" + status
+            revision = self.store._audit(con, order_id, action, data["evaluated_at"])
+            if status in {"BROKER_REJECTED", "NOT_ACCEPTED"}:
                 self._release(data, revision)
             self.store._update(con, order_id, status, False, data)
             result = record(self.store._find(con, order_id))

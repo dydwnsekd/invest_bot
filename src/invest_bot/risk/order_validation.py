@@ -1,11 +1,11 @@
-"""Deterministic, explicit-input validation for the virtual-only order scope."""
+"""Deterministic validation for explicit virtual and KIS mock order inputs."""
 from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
 from fractions import Fraction
 
 from ..trading.models import (
-    AccountBinding, AccountSnapshot, MarketSnapshot, OrderIntent, Position,
+    ORDER_TARGETS, AccountBinding, AccountSnapshot, MarketSnapshot, OrderIntent, Position,
     ReasonCode, Reservation, ReservationBook, RiskDecision, RiskPolicy, Side,
     aware, order_fingerprint, valid_id,
 )
@@ -44,20 +44,20 @@ def _decimal(value: Fraction) -> Decimal:
     return Decimal((int(numerator < 0), tuple(int(digit) for digit in str(coefficient)), -scale))
 
 
-def _binding_valid(binding):
+def _binding_valid(binding, execution_target="dry_run"):
     return (type(binding) is AccountBinding and all(valid_id(value) for value in (binding.alias, binding.binding_id, binding.version))
             and type(binding.mode) is str and binding.mode == "mock"
-            and type(binding.execution_target) is str and binding.execution_target == "dry_run")
+            and type(binding.execution_target) is str and binding.execution_target == execution_target)
 
 
-def _policy_valid(policy):
+def _policy_valid(policy, execution_target):
     if type(policy) is not RiskPolicy:
         return False
     money = (policy.max_order_notional, policy.max_symbol_exposure, policy.max_account_exposure, policy.max_fee,
              policy.buy_fee_rate, policy.sell_fee_rate, policy.buy_fixed_fee, policy.sell_fixed_fee)
     ages = (policy.max_request_age, policy.max_request_lifetime, policy.max_snapshot_age, policy.max_market_age, policy.max_valuation_age)
     return (valid_id(policy.version) and type(policy.mode) is str and policy.mode == "mock"
-            and type(policy.execution_target) is str and policy.execution_target == "dry_run"
+            and type(policy.execution_target) is str and policy.execution_target == execution_target
             and all(_ids(items) for items in (policy.allowed_symbols, policy.allowed_markets, policy.allowed_sessions))
             and all(_money(value) for value in money) and _money(policy.cost_quantum, positive=True)
             and _integer(policy.max_open_orders) and all(type(age) is timedelta and age >= timedelta(0) for age in ages))
@@ -82,7 +82,7 @@ def _account_valid(account, binding, policy, book, now):
     if type(account) is not AccountSnapshot or not _book_valid(book):
         return False
     if (not all(valid_id(v) for v in (account.version, account.valuation_source_id, account.book_id))
-            or type(account.execution_target) is not str or account.execution_target != "dry_run"
+            or type(account.execution_target) is not str or account.execution_target != binding.execution_target
             or type(account.mode) is not str or account.mode != "mock" or type(account.currency) is not str or account.currency != "KRW"
             or any(type(v) is not str for v in (account.account_alias, account.account_binding_id, account.binding_version))
             or (account.account_alias, account.account_binding_id, account.binding_version) != (binding.alias, binding.binding_id, binding.version)
@@ -118,7 +118,7 @@ def _account_valid(account, binding, policy, book, now):
 
 def _market_valid(market, intent, policy, now):
     return (type(market) is MarketSnapshot and all(valid_id(v) for v in (market.version, market.calendar_source_id, market.calendar_version))
-            and type(market.execution_target) is str and market.execution_target == "dry_run"
+            and type(market.execution_target) is str and market.execution_target == intent.execution_target
             and type(market.mode) is str and market.mode == "mock"
             and type(market.symbol) is str and market.symbol == intent.symbol
             and type(market.market) is str and market.market == intent.market
@@ -137,21 +137,23 @@ def decision(reasons, fingerprint=None, policy=None, account=None, market=None, 
                         ZERO if reasons else cash, 0 if reasons else qty, ZERO if reasons else exposure)
 
 
-def validate_order(intent, binding, policy, account, market, book, *, now) -> RiskDecision:
+def validate_order(intent, binding, policy, account, market, book, *, now, execution_target="dry_run") -> RiskDecision:
     """Validate only explicit evidence; malformed objects never escape in errors."""
     fingerprint = order_fingerprint(intent)
     try:
-        result = _validate(intent, binding, policy, account, market, book, now, fingerprint)
+        result = _validate(intent, binding, policy, account, market, book, now, fingerprint, execution_target)
         return replace(result, book_revision=book.revision) if result.account_version is not None else result
     except Exception:
         return decision((ReasonCode.INVALID_ORDER,), fingerprint)
 
 
-def _validate(intent, binding, policy, account, market, book, now, fingerprint):
+def _validate(intent, binding, policy, account, market, book, now, fingerprint, execution_target):
     reasons = []
     if type(intent) is not OrderIntent:
         return decision((ReasonCode.INVALID_ORDER,))
-    if type(intent.mode) is not str or intent.mode != "mock" or type(intent.execution_target) is not str or intent.execution_target != "dry_run":
+    if (type(execution_target) is not str or execution_target not in ORDER_TARGETS
+            or type(intent.mode) is not str or intent.mode != "mock"
+            or type(intent.execution_target) is not str or intent.execution_target != execution_target):
         reasons.append(ReasonCode.MODE_NOT_ALLOWED)
     if (type(intent.schema_version) is not int or intent.schema_version != 1 or fingerprint is None
             or not all(valid_id(v) for v in (intent.client_order_id, intent.account_alias, intent.account_binding_id,
@@ -161,12 +163,16 @@ def _validate(intent, binding, policy, account, market, book, now, fingerprint):
             or type(intent.currency) is not str or intent.currency != "KRW"
             or type(intent.market) is not str or intent.market != "domestic_stock"
             or type(intent.order_type) is not str or intent.order_type != "LIMIT"
-            or not aware(intent.created_at) or not aware(intent.expires_at) or not _binding_valid(binding)
+            or not aware(intent.created_at) or not aware(intent.expires_at) or not _binding_valid(binding, execution_target)
             or (intent.account_alias, intent.account_binding_id, intent.binding_version) != (binding.alias, binding.binding_id, binding.version)):
         reasons.append(ReasonCode.INVALID_ORDER)
     if reasons:
         return decision(reasons, fingerprint)
-    if not _policy_valid(policy):
+    if execution_target == "kis_mock" and (len(intent.symbol) != 6 or not intent.symbol.isascii()
+                                                    or not intent.symbol.isdigit()
+                                                    or intent.limit_price.as_integer_ratio()[1] != 1):
+        return decision((ReasonCode.INVALID_ORDER,), fingerprint)
+    if not _policy_valid(policy, execution_target):
         return decision((ReasonCode.POLICY_REQUIRED,), fingerprint)
     if (not aware(now) or not intent.created_at <= now < intent.expires_at
             or now-intent.created_at > policy.max_request_age
