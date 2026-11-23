@@ -1,7 +1,37 @@
 # Task 06. Trading And Risk
 
 > OKF ID: `D-TRADING` · 종류: `status` · 상태: `active` · 관리: 통합, 퀀트 구현·QA 검증
-> 현재 기준은 2026-11-21 main `e2bc29a`와 T06c 검토 작업본이다.
+> 현재 기준은 2026-11-22 main `39557f0`과 T06d 검토 작업본이다.
+
+## T06d KIS 모의 주문과 체결 확인
+
+한국투자증권 모의 계좌의 국내 현물 KRX 지정가 매수·매도와 주문·체결 확인을 구현했다. 운영 연결 전 검증은 가짜 전송 세션과 임시 SQLite에서 수행했다.
+
+| 공개 진입점 | 역할 |
+| --- | --- |
+| [`KISMockCredentials`, `KISMockOrderClient`](../../src/invest_bot/clients/kis_order_client.py) | 모의 계좌·앱 키/시크릿·만료가 명시된 토큰·모의 URL·전송 세션을 받는다. 거래소 KRX와 종합계좌 상품 `01`을 사용한다. 토큰 발급이나 캐시 자동 사용 없이 지정한 토큰을 확인한다. |
+| [`OrderStore.bootstrap/open(..., execution_target="kis_mock")`](../../src/invest_bot/trading/order_store.py) | 가상 실행(`dry_run`)과 파일 형식이 구분되는 단일 모의 계좌 원장을 연다. 기존 가상 원장 형식과 재조회는 유지한다. 계좌·상품·앱 키 범위는 비밀 키를 사용해 만든 식별자로 확인한다. |
+| [`KISMockOrders(store, client, *, clock, kill_switch)`](../../src/invest_bot/trading/kis_mock_orders.py) | 원장과 어댑터의 계좌 바인딩이 맞을 때만 구성한다. `submit(intent, context=...)`는 리스크 검증·예약·선점을 기록한 후 주문을 한 번 보낸다. `refresh(order_id)`는 해당 원장에 저장된 주문 번호만 조회한다. `fill_receipts()`로 원장에 적용한 체결 증거를 읽는다. |
+
+- **주문은 예약 저장 후 1회.** 저장을 마친 뒤 중지 스위치와 시각·자료의 유효성을 다시 검사한다. 이 검사에서 차단되면 송신 없이 예약을 해제하고 `SEND_SKIPPED`로 남긴다. 접수 결과는 주문일·지점·번호·시각으로 저장한다. 주문 접수와 체결은 개별 상태로 관리한다.
+- **근거가 생길 때만 예약 갱신.** 타임아웃·비정상 HTTP 응답·누락된 식별자는 `UNKNOWN`으로 남는다. 주문 번호가 없는 경우 예약과 계좌 차단을 유지한다. 주문 번호가 있는 경우 완결된 조회의 유일한 일치 응답에서 부분/전량 체결·확정 취소·명시 전량 거절을 확인한다. 중복 관측을 반복 적용하지 않는다. 체결 뒤 새 주문은 체결을 반영한 잔고 자료와 원장 기준 시각·버전을 확인해야 한다.
+- **명시 구성.** 사용자가 준 모의 토큰과 동기식 전송 세션만 사용한다. 일반 `requests.Session`은 재시도·별도 경로 설정·리디렉션·환경 프록시를 차단한 구성만 허용한다. 다른 주입 전송기는 요청당 1회 호출 준수와 민감정보 보호가 전제다. 가상 실행과 모의투자의 계좌 및 기록을 분리한다. 같은 모의 계좌의 참여자는 동일 원장을 사용한다. 주문 기능은 명시 Python 진입점에서 실행한다.
+
+### KIS 공식 자료에서 확인한 계약 (2026-11-22)
+
+| 항목 | 적용한 규격 | 근거 |
+| --- | --- | --- |
+| 대상 | 모의투자 HTTPS `openapivts.koreainvestment.com:29443`, 종합계좌 상품 `01`, 계좌 8자리. 모의 키·토큰과 계좌는 호출자가 명시 제공한다. | [KIS 모의 설정 예제](https://github.com/koreainvestment/open-trading-api/blob/main/kis_devlp.yaml), [개발자센터 인증 및 주문](https://apiportal.koreainvestment.com/apiservice) |
+| 국내 현금 지정가 | `POST /uapi/domestic-stock/v1/trading/order-cash`, 매수 `VTTC0012U`, 매도 `VTTC0011U`, `ORD_DVSN=00`, 거래소 `KRX`. 수량·가격은 문자열이다. 응답의 주문번호·거래소 전달 조직·주문시각을 접수 식별에 사용한다. | [현금 주문 예제](https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/order_cash/order_cash.py), [접수 응답 필드](https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/order_cash/chk_order_cash.py) |
+| 최근 주문·체결 조회 | `GET /uapi/domestic-stock/v1/trading/inquire-daily-ccld`, 모의 3개월 이내 `VTTC0081R`. 모의 페이지는 최대 15건이며, `M/F`와 연속 키를 받으면 `N`으로 다음 페이지를 요청한다. 날짜·종목·방향·주문번호·원 주문의 수량과 가격 및 누적 체결량/금액을 대조한다. | [일별 주문·체결 조회 예제](https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_daily_ccld/inquire_daily_ccld.py), [체결 응답 필드](https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_daily_ccld/chk_inquire_daily_ccld.py) |
+
+공식 예제에는 모의 연속 조회 간격 0.5초가 쓰인다. 실제 호출 한도와 조회 반영 지연은 계좌 연결 검증에서 확인할 항목이다. 접수 번호 없는 타임아웃을 특정 주문에 연결하거나, 빈 조회만으로 미접수를 확정할 근거는 확인하지 못했다. 조회 응답도 주문 식별·수량·금액이 모두 맞는 경우에만 원장에 반영한다. 실측할 항목에는 지점 필드 일치, 응답의 숫자 표현과 페이지 완결성, 잔고에 체결이 반영되는 시점이 포함된다. [KIS 공통 조회 예제](https://github.com/koreainvestment/open-trading-api/blob/main/examples_user/kis_auth.py)
+
+### 검증과 실제 계좌 연결 범위
+
+어댑터 계약 122개, 메인 원장 연결·전송 경계 21개, 독립 QA 8개를 검증했다. 기존 주문·화면 회귀를 포함한 관련 349개와 전체 기본 **2,350개**가 통과했다(2개 선택 제외, 기존 경고 51개, 112.92초). 이전 버전에서 생성한 가상 주문 DB를 별도 프로세스로 다시 열고 재제출 시 새 주문이 생성되지 않으며 파일이 그대로임을 확인했다. [어댑터 테스트](../../tests/test_t06d_kis_order_client.py) · [원장 연결 테스트](../../tests/test_t06d_kis_mock_orders.py) · [독립 QA](../../tests/test_t06d_independent_qa.py)
+
+실제 모의 인증·토큰 발급·주문과 체결 응답은 별도 검증 단계다. 주문량과 호출 빈도, 시장·잔고 자료의 출처 및 체결 반영 시점을 그 단계에서 확인한다. 주문 결과가 불명이고 주문번호가 없는 경우는 현재도 확인 근거가 필요하다. 예약을 유지하고 자동 조회로 추정하거나 같은 주문을 다시 보내지 않는다.
 
 ## T06c 주문 원장과 결과 불명 복구
 
@@ -168,7 +198,7 @@ T06b 메모리 가상 실행은 한 프로세스의 순차 호출만 모의한�
 | T06a / P1 | 이 설계와 색인·지식·HTML. 담당 통합, 퀀트 자문→QA 문서 검토 | 현재/계획 구분, 계약·복구·검증 시나리오와 선행 관계 문서화, 독립 검토·문서 검사 오류0 | 완료 (2026-11-17 문서 설계) |
 | T06b / P1 | 순수 검증+가상 broker. 위 구현3파일과 기능/독립 테스트 | V01~V06·V08·V13~V15의 오프라인 범위, 인증/네트워크/운영 쓰기0, 거절 시 실행0, 같은 인스턴스 중복 추가 실행0. 독립 QA·관련 회귀·고정 입력 기본 suite 통과 | 완료 (2026-11-18, 관련150·기본2138) |
 | T06c / P1 | 전용 SQLite 원장과 가상 주문 예약·대사 | 실제 임시 DB와 독립 프로세스에서 중복 전송·초과 예약·자동 재전송 0회, 재시작 후 미확정과 예약 보존 | 완료 (2026-11-21, 관련 196개·기본 2199개) |
-| T06d / P2 | KIS 모의 전용 어댑터. 제안 `clients/kis_order_client.py`, 주입 session 계약 테스트 | 공식 규격·mock 지원·계좌/비밀정보 처리·timeout/접수/체결 매핑 확인, 전송 직전 mock 일치 확인, fake session의 V01·V09~V15 통과 | 보류, T06c와 아래 게이트 뒤 |
+| T06d / P2 | KIS 모의 전용 주문·조회와 분리 SQLite 원장 | 공식 예제 대조와 가짜 전송 세션으로 모의 범위·주문 단일 호출·체결 상태 적용 검증 | 오프라인 완료 (2026-11-22, 관련 349개·기본 2350개), 실제 모의 계좌 검증 대기 |
 
 T06d 구현·오프라인 계약 완료와 실제 KIS 모의 인증/주문 성공은 별도 판정이다. 실제 계좌/키를 쓰는 검증의 대상·호출·정리 범위는 해당 후속 작업에서 정한다. 이번 설계나 일반 진행 요청을 실제 주문의 상시 권한으로 사용하지 않는다.
 
@@ -223,7 +253,8 @@ T06c의 동시성·재시작·저장 실패는 실제 임시 DB와 독립 프로
 
 - [x] T06b 순수 주문 계약·리스크 검증·가상 실행 (한 인스턴스 순차 메모리 범위)
 - [x] T06c 영속 원장·중복/예약·미확정 복구
-- [ ] T06d KIS 모의 전용 어댑터·공식 규격 대조
+- [x] T06d KIS 모의 전용 어댑터·공식 예제 대조·오프라인 검증
+- [ ] 실제 KIS 모의 계좌 연결 및 주문 검증
 - [ ] 실제 모의 계좌/잔고·주문 가능 수량/현금 조회·접수/체결 대사 검증
 - [ ] 취소/정정·시장가·자동 실행·손절/익절·알림·실거래: 별도 후속 범위
 

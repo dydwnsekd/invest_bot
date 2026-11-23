@@ -1,6 +1,6 @@
 # 개념과 구현 근거
 
-최초 기준은 2026-09-17 제품 커밋 `569cd97`이다. 최신 대조는 2026-11-21 main `e2bc29a`와 T06c 검토 작업본 기준이다. K-ORDER에 가상 주문을 위한 SQLite 예약·상태·확인 근거를 반영했다. 기능별 검증은 연결 문서를 따른다.
+최초 기준은 2026-09-17 제품 커밋 `569cd97`이다. 최신 대조는 2026-11-22 main `39557f0`과 T06d 검토 작업본이다. K-ORDER에 모의 전용 어댑터와 별도 주문 원장 연결을 반영했다.
 
 ## 개념 사전
 
@@ -20,7 +20,7 @@
 | K-HISTORY | 명시적 시작일·종료일의 가격·수급을 구간별로 보충하고 별도 history snapshot을 남기는 경로. 일반 수집 G08a의 기간 확보와 신규 상장 처리 완료를 뜻하지 않는다. | [보충 수집 job](../../src/invest_bot/jobs/backfill_history.py), [CLI](../../scripts/run_historical_collection.py) | [전용 회귀](../../tests/test_backfill_history.py), [검증 범위](../tasks/02_data_collection.md#보충-수집-검증-범위) |
 | K-COMPARISON | 같은 평가기간과 초기자금에서 전략별 일별 평가금액을 가격 매수 후 보유와 비교한다. 이 리포트의 비용·배당0 가정을 슬라이딩 연구의 비용 시나리오와 구분한다. | [비교 job](../../src/invest_bot/jobs/backtest_comparison.py), [HTML 생성기](../../scripts/render_backtest_comparison.py) | [비교 회귀](../../tests/test_backtest_comparison.py), [검증 범위](../tasks/05_strategy_backtest.md#비교-리포트-검증-범위) |
 | K-ROLLING | 고정된 로컬 CSV에서 슬라이딩 창마다 현금으로 다시 시작해 단일 전략·신호 혼합·독립 자금배분을 비교하는 연구. 겹친 창 분포와 비중복 테스트 블록의 시간순 선택을 구분하며, 대시보드 조합 저장·재로드 G08c와는 별도다. | [연구 job](../../src/invest_bot/jobs/rolling_backtest_research.py), [HTML 생성기](../../scripts/render_rolling_backtest_report.py) | [연구 회귀](../../tests/test_rolling_backtest_research.py), [HTML 회귀](../../tests/test_rolling_report_renderer.py), [검증 범위](../tasks/05_strategy_backtest.md#슬라이딩-연구-검증-범위) |
-| K-ORDER | 가상 정책과 계좌·시장 자료로 주문을 검증한다. SQLite 트랜잭션이 송신 전에 예약과 상태를 저장한다. 결과 불명인 계좌는 확정 근거로 확인할 때까지 신규 주문을 막는다. [계약](../tasks/06_trading_risk.md#t06c-주문-원장과-결과-불명-복구) | [리스크 검증](../../src/invest_bot/risk/order_validation.py), [주문 원장](../../src/invest_bot/trading/order_store.py), [주문 서비스](../../src/invest_bot/trading/order_service.py) | [기능 회귀](../../tests/test_t06c_order_ledger.py), [독립 QA](../../tests/test_t06c_independent_qa.py) |
+| K-ORDER | 주문 전에 정책·잔고·시장 자료를 검증하고 원장에 상태와 예약을 함께 기록한다. KIS 모의 주문·조회는 고정 모의 서버와 연결된 계좌로 처리한다. 결과 불명은 예약을 보존한다. [계약](../tasks/06_trading_risk.md#t06d-kis-모의-주문과-체결-확인) | [주문 원장](../../src/invest_bot/trading/order_store.py), [모의 주문 서비스](../../src/invest_bot/trading/kis_mock_orders.py), [어댑터](../../src/invest_bot/clients/kis_order_client.py) | [원장 연결 테스트](../../tests/test_t06d_kis_mock_orders.py), [독립 QA](../../tests/test_t06d_independent_qa.py) |
 
 ## 관계
 
