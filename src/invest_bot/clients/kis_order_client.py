@@ -24,6 +24,7 @@ from ..trading.order_service import Dispatch, SubmissionReply
 
 MOCK_BASE_URL = "https://openapivts.koreainvestment.com:29443"
 ORDER_PATH = "/uapi/domestic-stock/v1/trading/order-cash"
+BALANCE_PATH = "/uapi/domestic-stock/v1/trading/inquire-balance"
 QUERY_PATH = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld"
 KST = timezone(timedelta(hours=9))
 TIMEOUT = (3.05, 10.0)
@@ -52,6 +53,16 @@ class KISMockObservation:
     cumulative_notional: Decimal
     broker_order_id: str
     observed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class KISMockAccountCheck:
+    balance_ok: bool
+    orders_ok: bool | None
+
+    @property
+    def ok(self) -> bool:
+        return self.balance_ok and self.orders_ok is True
 
 
 def _digits(value, minimum, maximum):
@@ -227,6 +238,54 @@ class KISMockOrderClient:
             except Exception:
                 pass
 
+    def _daily_query_params(self, day, *, side="00", symbol="", branch="", order_number=""):
+        return {
+            "CANO": self._credentials.account_number, "ACNT_PRDT_CD": "01",
+            "INQR_STRT_DT": day, "INQR_END_DT": day, "SLL_BUY_DVSN_CD": side, "PDNO": symbol,
+            "CCLD_DVSN": "00", "INQR_DVSN": "00", "INQR_DVSN_3": "01", "ORD_GNO_BRNO": branch,
+            "ODNO": order_number, "INQR_DVSN_1": "", "CTX_AREA_FK100": "", "CTX_AREA_NK100": "",
+            "EXCG_ID_DVSN_CD": "KRX",
+        }
+
+    @staticmethod
+    def _check_page(response, *, balance):
+        if response is None:
+            return False
+        payload, continuations = response
+        if (len(continuations) != 1 or type(continuations[0]) is not str
+                or continuations[0] not in MORE_CONTINUATIONS | FINAL_CONTINUATIONS):
+            return False
+        rows, summary = payload.get("output1"), payload.get("output2")
+        if (type(rows) is not list or len(rows) > (20 if balance else 15)
+                or any(type(row) is not dict for row in rows)):
+            return False
+        if balance:
+            return type(summary) is list and bool(summary) and all(type(row) is dict and row for row in summary)
+        return type(summary) is dict
+
+    def check_account(self) -> KISMockAccountCheck:
+        """Check one page from each read-only endpoint with the supplied mock token."""
+        params = {
+            "CANO": self._credentials.account_number, "ACNT_PRDT_CD": "01",
+            "AFHR_FLPR_YN": "N", "OFL_YN": "", "INQR_DVSN": "02", "UNPR_DVSN": "01",
+            "FUND_STTL_ICLD_YN": "N", "FNCG_AMT_AUTO_RDPT_YN": "N", "PRCS_DVSN": "00",
+            "CTX_AREA_FK100": "", "CTX_AREA_NK100": "",
+        }
+        balance = self._request("GET", BALANCE_PATH, headers=self._headers("VTTC8434R"), params=params)
+        if not self._check_page(balance, balance=True):
+            return KISMockAccountCheck(False, None)
+
+        try:
+            if self._page_pause is not None:
+                self._page_pause()
+            day = self._now().astimezone(KST).strftime("%Y%m%d")
+        except Exception:
+            return KISMockAccountCheck(True, False)
+        orders = self._request(
+            "GET", QUERY_PATH, headers=self._headers("VTTC0081R"), params=self._daily_query_params(day),
+        )
+        return KISMockAccountCheck(True, self._check_page(orders, balance=False))
+
     def submit_claim(self, dispatch: Dispatch) -> SubmissionReply:
         self._dispatch(dispatch)
         self._check_session()
@@ -271,10 +330,10 @@ class KISMockOrderClient:
             at, day, branch, number, clock_time = _parse_identity(broker_order_id)
             if not self._recent(at, now):
                 return None
-            params = {"CANO": self._credentials.account_number, "ACNT_PRDT_CD": "01", "INQR_STRT_DT": day, "INQR_END_DT": day,
-                      "SLL_BUY_DVSN_CD": "02" if dispatch.side is Side.BUY else "01", "PDNO": dispatch.symbol,
-                      "CCLD_DVSN": "00", "INQR_DVSN": "00", "INQR_DVSN_3": "01", "ORD_GNO_BRNO": branch,
-                      "ODNO": number, "INQR_DVSN_1": "", "CTX_AREA_FK100": "", "CTX_AREA_NK100": "", "EXCG_ID_DVSN_CD": "KRX"}
+            params = self._daily_query_params(
+                day, side="02" if dispatch.side is Side.BUY else "01",
+                symbol=dispatch.symbol, branch=branch, order_number=number,
+            )
             seen, observations, continuation = {("", "")}, [], ""
             for page_index in range(MAX_PAGES):
                 if page_index and self._page_pause is not None:
