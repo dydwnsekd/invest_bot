@@ -1,7 +1,29 @@
 # Task 06. Trading And Risk
 
 > OKF ID: `D-TRADING` · 종류: `status` · 상태: `active` · 관리: 통합, 퀀트 구현·QA 검증
-> 현재 기준은 2026-11-22 main `39557f0`과 T06d 검토 작업본이다.
+> 현재 기준은 2026-11-24 main `76a8223`과 모의 계좌 조회 점검 작업본이다.
+
+## 모의 계좌 읽기 전용 점검
+
+토큰 발급과 주문 실행을 분리한 [모의 계좌 점검 명령](../../scripts/check_kis_mock_account.py)이다. 호출자가 이미 보유한 모의 토큰으로 주식 잔고 첫 페이지를 조회한다. 응답이 맞으면 서울 시간 기준 당일 현금 주문·체결 내역의 첫 페이지를 확인한다. 두 조회가 성공하면 `balance=ok orders=ok`를 출력한다. 당일 주문이 없는 빈 목록도 유효한 응답이다.
+
+기존 모의 전송 검사를 공유하며 모의 서버로 최대 두 번의 GET을 보낸다. 조회가 실패하면 재시도하지 않는다. 출력은 검사 상태와 누락된 설정 이름이며, 실제 계좌·잔고·주문 내역·토큰 원문은 출력하지 않는다. 이 결과의 범위는 연결과 응답 형식 확인이다. 주문 승인에 필요한 가용 잔고와 전체 체결 내역의 검증은 별도다. [KIS 주식 잔고조회 예제](https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_balance/inquire_balance.py)
+
+개인 실행 환경에 아래 값이 설정돼 있어야 한다. 만료시각은 시간대가 포함된 ISO 8601 형식이다.
+
+- `INVEST_BOT_KIS_MOCK_ACCOUNT_NUMBER`
+- `INVEST_BOT_KIS_MOCK_APP_KEY`
+- `INVEST_BOT_KIS_MOCK_APP_SECRET`
+- `INVEST_BOT_KIS_MOCK_ACCESS_TOKEN`
+- `INVEST_BOT_KIS_MOCK_TOKEN_EXPIRES_AT`
+
+```sh
+python scripts/check_kis_mock_account.py
+```
+
+종료 코드 0은 두 조회 성공, 1은 조회 실패 또는 건너뜀, 2는 입력 누락·오류다. 입력이 빠진 환경에서는 외부 호출 전에 종료한다.
+
+2026-11-24에 [새 테스트 13개](../../tests/test_kis_mock_account_check.py)를 먼저 실행해 기능이 없는 상태에서 실패를 확인했다. 구현 뒤 같은 테스트와 주문 회귀를 포함해 166개가 통과했다. 전체 기본 테스트는 2,363개 통과, 2개 선택 제외, 기존 경고 51개였다. 실제 모의 계좌 번호와 유효 토큰이 준비된 환경에서 읽기 전용 확인을 이어간다. 이후 테스트 주문은 계좌·종목·방향·수량·가격·미체결 처리 범위를 정해 별도 검증한다.
 
 ## T06d KIS 모의 주문과 체결 확인
 
