@@ -364,7 +364,9 @@ Docker Compose는 로컬 `config/` 디렉터리를 컨테이너에 read-only로 
 - `INVEST_BOT_ENABLE_DB_WRITE`: 수집 데이터를 DB fact table에도 기록할지 여부
 - `INVEST_BOT_KIS_TOKEN_CACHE`: KIS access token 캐시 파일 경로. 미설정 시 `/tmp/invest_bot/` 아래에 자동 저장
 
-KIS access token은 프로세스 간 재발급을 줄이기 위해 파일 캐시를 사용합니다. 이는 Streamlit 버튼 실행이나 CLI 실행이 반복될 때 `tokenP` 발급 제한으로 수집이 실패하는 것을 줄이기 위한 운영 캐시입니다.
+수집과 시세 조회의 KIS 클라이언트는 프로세스 간 재발급을 줄이기 위해 접근 토큰 파일 캐시를 사용합니다. 이는 Streamlit 버튼 실행이나 CLI 실행이 반복될 때 `tokenP` 발급 제한으로 수집이 실패하는 것을 줄이기 위한 운영 캐시입니다.
+
+모의 계좌 읽기 전용 점검은 발급받은 토큰과 만료시각을 포함한 모의 전용 환경변수를 사용합니다. `.env`에 보관한 값은 실행 프로세스의 환경으로 전달합니다. [설정 항목과 실행 방법](docs/tasks/06_trading_risk.md#모의-계좌-읽기-전용-점검)
 
 ## 설치
 
@@ -816,6 +818,8 @@ data/processed/test_reports/
 - [x] T06b 오프라인 주문 검증·가상 접수 (유지한 한 인스턴스의 순차 메모리 범위)
 - [x] T06c 가상 주문의 SQLite 원장·예약·결과 불명 복구
 - [x] T06d KIS 모의 주문·조회와 원장 연결 오프라인 검증
+- [x] KIS 모의 계좌 읽기 전용 점검 및 오프라인 검증
+- [ ] 실제 KIS 모의 계좌 잔고·당일 주문 내역 조회 검증
 - [ ] 실제 KIS 모의투자 주문 검증
 - [ ] 실거래 주문 실행
 - [ ] 리스크 관리 정책 자동화

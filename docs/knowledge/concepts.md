@@ -1,6 +1,6 @@
 # 개념과 구현 근거
 
-최초 기준은 2026-09-17 제품 커밋 `569cd97`이다. 최신 대조는 2026-11-22 main `39557f0`과 T06d 검토 작업본이다. K-ORDER에 모의 전용 어댑터와 별도 주문 원장 연결을 반영했다.
+최초 기준은 2026-09-17 제품 커밋 `569cd97`이다. 최신 대조는 2026-11-26 main `4c0459e` 기준이다. K-ORDER는 모의 전용 어댑터·별도 주문 원장·읽기 전용 점검을 포함한다.
 
 ## 개념 사전
 
@@ -20,7 +20,7 @@
 | K-HISTORY | 명시적 시작일·종료일의 가격·수급을 구간별로 보충하고 별도 history snapshot을 남기는 경로. 일반 수집 G08a의 기간 확보와 신규 상장 처리 완료를 뜻하지 않는다. | [보충 수집 job](../../src/invest_bot/jobs/backfill_history.py), [CLI](../../scripts/run_historical_collection.py) | [전용 회귀](../../tests/test_backfill_history.py), [검증 범위](../tasks/02_data_collection.md#보충-수집-검증-범위) |
 | K-COMPARISON | 같은 평가기간과 초기자금에서 전략별 일별 평가금액을 가격 매수 후 보유와 비교한다. 이 리포트의 비용·배당0 가정을 슬라이딩 연구의 비용 시나리오와 구분한다. | [비교 job](../../src/invest_bot/jobs/backtest_comparison.py), [HTML 생성기](../../scripts/render_backtest_comparison.py) | [비교 회귀](../../tests/test_backtest_comparison.py), [검증 범위](../tasks/05_strategy_backtest.md#비교-리포트-검증-범위) |
 | K-ROLLING | 고정된 로컬 CSV에서 슬라이딩 창마다 현금으로 다시 시작해 단일 전략·신호 혼합·독립 자금배분을 비교하는 연구. 겹친 창 분포와 비중복 테스트 블록의 시간순 선택을 구분하며, 대시보드 조합 저장·재로드 G08c와는 별도다. | [연구 job](../../src/invest_bot/jobs/rolling_backtest_research.py), [HTML 생성기](../../scripts/render_rolling_backtest_report.py) | [연구 회귀](../../tests/test_rolling_backtest_research.py), [HTML 회귀](../../tests/test_rolling_report_renderer.py), [검증 범위](../tasks/05_strategy_backtest.md#슬라이딩-연구-검증-범위) |
-| K-ORDER | 주문 전에 정책·잔고·시장 자료를 검증하고 원장에 상태와 예약을 함께 기록한다. KIS 모의 주문·조회는 고정 모의 서버와 연결된 계좌로 처리한다. 결과 불명은 예약을 보존한다. [계약](../tasks/06_trading_risk.md#t06d-kis-모의-주문과-체결-확인) | [주문 원장](../../src/invest_bot/trading/order_store.py), [모의 주문 서비스](../../src/invest_bot/trading/kis_mock_orders.py), [어댑터](../../src/invest_bot/clients/kis_order_client.py) | [원장 연결 테스트](../../tests/test_t06d_kis_mock_orders.py), [독립 QA](../../tests/test_t06d_independent_qa.py) |
+| K-ORDER | 주문 전에 정책·잔고·시장 자료를 검증하고 원장에 상태와 예약을 함께 기록한다. KIS 모의 주문·조회는 고정 모의 서버와 연결된 계좌로 처리한다. 결과 불명은 예약을 보존한다. 실제 계좌 연결은 [읽기 전용 점검](../tasks/06_trading_risk.md#모의-계좌-읽기-전용-점검)으로 확인한다. [주문 계약](../tasks/06_trading_risk.md#t06d-kis-모의-주문과-체결-확인) | [주문 원장](../../src/invest_bot/trading/order_store.py), [모의 주문 서비스](../../src/invest_bot/trading/kis_mock_orders.py), [어댑터](../../src/invest_bot/clients/kis_order_client.py) | [원장 연결 테스트](../../tests/test_t06d_kis_mock_orders.py), [독립 QA](../../tests/test_t06d_independent_qa.py) |
 
 ## 관계
 
@@ -50,10 +50,10 @@
 ## 저장 경계와 알려진 문서 차이
 
 - 정규화 fact 저장은 `enable_db_write`로 제어된다. snapshot의 기본 저장과 fact 테이블이 항상 함께 갱신된다고 가정하지 않는다.
-- 일반 수집도 미등록 종목의 placeholder를 만들 수 있다. 이미 있는 실제 종목명과 KOSPI/KOSDAQ을 placeholder로 덮어쓰지 않는다. 예전 DB 문서의 “symbols는 마스터만 변경”은 현재 동작 전체를 설명하지 못한다.
-- `stock_info_snapshots`는 제거 후보라는 설계안이 있지만, 물리적으로 제거됐다는 뜻은 아니다.
-- `report_favorite_symbols`는 [등록된 마이그레이션](../../migrations/versions/20260703_000003_add_report_favorite_symbols.py)에 존재한다. 예전 ERD의 테이블 목록에는 빠져 있다.
-- 이 차이 때문에 DB schema·ERD·repository 문서는 등록부에서 `review-required`로 표시한다. 실제 컬럼과 계약은 [모델](../../src/invest_bot/db/models.py), [계약](../../src/invest_bot/db/contracts.py), 마이그레이션을 함께 확인한다. 이번 작업에서 DB 정책이나 제품 코드를 변경하지 않는다.
+- 일반 수집도 미등록 종목의 placeholder를 만들 수 있다. 이미 있는 실제 종목명과 KOSPI/KOSDAQ을 placeholder로 덮어쓰지 않는다. 이 경로는 [DB 스키마의 쓰기 경계](../architecture/db_schema.md#user-action-boundary)에 반영했다.
+- `stock_info_snapshots`는 모델과 마이그레이션에 남아 있으며, 제거 후보는 설계 상태다.
+- `report_favorite_symbols`는 [등록된 마이그레이션](../../migrations/versions/20260703_000003_add_report_favorite_symbols.py)에 존재한다. [DB ERD](../architecture/db_migration_erd.md#relationships)에는 별도 기본키 테이블로 반영했다.
+- DB schema·ERD·repository의 등록 상태는 `review-required`다. 세부 컬럼과 메서드는 [모델](../../src/invest_bot/db/models.py), [계약](../../src/invest_bot/db/contracts.py), 마이그레이션을 함께 확인한다.
 
 ## 검증 결과를 읽는 법
 

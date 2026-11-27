@@ -29,7 +29,7 @@
 | D-ANALYSIS | [분석](../tasks/03_analysis.md) | status | active | 퀀트 · 지표 작업 |
 | D-DASHBOARD | [대시보드](../tasks/04_dashboard.md) | status | active | 대시보드 · 현재 UI·G05a 수급·G05b 날짜·G06a 실행 안내·G06b 가독성·QA02 독립 검증과 고립 관측점·G08b 입력 범위/실제 모바일·G08c 명시 저장/이력·G06c 카드/필터·G08d 자동 반응형 차트/글자 하한; 날짜별 증거 구분 |
 | D-BACKTEST | [전략·백테스트](../tasks/05_strategy_backtest.md) | status | active | 퀀트 · 구현된 전략·G08b 입력 범위·G08c 구성 설정/출처/명시 저장/호환 계약·매수 후 보유 비교·슬라이딩 혼합 연구 |
-| D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | status | active | 통합·퀀트·QA · KIS 모의 주문·조회 어댑터와 SQLite 원장 · 오프라인 검증 완료 |
+| D-TRADING | [주문·리스크](../tasks/06_trading_risk.md) | status | active | 통합·퀀트·QA · KIS 모의 주문·조회 어댑터, SQLite 원장, 읽기 전용 점검 · 실제 모의 조회 대기 |
 | D-OPS | [운영](../tasks/07_operations_docs.md) | runbook | active | 운영 · 시작·재시작 사전검증·유한 준비 확인, 공개/내부 포트, 스케줄러 실패 대기·시도 상한, 설정 타입·초기화·로그·Git 관리 경계 |
 | D-SESSIONS | [개선 작업 추적](../operations/improvement_sessions_2026-09-13.md) | status | active | 통합 · 역할별 단일 작업·순차 실행 |
 | D-IMPROVEMENTS | [개선 작업 색인](../operations/improvements/README.md) | index | active | 통합 · 다음 작업·우선순위·역할별 상태의 진입점 |
@@ -42,9 +42,9 @@
 
 | ID | 문서 | 종류 | 상태 | 관리 역할 · 담당 주제 |
 | --- | --- | --- | --- | --- |
-| D-DB-SCHEMA | [DB schema](../architecture/db_schema.md) | reference | review-required | 데이터 · placeholder 쓰기 정책·관심종목 테이블 정합성 필요 |
-| D-DB-ERD | [DB ERD](../architecture/db_migration_erd.md) | reference | review-required | 데이터 · schema와 같은 차이, 전체 최신 ERD 아님 |
-| D-REPOSITORIES | [repository 계약](../architecture/repository_interfaces.md) | reference | review-required | 데이터 · 쓰기 정책은 실제 계약·구현과 대조 |
+| D-DB-SCHEMA | [DB schema](../architecture/db_schema.md) | reference | review-required | 데이터 · 종목 placeholder·관심종목·기준일 반영, 세부 스키마는 코드와 대조 |
+| D-DB-ERD | [DB ERD](../architecture/db_migration_erd.md) | reference | review-required | 데이터 · 주요 테이블과 관심종목 관계 요약 |
+| D-REPOSITORIES | [repository 계약](../architecture/repository_interfaces.md) | reference | review-required | 데이터 · 종목 placeholder·관심종목·snapshot 계약 반영 |
 | D-DB-PLAN | [DB 구현 계획](../architecture/db_migration_plan.md) | plan | proposed | 데이터 · 미완료 구조 개편 제안 |
 | D-IMPROVEMENT-PLAN-1005 | [개선 우선순위와 실행 계획](../operations/improvement_plan_2026-10-05.md) | plan | proposed | 통합 · 역할별 순차 검토와 개선 완료 조건 |
 | D-IMPROVEMENT-DATA | [데이터 작업](../operations/improvements/data.md) | plan | proposed | 데이터 · G01a·G01b·G08a 상태·근거·완료 조건 |
@@ -53,7 +53,7 @@
 | D-IMPROVEMENT-OPERATIONS | [운영 작업](../operations/improvements/operations.md) | plan | proposed | 운영 · G02·G07a·G07b 상태·근거·완료 조건 |
 | D-IMPROVEMENT-QA | [QA 작업](../operations/improvements/qa.md) | plan | proposed | QA · QA01·QA02·QA03·QA04 독립 검증·CI/OS/SQL 계측 호환성 조건 |
 | D-DB-OPS-PLAN | [DB 운영 계획](../operations/db_migration_plan.md) | plan | proposed | 운영 · 구조 개편의 운영 관점, 현재 구현 명세 아님 |
-| D-DB-OPS-ERD | [운영 ERD](../operations/db_erd.md) | reference | review-required | 운영 · 최신 테이블·쓰기 경계 재검토 필요 |
+| D-DB-OPS-ERD | [운영 ERD](../operations/db_erd.md) | reference | review-required | 운영 · 수집·snapshot·관심종목 쓰기 경계 요약 |
 | D-STRATEGY-REFERENCE | [전략 후보 설명](../strategies/01_reference_strategies.md) | reference | review-required | 퀀트 · 원본 reference 미포함; 아이디어 설명 재검토, 구현 여부는 D-BACKTEST |
 | D-PROJECT-SKILL | [프로젝트 참조 skill](../../skills/invest-bot-reference-reader/SKILL.md) | policy | review-required | 통합 · 옛 절대 경로·외부 reference 디렉터리 가정 재검토 |
 | D-PROJECT-RULES | [프로젝트 참조 규칙](../../skills/invest-bot-reference-reader/references/project-rules.md) | policy | review-required | 통합 · 참조 skill의 기존 보조 지침 |

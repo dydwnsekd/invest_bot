@@ -1,17 +1,17 @@
 # invest_bot DB-first schema
 
-> OKF 상태: `review-required`. 아래 문서에는 목표 정책과 현재 구현의 차이가 남아 있다. 특히 수집 시 종목 placeholder 생성과 관심종목 테이블은 [현재 저장 경계](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)를 먼저 확인한다. 이 문서만으로 현행 구현을 단정하지 않는다.
+> OKF 상태는 `review-required`다. 2026-11-26에 종목 placeholder 쓰기, 관심종목 테이블과 snapshot 기준일을 현행 코드에 맞춰 갱신했다. 세부 계약은 [모델](../../src/invest_bot/db/models.py), [마이그레이션](../../migrations/versions), [현재 저장 경계](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)를 함께 확인한다.
 
 ## Purpose
 
-이 문서는 현재 `invest_bot`의 DB 스키마와 **테이블 책임**, **사용자 액션에 의한 변경 허용 여부**, **컬럼 의미**, **기능별 source of truth**를 정리하는 canonical 문서다. 구현/리팩터링/마이그레이션 판단은 이 문서를 우선 기준으로 삼는다.
+이 문서는 수집·분석·대시보드 DB의 테이블 책임과 쓰기 경계를 정리한다. 모의 주문 SQLite 원장은 [주문·리스크 문서](../tasks/06_trading_risk.md#t06d-kis-모의-주문과-체결-확인)에서 관리한다.
 
 ## Global rules
 
 - 사용자 Web 조회(검색, 선택, 단건 확인, 미리보기)는 **read-only**다.
 - canonical 종목 reference는 `symbols`다.
-- `symbols`는 **종목 마스터 동기화**에서만 갱신한다.
-- 수집/분석/리포트 실행은 fact/artifact 테이블만 갱신할 수 있다.
+- 종목 마스터 동기화가 `symbols`의 종목명·시장을 관리한다. 수집 fact 또는 종목이 연결된 snapshot을 저장할 때 미등록 종목의 placeholder가 생길 수 있다.
+- snapshot 저장은 수집·분석·리포트 실행에 쓰인다. 정규화 fact 저장은 `enable_db_write`가 켜진 수집 경로에서 수행한다.
 - raw API 응답이나 fallback 응답은 canonical 종목명 source가 아니다.
 
 ## Table classes
@@ -21,6 +21,7 @@
 | Canonical reference | `symbols` | 사용자 조회와 표시의 정답 데이터 |
 | Collected facts | `daily_prices`, `investor_daily` | 수집된 정규화 사실 데이터 |
 | Snapshots / artifacts | `dataset_frames` | raw snapshot 및 분석/리포트 산출물 저장소 |
+| Report favorites | `report_favorite_symbols` | 사용자가 명시적으로 추가·제거한 리포트 관심종목 |
 | Deprecated candidate | `stock_info_snapshots` | 현재 제품 기준 직접 가치가 낮고 제거 후보인 테이블 |
 
 ## Tables
@@ -33,9 +34,9 @@
 - 다른 도메인 테이블의 FK 기준점
 
 **Can user actions mutate it?**
-- **No**
-- 사용자 조회, 화면 진입, 종목 검색, 미리보기, 리포트 열람으로 변경되면 안 된다.
-- 종목 마스터 sync 또는 관리자성 reference refresh 작업에서만 변경된다.
+- 사용자 조회·화면 진입·검색·미리보기·열람은 읽기 전용이다.
+- 사용자가 시작한 수집·분석도 종목이 연결된 fact 또는 snapshot을 저장하면 placeholder를 만들 수 있다.
+- 종목 마스터 동기화가 실제 종목명·시장 정보를 갱신한다. 일반 수집·snapshot 저장으로 들어오는 기본 placeholder는 기존 종목명과 확인된 KOSPI/KOSDAQ을 보존한다.
 
 **Columns**
 
@@ -130,7 +131,7 @@
 | `dataset` | dataset 종류 (`daily_prices`, `market_reports` 등) |
 | `filename` | dataset 내부 고유 snapshot key |
 | `symbol` | 관련 종목 (`symbols.symbol` FK, nullable) |
-| `as_of_date` | 데이터 기준일. `date`, `trade_date`, `stck_bsop_date` 컬럼 중 존재하는 날짜 컬럼의 최대 날짜 |
+| `as_of_date` | `date` → `trade_date` → `stck_bsop_date` 순서에서 유효 날짜가 있는 첫 컬럼의 최댓값. [기준일 계약](../tasks/02_data_collection.md#snapshot-기준일-날짜-계약-2026-10-27) |
 | `row_count` | frame row 수 |
 | `frame_json` | 전체 DataFrame payload |
 | `created_at` | snapshot 최초 저장 시각 |
@@ -175,6 +176,10 @@
 - canonical 종목명 source가 아니다.
 - 현재 정책 기준에서는 제거 대상 후보로 문서화한다.
 
+### `report_favorite_symbols`
+
+투자 리포트와 관심종목 화면이 읽는 공유 관심종목 저장소다. 관심종목 버튼으로 추가·제거한다. `symbol`은 문자열 기본키이며 `created_at`, `updated_at`을 저장한다. 모의 주문 계좌나 사용자별 소유권 컬럼은 없다. [관심종목 마이그레이션](../../migrations/versions/20260703_000003_add_report_favorite_symbols.py)
+
 ## User action boundary
 
 ### Read-only user actions
@@ -190,6 +195,7 @@
 - `investor_daily`
 - `dataset_frames`
 - `stock_info_snapshots`
+- `report_favorite_symbols`
 
 ### Mutating execution actions
 - 데이터 수집
@@ -198,14 +204,16 @@
 - 신호 생성
 - 리포트 생성
 - 백테스트 실행
+- 리포트 관심종목 추가·제거
 
 이때 변경 가능한 테이블:
 - `daily_prices`
 - `investor_daily`
 - 관련 `dataset_frames` raw/processed dataset
+- fact 또는 종목이 연결된 snapshot 저장에 필요한 `symbols` placeholder
+- 명시적인 관심종목 버튼 조작 시 `report_favorite_symbols`
 
-이때도 변경되면 안 되는 테이블:
-- `symbols`
+이때도 변경되면 안 되는 항목:
 - `stock_info_snapshots`
 - 사용자 조회에서 생성된 `dataset_frames.stock_info`
 
@@ -216,6 +224,7 @@
 | 종목 검색 / 종목 선택 / 표시명 | `symbols` |
 | 가격 fact | `daily_prices` |
 | 수급 fact | `investor_daily` |
+| 투자 리포트 관심종목 | `report_favorite_symbols` |
 | 지표 / 신호 / 리포트 / 백테스트 결과 | `dataset_frames` processed datasets |
 | raw stock_info 응답 | canonical source 아님; 비저장 또는 분리된 raw snapshot 취급 |
 

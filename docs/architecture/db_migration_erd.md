@@ -1,6 +1,6 @@
 # invest_bot DB migration ERD
 
-> OKF 상태: `review-required`. 최신 테이블·쓰기 정책 전체를 반영한 ERD는 아니다. [알려진 차이와 구현 근거](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)를 함께 확인한다.
+> OKF 상태는 `review-required`다. 2026-11-26에 관심종목 테이블을 모델과 마이그레이션에 맞춰 추가했다. [현재 저장 경계](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)
 
 ## Purpose
 
@@ -8,7 +8,7 @@
 
 ## Tables
 
-관리 대상 테이블은 `symbols`, `daily_prices`, `investor_daily`, `dataset_frames`, `stock_info_snapshots`다. 아래 ERD는 각 테이블의 주요 컬럼과 현재 관계를 요약한다.
+관리 대상 테이블은 `symbols`, `daily_prices`, `investor_daily`, `dataset_frames`, `stock_info_snapshots`, `report_favorite_symbols`다. 아래 ERD는 각 테이블의 주요 컬럼과 현재 관계를 요약한다.
 
 ## Relationships
 
@@ -75,6 +75,12 @@ erDiagram
         text raw_payload
         string source_filename
     }
+
+    REPORT_FAVORITE_SYMBOLS {
+        string symbol PK
+        datetime created_at
+        datetime updated_at
+    }
 ```
 
 ## Constraints
@@ -83,7 +89,9 @@ erDiagram
 - `daily_prices`는 `symbol + trade_date` unique constraint로 일별 가격 중복을 막는다.
 - `investor_daily`는 `symbol + trade_date` unique constraint로 일별 수급 중복을 막는다.
 - `dataset_frames`는 `dataset + filename` unique constraint로 snapshot 중복을 막는다.
-- fact/snapshot table의 `symbol`은 `symbols.symbol`을 참조하는 관계로 해석한다.
+- `daily_prices`, `investor_daily`, `stock_info_snapshots`의 종목 FK에는 `ON DELETE CASCADE`가 적용된다. `dataset_frames.symbol`은 nullable FK이며 종목 삭제 시 NULL로 바뀐다.
+- `stock_info_snapshots`에는 `symbol + captured_at` unique constraint가 있다.
+- `report_favorite_symbols.symbol`은 기본키이며 종목 FK가 없는 별도 테이블이다.
 
 ## Ownership notes
 

@@ -1,6 +1,6 @@
 # invest_bot repository interfaces for DB migration
 
-> OKF 상태: `review-required`. 특히 종목 reference의 쓰기 정책은 현재 수집 경로와 차이가 있다. [현재 저장 경계](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)와 실제 계약·구현을 함께 확인한다.
+> OKF 상태는 `review-required`다. 2026-11-26에 종목 저장과 관심종목의 계약을 갱신했다. [현재 저장 경계](../knowledge/concepts.md#저장-경계와-알려진-문서-차이)와 실제 계약·구현을 함께 확인한다.
 
 ## Purpose
 
@@ -16,7 +16,7 @@
 
 **Mutation policy**
 - 일반 사용자 조회 경로에서는 write 금지
-- 종목 마스터 sync/관리성 reference refresh에서만 write 허용
+- 종목 마스터 동기화가 종목명과 시장을 관리한다. fact 및 종목 snapshot 저장 시 미등록 종목의 placeholder를 만들 수 있다.
 
 **Current contract**
 - `upsert(record: StockRecord) -> None`
@@ -67,6 +67,7 @@
 - `load(dataset: str, filename: str) -> DatasetFrameRecord | None`
 - `latest_for_symbol(dataset: str, symbol: str) -> DatasetFrameRecord | None`
 - `list_latest(datasets: Sequence[str]) -> Sequence[DatasetFrameRecord]`
+- `list_for_dataset(dataset: str) -> Sequence[DatasetFrameRecord]`
 
 ### `StockInfoSnapshotRepository`
 
@@ -77,6 +78,14 @@
 - 현재 제품 정책 기준 직접 가치가 낮다.
 - canonical 종목 lookup source가 아니다.
 - 후속 단계에서 제거 후보로 다룬다.
+
+### `ReportFavoriteSymbolRepository`
+
+리포트 관심종목의 공유 목록을 읽고, 사용자의 명시적인 추가·제거를 저장한다.
+
+- `load_all() -> Sequence[ReportFavoriteSymbolRecord]`
+- `add(symbol: str) -> bool`
+- `remove(symbol: str) -> bool`
 
 ## Compatibility rules
 
@@ -90,4 +99,4 @@
 1. 사용자 종목 검색/선택/표시는 `StockRepository`만 사용한다.
 2. `DatasetFrameRepository`는 raw/derived snapshot 용도로만 유지한다.
 3. `StockInfoSnapshotRepository`는 제거 또는 완전 비사용화 후보로 본다.
-4. canonical reference 변경은 종목 마스터 sync 경로에서만 허용한다.
+4. 종목 마스터 동기화와 수집·snapshot 저장의 placeholder 경로를 구분한다.
