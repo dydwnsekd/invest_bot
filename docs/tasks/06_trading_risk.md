@@ -1,7 +1,7 @@
 # Task 06. Trading And Risk
 
 > OKF ID: `D-TRADING` · 종류: `status` · 상태: `active` · 관리: 통합, 퀀트 구현·QA 검증
-> 현재 기준은 2026-11-26 main `4c0459e`이다. 읽기 전용 점검은 코드 `02820cf`와 문서 `4c0459e`로 반영됐다.
+> 현재 기준은 2026-11-27 main `b8b21b9`이다. 읽기 전용 점검은 코드 `02820cf`로 반영됐다.
 
 ## 모의 계좌 읽기 전용 점검
 
@@ -9,13 +9,25 @@
 
 기존 모의 전송 검사를 공유하며 모의 서버로 최대 두 번의 GET을 보낸다. 조회가 실패하면 재시도하지 않는다. 출력은 검사 상태와 누락된 설정 이름이며, 실제 계좌·잔고·주문 내역·토큰 원문은 출력하지 않는다. 이 결과의 범위는 연결과 응답 형식 확인이다. 주문 승인에 필요한 가용 잔고와 전체 체결 내역의 검증은 별도다. [KIS 주식 잔고조회 예제](https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_balance/inquire_balance.py)
 
-점검 명령은 아래 다섯 값을 실행 프로세스의 환경변수에서 받는다. `.env`에 값을 보관하는 경우 실행 전에 프로세스 환경으로 전달한다. 이미 발급한 모의 토큰과 시간대가 포함된 ISO 8601 만료시각을 사용한다.
+### 모의투자 계좌 정보 확인
 
-- `INVEST_BOT_KIS_MOCK_ACCOUNT_NUMBER`
-- `INVEST_BOT_KIS_MOCK_APP_KEY`
-- `INVEST_BOT_KIS_MOCK_APP_SECRET`
-- `INVEST_BOT_KIS_MOCK_ACCESS_TOKEN`
-- `INVEST_BOT_KIS_MOCK_TOKEN_EXPIRES_AT`
+1. **홈페이지에서 확인.** 한국투자증권에 로그인한 뒤 **트레이딩 → 모의투자 → 주식/선물옵션 모의투자 → 모의투자안내 → 나의계좌**에서 국내주식 모의 계좌번호를 확인한다. 계좌가 없으면 모의투자안내의 **신청/재도전**에서 가입 절차를 확인한다. [모의투자안내](https://securities.koreainvestment.com/main/research/virtual/_static/TF07da010000.jsp) · [모의투자 신청 FAQ](https://securities.koreainvestment.com/main/customer/support/_static/TF04fg000000.jsp?mctgr=04)
+2. **앱에서 확인.** 한국투자 앱의 **메뉴 → 주식 → 모의투자 → 모의투자 로그인**을 연다. **상시 모의투자**로 로그인한 뒤 모의 화면의 **메뉴 → 주식 잔고 손익**에서 계좌번호를 확인한다. [KIS Developers 모의투자 API 사용 안내](https://apiportal.koreainvestment.com/)
+3. **API 등록 계좌 대조.** 홈페이지의 **트레이딩 → Open API → KIS Developers → KIS Developers 서비스 신청/조회**에서 확인한 모의 계좌의 API 등록 내역을 확인한다. 해당 계좌에 발급된 앱 키와 시크릿을 사용한다. [한국투자증권 사이트맵](https://securities.koreainvestment.com/tfcommon/base/Sitemap.jsp) · [KIS Developers 모의투자 API 사용 안내](https://apiportal.koreainvestment.com/)
+
+### 점검 입력과 실행
+
+점검 명령은 다음 다섯 값을 실행 프로세스의 환경변수에서 받는다. `.env`에 값을 보관하는 경우 실행 전에 프로세스 환경으로 전달한다. 실제 계좌번호·키·토큰 값은 비공개 로컬 환경에서 관리한다.
+
+| 환경변수 | 넣을 값 |
+| --- | --- |
+| `INVEST_BOT_KIS_MOCK_ACCOUNT_NUMBER` | 국내주식 모의 계좌번호 **앞 8자리**. 가상 예시 `50000000-01`이면 `50000000`을 넣는다. 점검 명령은 종합 상품코드 `01`을 별도로 보낸다. |
+| `INVEST_BOT_KIS_MOCK_APP_KEY` | 같은 모의 계좌에 연결된 앱 키 |
+| `INVEST_BOT_KIS_MOCK_APP_SECRET` | 같은 모의 앱 키의 시크릿 |
+| `INVEST_BOT_KIS_MOCK_ACCESS_TOKEN` | 모의 서버에서 이미 발급한 REST 접근 토큰 `access_token` |
+| `INVEST_BOT_KIS_MOCK_TOKEN_EXPIRES_AT` | 같은 토큰의 `access_token_token_expired` 값을 시간대가 있는 ISO 8601로 기록한다. 만료시각이 한국시간으로 확인되면 `2026-11-28T09:30:00+09:00` 같은 형식으로 넣는다. |
+
+REST 토큰이 필요하면 KIS API 문서의 **OAuth인증 → 접근토큰발급(P)**에서 모의 서버의 발급 절차를 확인한다. [계좌번호·상품코드 공식 예제](https://github.com/koreainvestment/open-trading-api/blob/main/kis_devlp.yaml) · [KIS REST 인증 안내](https://apiportal.koreainvestment.com/apiservice) · [토큰 응답 공식 예제](https://github.com/koreainvestment/open-trading-api/blob/main/examples_user/kis_auth.py#L219-L229)
 
 ```sh
 python scripts/check_kis_mock_account.py
